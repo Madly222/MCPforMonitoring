@@ -1,0 +1,107 @@
+# ==============================================================================
+# MCP Server Monitor - General Settings
+# ==============================================================================
+# Non-sensitive configuration options
+# Sensitive data (passwords, keys, IPs) should be in secrets.yaml
+# ==============================================================================
+
+
+# ==============================================================================
+# MONITORING SETTINGS
+# ==============================================================================
+
+monitoring:
+  # Real-time log watching via SSH tail -F
+  realtime:
+    enabled: true
+    reconnect_delay_seconds: 5
+    max_reconnect_attempts: 10
+
+  # Fallback polling when realtime is not available
+  polling:
+    interval_seconds: 300
+    
+  # Health check intervals
+  health_check:
+    interval_seconds: 60
+    timeout_seconds: 10
+
+  # Error aggregation (wait before sending to Claude API)
+  aggregation:
+    wait_seconds: 30
+    max_errors_per_batch: 10
+
+
+# ==============================================================================
+# ERROR PROCESSING
+# ==============================================================================
+
+error_processing:
+  # Deduplication window (ignore same error within this period)
+  dedup_window_seconds: 300
+  
+  # Minimum severity to process (debug, info, warning, error, critical)
+  min_severity: warning
+  
+  # Maximum context lines to collect around error
+  context_lines: 50
+
+
+# ==============================================================================
+# CLAUDE API OPTIMIZATION
+# ==============================================================================
+
+claude_optimization:
+  # Cache responses for similar errors
+  cache:
+    enabled: true
+    ttl_hours: 24
+    
+  # Rate limiting
+  rate_limit:
+    max_requests_per_minute: 10
+    max_requests_per_hour: 100
+
+
+# ==============================================================================
+# LOGGING
+# ==============================================================================
+
+logging:
+  # Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL
+  level: INFO
+  
+  # Log rotation
+  rotation:
+    max_size_mb: 10
+    backup_count: 5
+    
+  # Log format
+  format: "{time:YYYY-MM-DD HH:mm:ss} | {level: <8} | {name}:{function}:{line} | {message}"
+
+
+# ==============================================================================
+# WEB UI
+# ==============================================================================
+
+web_ui:
+  # Static files directory
+  static_dir: web
+  
+  # API rate limiting
+  rate_limit:
+    requests_per_minute: 60
+
+
+# ==============================================================================
+# INCIDENTS
+# ==============================================================================
+
+incidents:
+  # Storage settings
+  storage:
+    format: json
+    directory: logs/incidents
+    
+  # Retention
+  retention_days: 90

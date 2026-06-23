@@ -1,0 +1,111 @@
+# ==============================================================================
+# RADIUS Service Configuration
+# ==============================================================================
+# Supports: FreeRADIUS 2.x and 3.x
+# ==============================================================================
+
+detection:
+  commands:
+    - name: freeradius
+      service_name: freeradius
+      process_name: freeradius
+      check: "pgrep -x freeradius >/dev/null 2>&1 && echo 'found' || pgrep -x radiusd >/dev/null 2>&1 && echo 'found' || echo 'not found'"
+
+file_paths:
+  freeradius:
+    config:
+      - /etc/freeradius/3.0/radiusd.conf
+      - /etc/freeradius/radiusd.conf
+      - /etc/raddb/radiusd.conf
+      - /usr/local/etc/raddb/radiusd.conf
+    clients:
+      - /etc/freeradius/3.0/clients.conf
+      - /etc/freeradius/clients.conf
+      - /etc/raddb/clients.conf
+    users:
+      - /etc/freeradius/3.0/users
+      - /etc/freeradius/users
+      - /etc/raddb/users
+
+log_files:
+  freeradius:
+    - path: /var/log/freeradius/radius.log
+      type: general
+    - path: /var/log/radius/radius.log
+      type: general
+    - path: /var/log/radiusd/radiusd.log
+      type: general
+    - path: /var/log/daloradius.log
+      type: web_interface
+
+health_checks:
+  - name: process_running
+    description: Check if RADIUS process is running
+    critical: true
+  
+  - name: auth_port_listening
+    description: Check if UDP port 1812 (authentication) is listening
+    critical: true
+  
+  - name: acct_port_listening
+    description: Check if UDP port 1813 (accounting) is listening
+    critical: false
+  
+  - name: config_exists
+    description: Check if config file exists
+    critical: true
+  
+  - name: log_active
+    description: Check if log file is being written
+    critical: false
+
+diagnostics:
+  - name: get_config
+    description: Show RADIUS configuration
+    requires_sudo: true
+  
+  - name: config_test
+    description: Test configuration syntax
+    requires_sudo: true
+  
+  - name: get_clients
+    description: Show configured NAS clients
+    requires_sudo: true
+  
+  - name: get_users
+    description: Show configured users
+    requires_sudo: true
+  
+  - name: get_stats
+    description: Get authentication statistics
+    requires_sudo: true
+  
+  - name: get_process_info
+    description: Show RADIUS process details
+    requires_sudo: false
+  
+  - name: get_recent_auths
+    description: Show recent successful authentications
+    requires_sudo: true
+  
+  - name: get_failed_auths
+    description: Show recent failed authentications
+    requires_sudo: true
+
+error_patterns:
+  freeradius:
+    - pattern: "Login incorrect"
+      severity: warning
+      diagnosis: "Failed authentication attempt"
+    - pattern: "Invalid user"
+      severity: warning
+      diagnosis: "Unknown user tried to authenticate"
+    - pattern: "Error:"
+      severity: error
+      diagnosis: "RADIUS error occurred"
+    - pattern: "Failed to connect"
+      severity: error
+      diagnosis: "Database connection failed"
+    - pattern: "rlm_sql"
+      severity: info
+      diagnosis: "SQL module message"

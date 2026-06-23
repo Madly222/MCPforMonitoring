@@ -1,0 +1,180 @@
+# ==============================================================================
+# DNS Service Configuration
+# ==============================================================================
+# Supports: bind9 (named), dnsmasq, unbound, PowerDNS
+# ==============================================================================
+
+detection:
+  commands:
+    - name: bind9
+      service_name: bind9
+      process_name: named
+      check: "pgrep -x named >/dev/null 2>&1 && echo 'found' || (dpkg -l bind9 2>/dev/null | grep -q '^ii' && echo 'found') || (rpm -q bind >/dev/null 2>&1 && echo 'found') || echo 'not found'"
+    
+    - name: dnsmasq
+      service_name: dnsmasq
+      process_name: dnsmasq
+      check: "pgrep -x dnsmasq >/dev/null 2>&1 && echo 'found' || (dpkg -l dnsmasq 2>/dev/null | grep -q '^ii' && echo 'found') || echo 'not found'"
+    
+    - name: unbound
+      service_name: unbound
+      process_name: unbound
+      check: "pgrep -x unbound >/dev/null 2>&1 && echo 'found' || (dpkg -l unbound 2>/dev/null | grep -q '^ii' && echo 'found') || echo 'not found'"
+    
+    - name: pdns
+      service_name: pdns
+      process_name: pdns_server
+      check: "pgrep -x pdns_server >/dev/null 2>&1 && echo 'found' || (dpkg -l pdns-server 2>/dev/null | grep -q '^ii' && echo 'found') || echo 'not found'"
+
+file_paths:
+  bind9:
+    config:
+      - /etc/bind/named.conf
+      - /etc/bind/named.conf.local
+      - /etc/bind/named.conf.options
+      - /etc/named.conf
+      - /etc/named/named.conf
+    zones:
+      - /etc/bind/zones
+      - /etc/bind
+      - /var/named
+      - /var/cache/bind
+  
+  dnsmasq:
+    config:
+      - /etc/dnsmasq.conf
+      - /etc/dnsmasq.d/local.conf
+  
+  unbound:
+    config:
+      - /etc/unbound/unbound.conf
+      - /usr/local/etc/unbound/unbound.conf
+  
+  pdns:
+    config:
+      - /etc/powerdns/pdns.conf
+      - /etc/pdns/pdns.conf
+    zones:
+      - /etc/powerdns/zones
+      - /var/lib/powerdns
+
+log_files:
+  bind9:
+    - path: /var/log/named/queries.log
+      type: queries
+    - path: /var/log/named/named.log
+      type: general
+    - path: /var/log/named.log
+      type: general
+    - path: /var/log/bind.log
+      type: general
+    - path: /var/log/syslog
+      type: syslog
+      filter: named
+  
+  dnsmasq:
+    - path: /var/log/dnsmasq.log
+      type: general
+    - path: /var/log/syslog
+      type: syslog
+      filter: dnsmasq
+  
+  unbound:
+    - path: /var/log/unbound/unbound.log
+      type: general
+    - path: /var/log/unbound.log
+      type: general
+    - path: /var/log/syslog
+      type: syslog
+      filter: unbound
+  
+  pdns:
+    - path: /var/log/pdns.log
+      type: general
+    - path: /var/log/syslog
+      type: syslog
+      filter: pdns
+
+health_checks:
+  - name: process_running
+    description: Check if DNS process is running
+    critical: true
+  
+  - name: udp_port_listening
+    description: Check if UDP port 53 is listening
+    critical: true
+  
+  - name: tcp_port_listening
+    description: Check if TCP port 53 is listening
+    critical: false
+  
+  - name: config_exists
+    description: Check if config file exists
+    critical: true
+  
+  - name: dns_resolution
+    description: Test DNS resolution
+    critical: true
+
+diagnostics:
+  - name: get_config
+    description: Show DNS configuration
+    requires_sudo: false
+  
+  - name: config_test
+    description: Test configuration syntax
+    requires_sudo: false
+  
+  - name: get_zones
+    description: List zone files
+    requires_sudo: false
+  
+  - name: query_test
+    description: Test DNS query resolution
+    requires_sudo: false
+  
+  - name: get_stats
+    description: Get query statistics
+    requires_sudo: false
+  
+  - name: get_process_info
+    description: Show DNS process details
+    requires_sudo: false
+  
+  - name: get_cache_stats
+    description: Show cache statistics
+    requires_sudo: false
+
+error_patterns:
+  bind9:
+    - pattern: "SERVFAIL"
+      severity: warning
+      diagnosis: "DNS query returned SERVFAIL"
+    - pattern: "REFUSED"
+      severity: warning
+      diagnosis: "DNS query was refused"
+    - pattern: "network unreachable"
+      severity: error
+      diagnosis: "Network unreachable for DNS resolution"
+    - pattern: "connection refused"
+      severity: error
+      diagnosis: "Connection refused to upstream DNS"
+    - pattern: "NXDOMAIN"
+      severity: info
+      diagnosis: "Domain not found (normal for non-existent domains)"
+  
+  dnsmasq:
+    - pattern: "failed to"
+      severity: error
+      diagnosis: "dnsmasq operation failed"
+    - pattern: "no servers found"
+      severity: error
+      diagnosis: "No upstream DNS servers configured"
+  
+  unbound:
+    - pattern: "error:"
+      severity: error
+      diagnosis: "Unbound error occurred"
+    - pattern: "SERVFAIL"
+      severity: warning
+      diagnosis: "DNS query returned SERVFAIL"

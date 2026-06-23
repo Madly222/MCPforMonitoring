@@ -1,0 +1,183 @@
+# ==============================================================================
+# DHCP Service Configuration
+# ==============================================================================
+# Monitoring and management settings for DHCP servers
+# Supports: isc-dhcp-server, kea-dhcp4, dnsmasq
+# Supports: systemd and SysVinit (init.d)
+# ==============================================================================
+
+
+# ==============================================================================
+# SERVICE DETECTION
+# ==============================================================================
+
+detection:
+  commands:
+    - name: isc-dhcp-server
+      check: "dpkg -l 2>/dev/null | grep -q isc-dhcp-server && echo 'found' || rpm -q dhcp-server 2>/dev/null && echo 'found'"
+      service_name: isc-dhcp-server
+      process_name: dhcpd
+      
+    - name: kea-dhcp4
+      check: "dpkg -l 2>/dev/null | grep -q kea-dhcp4-server && echo 'found'"
+      service_name: kea-dhcp4-server
+      process_name: kea-dhcp4
+      
+    - name: dnsmasq
+      check: "dpkg -l 2>/dev/null | grep -q dnsmasq && echo 'found'"
+      service_name: dnsmasq
+      process_name: dnsmasq
+
+
+# ==============================================================================
+# INIT SYSTEM DETECTION
+# ==============================================================================
+
+init_system:
+  detect_command: "if command -v systemctl >/dev/null 2>&1 && systemctl --version >/dev/null 2>&1; then echo 'systemd'; elif [ -d /etc/init.d ]; then echo 'sysvinit'; else echo 'unknown'; fi"
+  
+  commands:
+    systemd:
+      status: "systemctl is-active {service_name}"
+      start: "systemctl start {service_name}"
+      stop: "systemctl stop {service_name}"
+      restart: "systemctl restart {service_name}"
+      reload: "systemctl reload {service_name}"
+      enabled: "systemctl is-enabled {service_name}"
+      
+    sysvinit:
+      status: "/etc/init.d/{service_name} status || (pgrep -x {process_name} >/dev/null && echo 'running' || echo 'stopped')"
+      start: "/etc/init.d/{service_name} start"
+      stop: "/etc/init.d/{service_name} stop"
+      restart: "/etc/init.d/{service_name} restart"
+      reload: "/etc/init.d/{service_name} reload 2>/dev/null || /etc/init.d/{service_name} restart"
+      enabled: "ls /etc/rc2.d/S*{service_name}* >/dev/null 2>&1 && echo 'enabled' || echo 'disabled'"
+
+
+# ==============================================================================
+# LOG FILES
+# ==============================================================================
+
+log_files:
+  isc-dhcp-server:
+    - path: /var/log/syslog
+      filter: "dhcpd"
+    - path: /var/log/dhcpd.log
+      filter: null
+    - path: /var/log/messages
+      filter: "dhcpd"
+      
+  kea-dhcp4:
+    - path: /var/log/kea/kea-dhcp4.log
+      filter: null
+    - path: /var/log/syslog
+      filter: "kea-dhcp4"
+      
+  dnsmasq:
+    - path: /var/log/syslog
+      filter: "dnsmasq-dhcp"
+
+
+# ==============================================================================
+# HEALTH CHECK COMMANDS
+# ==============================================================================
+
+health_checks:
+  process_running:
+    command: "pgrep -x {process_name} >/dev/null && echo 'running' || echo 'stopped'"
+    expected: "running"
+    
+  port_listening:
+    command: "netstat -uln 2>/dev/null | grep -q ':67 ' && echo 'listening' || ss -uln 2>/dev/null | grep -q ':67 ' && echo 'listening' || echo 'not listening'"
+    expected: "listening"
+
+  config_syntax:
+    isc-dhcp-server:
+      command: "dhcpd -t -cf {config_file} 2>&1"
+    kea-dhcp4:
+      command: "kea-dhcp4 -t {config_file} 2>&1"
+    dnsmasq:
+      command: "dnsmasq --test 2>&1"
+
+
+# ==============================================================================
+# FILE PATHS (defaults, can be overridden per server)
+# ==============================================================================
+
+file_paths:
+  isc-dhcp-server:
+    config:
+      - /etc/dhcp/dhcpd.conf
+      - /etc/dhcpd.conf
+      - /var/www/phpDHCPAdmin/conf/dhcpd.conf
+    leases:
+      - /var/lib/dhcp/dhcpd.leases
+      - /var/lib/dhcpd/dhcpd.leases
+      - /var/www/phpDHCPAdmin/conf/dhcpd.leases
+      
+  kea-dhcp4:
+    config:
+      - /etc/kea/kea-dhcp4.conf
+    leases:
+      - /var/lib/kea/kea-leases4.csv
+      
+  dnsmasq:
+    config:
+      - /etc/dnsmasq.conf
+    leases:
+      - /var/lib/misc/dnsmasq.leases
+
+
+# ==============================================================================
+# DIAGNOSTIC COMMANDS
+# ==============================================================================
+
+diagnostics:
+  get_leases:
+    command: "cat {leases_file}"
+    
+  get_config:
+    command: "cat {config_file}"
+    
+  count_leases:
+    isc-dhcp-server:
+      command: "grep -c '^lease' {leases_file} 2>/dev/null || echo '0'"
+    kea-dhcp4:
+      command: "wc -l < {leases_file} 2>/dev/null || echo '0'"
+    dnsmasq:
+      command: "wc -l < {leases_file} 2>/dev/null || echo '0'"
+
+  get_process_info:
+    command: "ps aux | grep {process_name} | grep -v grep"
+
+
+# ==============================================================================
+# SAFE ACTIONS (can be executed automatically)
+# ==============================================================================
+
+safe_actions:
+  - action: restart_service
+    sysvinit: "/etc/init.d/{service_name} restart"
+    systemd: "systemctl restart {service_name}"
+    description: "Restart DHCP service"
+    risk_level: 1
+    
+  - action: reload_config
+    sysvinit: "/etc/init.d/{service_name} restart"
+    systemd: "systemctl reload {service_name}"
+    description: "Reload configuration"
+    risk_level: 1
+
+
+# ==============================================================================
+# DANGEROUS ACTIONS (require confirmation)
+# ==============================================================================
+
+dangerous_actions:
+  - action: clear_leases
+    description: "Clear all DHCP leases"
+    risk_level: 3
+    
+  - action: modify_config
+    description: "Modify DHCP configuration"
+    risk_level: 3

@@ -1,0 +1,112 @@
+# ==============================================================================
+# Ignore Patterns
+# ==============================================================================
+# Log entries matching these patterns will be ignored (noise reduction)
+# Uses regex matching
+# ==============================================================================
+
+
+# ==============================================================================
+# SYSTEM NOISE
+# ==============================================================================
+
+system:
+  - "systemd\\[1\\]: Started Session"
+  - "systemd\\[1\\]: Removed slice"
+  - "systemd\\[1\\]: Created slice"
+  - "systemd\\[1\\]: Starting User Slice"
+  - "systemd\\[1\\]: Stopping User Slice"
+  - "systemd-logind\\[.*\\]: New session"
+  - "systemd-logind\\[.*\\]: Removed session"
+  - "CRON\\[.*\\]: \\(.*\\) CMD"
+  - "CRON\\[.*\\]: pam_unix"
+
+
+# ==============================================================================
+# SSH NOISE (normal operations)
+# ==============================================================================
+
+ssh:
+  - "sshd\\[.*\\]: Accepted publickey"
+  - "sshd\\[.*\\]: Accepted password"
+  - "sshd\\[.*\\]: pam_unix.*session opened"
+  - "sshd\\[.*\\]: pam_unix.*session closed"
+  - "sshd\\[.*\\]: Received disconnect"
+  - "sshd\\[.*\\]: Disconnected from user"
+
+
+# ==============================================================================
+# DHCP NOISE (normal operations)
+# ==============================================================================
+
+dhcp:
+  - "dhcpd\\[.*\\]: DHCPDISCOVER from"
+  - "dhcpd\\[.*\\]: DHCPOFFER on"
+  - "dhcpd\\[.*\\]: DHCPREQUEST for"
+  - "dhcpd\\[.*\\]: DHCPACK on"
+  - "dhcpd\\[.*\\]: DHCPRELEASE of"
+  - "dhcpd\\[.*\\]: DHCPINFORM from"
+  - "dnsmasq-dhcp\\[.*\\]: DHCPDISCOVER"
+  - "dnsmasq-dhcp\\[.*\\]: DHCPOFFER"
+  - "dnsmasq-dhcp\\[.*\\]: DHCPREQUEST"
+  - "dnsmasq-dhcp\\[.*\\]: DHCPACK"
+
+
+# ==============================================================================
+# DNS NOISE (normal operations)
+# ==============================================================================
+
+dns:
+  - "named\\[.*\\]: client.*query:"
+  - "named\\[.*\\]: zone.*loaded serial"
+  - "named\\[.*\\]: zone.*sending notifies"
+  - "named\\[.*\\]: transfer of.*started"
+  - "named\\[.*\\]: transfer of.*complete"
+
+
+# ==============================================================================
+# POSTFIX NOISE (normal operations)
+# ==============================================================================
+
+postfix:
+  - "postfix/pickup\\[.*\\]: uid="
+  - "postfix/cleanup\\[.*\\]: message-id="
+  - "postfix/qmgr\\[.*\\]: from="
+  - "postfix/smtp\\[.*\\]: to=.*status=sent"
+  - "postfix/local\\[.*\\]: to=.*status=sent"
+  - "postfix/smtpd\\[.*\\]: connect from"
+  - "postfix/smtpd\\[.*\\]: disconnect from"
+
+
+# ==============================================================================
+# DOVECOT NOISE (normal operations)
+# ==============================================================================
+
+dovecot:
+  - "dovecot\\[.*\\]: imap-login: Login:"
+  - "dovecot\\[.*\\]: imap\\(.*\\): Logged out"
+  - "dovecot\\[.*\\]: imap-login: Disconnected.*Logged out"
+  - "dovecot\\[.*\\]: pop3-login: Login:"
+  - "dovecot\\[.*\\]: pop3\\(.*\\): Logged out"
+
+
+# ==============================================================================
+# APACHE NOISE (normal operations)
+# ==============================================================================
+
+apache:
+  - "apache2\\[.*\\]: AH00094: Command line:"
+  - "apache2\\[.*\\]: AH00163: Apache/.* configured"
+  - "apache2\\[.*\\]: AH00489: Apache/.* resuming normal operations"
+
+
+# ==============================================================================
+# SPAMASSASSIN NOISE (normal operations)
+# ==============================================================================
+
+spamfilter:
+  - "spamd\\[.*\\]: connection from"
+  - "spamd\\[.*\\]: processing message"
+  - "spamd\\[.*\\]: clean message"
+  - "spamd\\[.*\\]: identified spam"
+  - "spamd\\[.*\\]: result:"
