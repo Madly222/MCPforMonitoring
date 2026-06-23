@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+
+# Secrets — NEVER commit
+.env
+secrets.yaml
+keys/
+sessions/
+
+# Logs & runtime
+*.log
+logs/
+invoices_logs/
+
+# Backup / temp
+*.bak
+*.backup
+*~
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store

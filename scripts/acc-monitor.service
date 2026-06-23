@@ -1,0 +1,13 @@
+[Unit]
+Description=ACC.md Water Disconnection Monitor
+After=network.target
+
+[Service]
+Type=oneshot
+User=user
+WorkingDirectory=/home/user/ServersMonitoringMCP
+Environment="PATH=/home/user/ServersMonitoringMCP/venv/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=/home/user/ServersMonitoringMCP/venv/bin/python /home/user/ServersMonitoringMCP/scripts/acc_monitor.py
+
+[Install]
+WantedBy=multi-user.target

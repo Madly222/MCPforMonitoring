@@ -1,0 +1,108 @@
+# ==============================================================================
+# Safe Actions Configuration
+# ==============================================================================
+# Defines which actions can be executed automatically without confirmation
+#
+# Risk Levels:
+#   0 - No risk (read-only, status checks)
+#   1 - Low risk (restart service, reload config)
+#   2 - Medium risk (clear queues, flush cache)
+#   3 - High risk (modify config, delete data) - NEVER auto-execute
+# ==============================================================================
+
+
+# ==============================================================================
+# AUTOMATIC ACTIONS (no confirmation needed)
+# ==============================================================================
+
+auto_execute:
+  max_risk_level: 1
+  
+  actions:
+    - name: restart_service
+      risk_level: 1
+      allowed_services:
+        - dhcpd
+        - isc-dhcp-server
+        - kea-dhcp4-server
+        - named
+        - bind9
+        - postfix
+        - dovecot
+        - spamassassin
+        - apache2
+        - httpd
+        - dnsmasq
+      cooldown_seconds: 300
+      max_attempts_per_hour: 3
+
+    - name: reload_config
+      risk_level: 0
+      allowed_services:
+        - named
+        - bind9
+        - postfix
+        - apache2
+        - httpd
+      cooldown_seconds: 60
+
+    - name: flush_dns_cache
+      risk_level: 0
+      command: "rndc flush"
+      cooldown_seconds: 60
+
+    - name: flush_mail_queue_deferred
+      risk_level: 2
+      command: "postsuper -d ALL deferred"
+      cooldown_seconds: 3600
+      conditions:
+        - "queue_size > 10000"
+        - "oldest_message_hours > 168"
+
+
+# ==============================================================================
+# NOTIFY AND EXECUTE (sends notification, then executes)
+# ==============================================================================
+
+notify_and_execute:
+  max_risk_level: 2
+  
+  actions:
+    - name: clear_old_logs
+      risk_level: 2
+      conditions:
+        - "disk_usage_percent > 85"
+      
+    - name: block_ip_temporarily
+      risk_level: 2
+      conditions:
+        - "failed_auth_attempts > 100"
+        - "time_window_minutes: 60"
+
+
+# ==============================================================================
+# NEVER AUTO-EXECUTE (always require manual confirmation)
+# ==============================================================================
+
+never_auto_execute:
+  - modify_dhcp_config
+  - modify_dns_zones
+  - modify_firewall_rules
+  - delete_mail
+  - delete_user_data
+  - modify_user_accounts
+  - change_network_config
+  - clear_all_leases
+  - modify_ssl_certificates
+
+
+# ==============================================================================
+# EXECUTION LIMITS
+# ==============================================================================
+
+limits:
+  max_actions_per_minute: 5
+  max_actions_per_hour: 30
+  max_consecutive_failures: 3
+  backoff_multiplier: 2
+  max_backoff_seconds: 3600

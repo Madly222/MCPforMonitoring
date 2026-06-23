@@ -1,0 +1,203 @@
+# ==============================================================================
+# Known Errors Database
+# ==============================================================================
+# Patterns for automatic error detection and resolution
+# Format: service -> list of error patterns
+#
+# Fields:
+#   pattern     - Regex pattern to match in logs
+#   severity    - critical, warning, info
+#   auto_fix    - Whether to fix automatically (true/false)
+#   diagnosis   - Human-readable explanation
+#   commands    - List of commands to execute for fix
+#   cooldown    - Minimum seconds between auto-fix attempts
+# ==============================================================================
+
+
+dhcp:
+  - pattern: "No free leases"
+    severity: critical
+    auto_fix: false
+    diagnosis: "DHCP pool exhausted - no available IP addresses"
+    suggestions:
+      - "Check for stale leases"
+      - "Expand DHCP pool range"
+      - "Reduce lease time"
+
+  - pattern: "DHCPDECLINE.*abandoned"
+    severity: warning
+    auto_fix: false
+    diagnosis: "IP address conflict detected - client declined offered address"
+    suggestions:
+      - "Check for static IP conflicts"
+      - "Verify no duplicate DHCP servers"
+
+  - pattern: "Unable to add forward map"
+    severity: warning
+    auto_fix: false
+    diagnosis: "Dynamic DNS update failed"
+    suggestions:
+      - "Check DNS server connectivity"
+      - "Verify DDNS configuration"
+
+  - pattern: "bind.*Address already in use"
+    severity: critical
+    auto_fix: false
+    diagnosis: "Port 67 is already in use by another process"
+    suggestions:
+      - "Check for duplicate DHCP server"
+      - "Run: ss -uln | grep :67"
+
+  - pattern: "Not configured to listen"
+    severity: critical
+    auto_fix: false
+    diagnosis: "DHCP server not configured for any interface"
+    suggestions:
+      - "Check interface configuration"
+      - "Verify network interface is up"
+
+  - pattern: "exiting"
+    severity: critical
+    auto_fix: true
+    diagnosis: "DHCP service crashed"
+    commands:
+      - "systemctl restart {service_name}"
+    cooldown: 300
+
+
+dns:
+  - pattern: "SERVFAIL"
+    severity: warning
+    auto_fix: false
+    diagnosis: "DNS resolution failure"
+    suggestions:
+      - "Check upstream DNS servers"
+      - "Verify zone configuration"
+
+  - pattern: "zone.*expired"
+    severity: critical
+    auto_fix: true
+    diagnosis: "DNS zone expired - transfer may have failed"
+    commands:
+      - "rndc retransfer {zone}"
+    cooldown: 600
+
+  - pattern: "connection refused.*port 53"
+    severity: critical
+    auto_fix: true
+    diagnosis: "DNS service not responding"
+    commands:
+      - "systemctl restart named"
+    cooldown: 300
+
+
+postfix:
+  - pattern: "fatal:.*no SASL authentication"
+    severity: critical
+    auto_fix: false
+    diagnosis: "SASL authentication not configured"
+    suggestions:
+      - "Install libsasl2-modules"
+      - "Check smtpd_sasl_auth_enable setting"
+
+  - pattern: "connect to.*:25.*Connection timed out"
+    severity: warning
+    auto_fix: false
+    diagnosis: "Cannot connect to remote mail server"
+    suggestions:
+      - "Check network connectivity"
+      - "Verify firewall rules for port 25"
+
+  - pattern: "warning:.*queue file size limit exceeded"
+    severity: warning
+    auto_fix: true
+    diagnosis: "Mail queue is too large"
+    commands:
+      - "postsuper -d ALL deferred"
+    cooldown: 3600
+
+  - pattern: "fatal:.*mail system is down"
+    severity: critical
+    auto_fix: true
+    diagnosis: "Postfix service crashed"
+    commands:
+      - "systemctl restart postfix"
+    cooldown: 300
+
+
+dovecot:
+  - pattern: "auth failed"
+    severity: info
+    auto_fix: false
+    diagnosis: "Authentication failure - likely wrong password"
+    suggestions:
+      - "Check user credentials"
+      - "Review auth logs for brute force attempts"
+
+  - pattern: "out of memory"
+    severity: critical
+    auto_fix: true
+    diagnosis: "Dovecot out of memory"
+    commands:
+      - "systemctl restart dovecot"
+    cooldown: 300
+
+  - pattern: "Killed.*signal 9"
+    severity: critical
+    auto_fix: true
+    diagnosis: "Dovecot process killed by OOM killer"
+    commands:
+      - "systemctl restart dovecot"
+    cooldown: 300
+
+
+apache:
+  - pattern: "\\[crit\\].*segfault"
+    severity: critical
+    auto_fix: true
+    diagnosis: "Apache segmentation fault"
+    commands:
+      - "systemctl restart apache2"
+    cooldown: 300
+
+  - pattern: "AH00060.*seg fault"
+    severity: critical
+    auto_fix: true
+    diagnosis: "Apache child process crashed"
+    commands:
+      - "systemctl restart apache2"
+    cooldown: 300
+
+  - pattern: "AH00072.*make_sock.*could not bind"
+    severity: critical
+    auto_fix: false
+    diagnosis: "Apache cannot bind to port - port already in use"
+    suggestions:
+      - "Check what process is using the port"
+      - "Run: ss -tln | grep :80"
+
+  - pattern: "AH00016.*Configuration Failed"
+    severity: critical
+    auto_fix: false
+    diagnosis: "Apache configuration error"
+    suggestions:
+      - "Run: apachectl configtest"
+      - "Check syntax in config files"
+
+
+spamfilter:
+  - pattern: "spamd.*child process.*exited"
+    severity: warning
+    auto_fix: true
+    diagnosis: "SpamAssassin child process crashed"
+    commands:
+      - "systemctl restart spamassassin"
+    cooldown: 300
+
+  - pattern: "timed out"
+    severity: warning
+    auto_fix: false
+    diagnosis: "SpamAssassin processing timeout"
+    suggestions:
+      - "Check system resources"
+      - "Consider increasing timeout"

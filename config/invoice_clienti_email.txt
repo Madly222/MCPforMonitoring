@@ -1,0 +1,13 @@
+# Список клиентов для email рассылки счетов
+# Формат: Имя Фамилия (порядок не важен)
+
+Florian Costinel Jula
+Duca Diana
+Popa Stefan
+Artem Didushko
+Butacova Aliona
+Veaceslav Smiganovschi
+Mihail Deleu
+Cristian Bors
+Cernenchii Tihon
+Vitalie Panico

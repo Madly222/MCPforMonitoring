@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MCP Monitor - Login</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="login-page">
+    <div class="login-container">
+        <div class="login-box">
+            <h1>🖥 MCP Monitor</h1>
+            <p class="subtitle">Server Monitoring System</p>
+            
+            <form id="loginForm">
+                <div class="form-group">
+                    <input type="text" id="username" placeholder="Username" required autocomplete="username">
+                </div>
+                <div class="form-group">
+                    <input type="password" id="password" placeholder="Password" required autocomplete="current-password">
+                </div>
+                <button type="submit" id="loginBtn">Login</button>
+            </form>
+            
+            <p id="error" class="error-message"></p>
+        </div>
+    </div>
+    
+    <script src="/js/login.js"></script>
+</body>
+</html>

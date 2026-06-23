@@ -1,0 +1,9 @@
+# Список клиентов для Posta Moldovei
+# Формат: Имя Фамилия или Фамилия Имя (порядок не важен)
+# Можно также одно слово - будет искать в обоих полях
+
+Mizdrea Sergiu
+Cernenchii Tihon
+Iurii Cozlov
+Pavel Melinti
+Feodora Borcan

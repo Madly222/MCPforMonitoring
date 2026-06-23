@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MCP Server Monitor</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        /* Utility Status Indicators */
+        .utility-status {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            background: #1a1a2e;
+            border-radius: 4px;
+            margin-right: 8px;
+            cursor: pointer;
+        }
+        .utility-status:hover { background: #252540; }
+        .utility-icon { font-size: 16px; }
+        .utility-status .status-dot { width: 8px; height: 8px; border-radius: 50%; }
+        .utility-status .status-dot.status-ok { background: #4CAF50; }
+        .utility-status .status-dot.status-error { background: #f44336; animation: pulse 1.5s infinite; }
+        .utility-status .status-dot.status-loading { background: #888; }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        /* Tab Navigation */
+        .tab-nav {
+            display: flex;
+            gap: 0;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #333;
+        }
+        
+        .tab-btn {
+            padding: 12px 24px;
+            background: #1a1a2e;
+            border: none;
+            color: #888;
+            font-size: 16px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+        }
+        
+        .tab-btn:hover { color: #fff; background: #252540; }
+        .tab-btn.active { color: #4CAF50; border-bottom-color: #4CAF50; background: #252540; }
+        
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        
+        /* ONU Monitoring Styles */
+        .onu-total-stats {
+            display: flex;
+            gap: 24px;
+            padding: 16px 20px;
+            background: #1a1a2e;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+        .onu-total-stats span { color: #aaa; }
+        .onu-total-stats strong { color: #fff; }
+        .onu-total-stats .stat-online { color: #4CAF50; }
+        .onu-total-stats .stat-offline { color: #f44336; }
+        .onu-total-stats .stat-warning { color: #ff9800; }
+        
+        .olt-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 16px;
+        }
+        
+        .olt-card {
+            background: #1a1a2e;
+            border-radius: 8px;
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 2px solid transparent;
+        }
+        
+        .olt-card:hover { 
+            background: #252540; 
+            border-color: #4CAF50;
+            transform: translateY(-2px);
+        }
+        
+        .olt-card.has-offline { border-left: 4px solid #f44336; }
+        .olt-card.has-warning { border-left: 4px solid #ff9800; }
+        .olt-card.all-ok { border-left: 4px solid #4CAF50; }
+        
+        .olt-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        
+        .olt-icon { font-size: 24px; }
+        .olt-name { font-size: 18px; font-weight: bold; color: #fff; }
+        
+        .olt-stats {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+        
+        .olt-stat { text-align: center; }
+        .olt-stat-value { display: block; font-size: 20px; font-weight: bold; color: #fff; }
+        .olt-stat-label { font-size: 11px; color: #888; text-transform: uppercase; }
+        .olt-stat.online .olt-stat-value { color: #4CAF50; }
+        .olt-stat.offline .olt-stat-value { color: #f44336; }
+        .olt-stat.warning .olt-stat-value { color: #ff9800; }
+        
+        .olt-action {
+            text-align: center;
+            color: #4CAF50;
+            font-size: 13px;
+            padding-top: 12px;
+            border-top: 1px solid #333;
+        }
+        
+        .onu-toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        
+        .onu-toolbar h3 { margin: 0; color: #fff; font-size: 18px; }
+        
+        .onu-toolbar-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .onu-count { color: #888; font-size: 14px; }
+        
+        .onu-toolbar-row {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+        }
+        
+        .back-btn {
+            padding: 8px 16px;
+            background: #333;
+            border: none;
+            color: #fff;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .back-btn:hover { background: #444; }
+        
+        .refresh-btn {
+            padding: 8px 16px;
+            background: #4CAF50;
+            border: none;
+            color: #fff;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .refresh-btn:hover { background: #43a047; }
+        .refresh-btn:disabled { background: #333; cursor: not-allowed; }
+        
+        .onu-search {
+            flex: 1;
+            min-width: 200px;
+        }
+        
+        .onu-search input {
+            width: 100%;
+            padding: 10px 16px;
+            background: #1a1a2e;
+            border: 1px solid #333;
+            color: #fff;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .onu-search input:focus { outline: none; border-color: #4CAF50; }
+        .onu-search input::placeholder { color: #666; }
+        
+        .onu-filters { display: flex; gap: 8px; }
+        
+        .filter-btn {
+            padding: 8px 16px;
+            background: #252540;
+            border: 1px solid #333;
+            color: #888;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+        }
+        .filter-btn:hover { border-color: #4CAF50; color: #fff; }
+        .filter-btn.active { background: #4CAF50; border-color: #4CAF50; color: #fff; }
+        
+        .onu-list {
+            background: #1a1a2e;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        .onu-list-header {
+            display: grid;
+            grid-template-columns: 80px 1fr 130px 130px 80px 110px 120px;
+            gap: 10px;
+            padding: 12px 16px;
+            background: #252540;
+            font-size: 11px;
+            color: #888;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+        
+        .onu-row-item {
+            display: grid;
+            grid-template-columns: 80px 1fr 130px 130px 80px 110px 120px;
+            gap: 10px;
+            padding: 12px 16px;
+            border-bottom: 1px solid #252540;
+            align-items: center;
+            font-size: 13px;
+        }
+        
+        .onu-row-item:hover { background: #252540; }
+        .onu-row-item.offline { background: rgba(244, 67, 54, 0.05); }
+        .onu-row-item.low_signal { background: rgba(255, 152, 0, 0.05); }
+        
+        .col-id {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .onu-status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #888;
+        }
+        .onu-status-dot.online { background: #4CAF50; }
+        .onu-status-dot.offline { background: #f44336; }
+        .onu-status-dot.low_signal { background: #ff9800; }
+        
+        .port-badge {
+            padding: 2px 6px;
+            background: #333;
+            border-radius: 3px;
+            font-size: 11px;
+            color: #aaa;
+        }
+        
+        .col-client {
+            color: #fff;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .col-client .no-desc { color: #555; }
+        .col-client .last-offline { margin-left: 8px; cursor: help; }
+        
+        .col-model { color: #888; font-size: 13px; }
+        
+        .col-sn { 
+            color: #aaa; 
+            font-family: monospace; 
+            font-size: 11px;
+            word-break: break-all;
+        }
+        
+        .col-mac {
+            color: #aaa;
+            font-family: monospace;
+            font-size: 11px;
+        }
+        
+        .col-signal { color: #aaa; font-family: monospace; }
+        .col-signal .signal-current { font-size: 14px; }
+        .col-signal .signal-avg { font-size: 11px; color: #666; margin-top: 2px; }
+        .col-signal .signal-good { color: #4CAF50; }
+        .col-signal .signal-warning { color: #ff9800; }
+        .col-signal .signal-critical { color: #f44336; }
+        
+        .status-badge {
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .status-badge.online { background: rgba(76, 175, 80, 0.2); color: #4CAF50; }
+        .status-badge.offline { background: rgba(244, 67, 54, 0.2); color: #f44336; }
+        .status-badge.low_signal { background: rgba(255, 152, 0, 0.2); color: #ff9800; }
+        
+        .reason-badge {
+            display: block;
+            margin-top: 4px;
+            padding: 2px 6px;
+            background: rgba(244, 67, 54, 0.1);
+            border-radius: 3px;
+            font-size: 11px;
+            color: #f44336;
+        }
+        
+        .onu-empty {
+            text-align: center;
+            padding: 60px 20px;
+            color: #888;
+            font-size: 16px;
+        }
+        
+        @media (max-width: 900px) {
+            .onu-list-header { display: none; }
+            
+            .onu-row-item {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 8px;
+            }
+            
+            .col-id { width: 100%; }
+            .col-client { width: 100%; }
+            .col-model, .col-signal, .col-status { width: auto; }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <header class="header">
+            <div class="header-left">
+                <h1>🖥️ MCP Server Monitor</h1>
+            </div>
+            <div class="header-right">
+                <button class="utility-status" id="restartBtn" title="Перезапустить сервис">
+                    <span class="utility-icon">🔄</span>
+                </button>
+                <button class="utility-status" id="emailInvoiceBtn" title="Отправить счета по email">
+                    <span class="utility-icon">✉️</span>
+                </button>
+                <button class="utility-status" id="invoiceBtn" title="Сгенерировать счёт">
+                    <span class="utility-icon">📄</span>
+                </button>
+                <span class="utility-status" id="electricStatus" title="Электричество">
+                    <span class="utility-icon">⚡</span>
+                    <span class="status-dot status-ok" id="electricDot"></span>
+                </span>
+                <span class="utility-status" id="waterStatus" title="Вода">
+                    <span class="utility-icon">💧</span>
+                    <span class="status-dot status-ok" id="waterDot"></span>
+                </span>
+                <span class="connection-status" id="connectionStatus">
+                    <span class="status-dot status-ok"></span>
+                    <span id="statusText">Connected</span>
+                </span>
+                <span class="user-info" id="userInfo">
+                    <span id="username"></span>
+                    <span id="userRole" class="user-role"></span>
+                </span>
+                <button class="btn btn-logout" id="logoutBtn">Logout</button>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <div class="tab-nav">
+                <button class="tab-btn active" data-tab="servers">🖥️ Servers</button>
+                <button class="tab-btn" data-tab="onu">📡 ONU Monitoring</button>
+                <a href="/netbox.html" class="tab-btn" style="text-decoration:none;" title="NetBox Auto-Fill">📦 NetBox Auto-Fill</a>
+            </div>
+
+            <div class="tab-content active" id="tab-servers">
+                <section class="command-section">
+                    <div class="command-input-wrapper">
+                        <input type="text" class="command-input" id="commandInput"
+                               placeholder="Enter command (e.g., 'status', 'restart dhcp')">
+                        <button class="btn btn-primary" id="executeBtn">Execute</button>
+                    </div>
+                </section>
+
+                <section class="servers-section">
+                    <h2>Servers</h2>
+                    <div class="servers-grid" id="serversGrid">
+                        <div class="loading">Loading servers...</div>
+                    </div>
+                </section>
+
+                <section class="output-section">
+                    <h2>Output</h2>
+                    <div class="output-area" id="outputArea">
+                        Ready. Enter a command above or click on a server for details.
+                    </div>
+                </section>
+
+                <section class="history-section">
+                    <h2>Command History</h2>
+                    <div class="history-list" id="historyList">
+                        <p class="empty-history">No commands executed yet</p>
+                    </div>
+                </section>
+            </div>
+
+            <div class="tab-content" id="tab-onu">
+                <div id="onuHeader"></div>
+                <div id="onuContainer">
+                    <div class="onu-empty">Loading ONU data...</div>
+                </div>
+            </div>
+        </main>
+
+        <footer class="footer">
+            <p>MCP Server Monitor v1.0.0</p>
+        </footer>
+    </div>
+
+    <div class="modal" id="serverModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalTitle">Server Details</h3>
+                <button class="modal-close" id="modalClose">&times;</button>
+            </div>
+            <div class="modal-body" id="modalBody">Loading...</div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="modalCloseBtn">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/api.js"></script>
+    <script src="/js/app.js"></script>
+    <script src="/js/onu.js"></script>
+    <script>
+        // Invoice Generator Button
+        (function() {
+            const invoiceBtn = document.getElementById("invoiceBtn");
+            if (!invoiceBtn) return;
+            
+            invoiceBtn.addEventListener("click", async () => {
+                if (!confirm("Сгенерировать и отправить счёт?")) return;
+                
+                invoiceBtn.style.opacity = "0.5";
+                invoiceBtn.style.pointerEvents = "none";
+                invoiceBtn.title = "Генерация...";
+                
+                try {
+                    const result = await API.invoice.generate();
+                    if (result.success) {
+                        alert("✅ " + result.message);
+                    } else {
+                        alert("❌ Ошибка: " + result.message);
+                    }
+                } catch (e) {
+                    alert("❌ Ошибка: " + e.message);
+                } finally {
+                    invoiceBtn.style.opacity = "1";
+                    invoiceBtn.style.pointerEvents = "auto";
+                    invoiceBtn.title = "Сгенерировать счёт";
+                }
+            });
+        })();
+        // Email Invoice Sender
+        (function() {
+        // Service Restart (admin only)
+        (function() {
+            const restartBtn = document.getElementById("restartBtn");
+            if (!restartBtn) return;
+            restartBtn.addEventListener("click", async () => {
+                if (!confirm("Перезапустить сервис? Соединение будет временно потеряно.")) return;
+                restartBtn.style.opacity = "0.5";
+                restartBtn.style.pointerEvents = "none";
+                try {
+                    const response = await fetch("/api/service/restart", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" }
+                    });
+                    const result = await response.json();
+                    if (result.success) {
+                        alert("✅ " + result.message + "\n\nСтраница перезагрузится через 5 секунд...");
+                        setTimeout(() => location.reload(), 5000);
+                    } else {
+                        alert("❌ Ошибка: " + result.message);
+                    }
+                } catch (e) {
+                    alert("❌ Ошибка: " + e.message);
+                } finally {
+                    restartBtn.style.opacity = "1";
+                    restartBtn.style.pointerEvents = "auto";
+                }
+            });
+        })();
+            const emailInvoiceBtn = document.getElementById("emailInvoiceBtn");
+            if (!emailInvoiceBtn) return;
+            emailInvoiceBtn.addEventListener("click", async () => {
+                if (!confirm("Отправить счета по email?")) return;
+                emailInvoiceBtn.style.opacity = "0.5";
+                emailInvoiceBtn.style.pointerEvents = "none";
+                emailInvoiceBtn.title = "Отправка...";
+                try {
+                    const response = await fetch("/api/invoice/send-emails", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" }
+                    });
+                    const result = await response.json();
+                    let msg = result.message;
+                    if (result.no_email && result.no_email.length > 0) {
+                        msg += "\n\nБез email: " + result.no_email.join(", ");
+                    }
+                    if (result.not_found && result.not_found.length > 0) {
+                        msg += "\n\nНе найдены: " + result.not_found.join(", ");
+                    }
+                    if (result.success) {
+                        alert("✅ " + msg);
+                    } else {
+                        alert("❌ Ошибка: " + msg);
+                    }
+                } catch (e) {
+                    alert("❌ Ошибка: " + e.message);
+                } finally {
+                    emailInvoiceBtn.style.opacity = "1";
+                    emailInvoiceBtn.style.pointerEvents = "auto";
+                    emailInvoiceBtn.title = "Отправить счета по email";
+                }
+            });
+        })();
+
+        // Electric Status Indicator
+        (function() {
+            const electricStatus = document.getElementById('electricStatus');
+            const electricDot = document.getElementById('electricDot');
+            
+            if (!electricStatus || !electricDot) return;
+            
+            let lastStatus = null;
+            
+            async function updateElectricStatus() {
+                try {
+                    const data = await API.electric.status();
+                    lastStatus = data;
+                    
+                    if (data.ok) {
+                        electricDot.className = 'status-dot status-ok';
+                        electricStatus.title = 'Электричество: OK' + (data.last_check ? '\nПроверено: ' + new Date(data.last_check).toLocaleString() : '');
+                    } else {
+                        electricDot.className = 'status-dot status-error';
+                        electricStatus.title = '⚠️ Возможно отключение электричества!\nНайдено: ' + data.matches_count + '\nПроверено: ' + new Date(data.last_check).toLocaleString();
+                    }
+                } catch (e) {
+                    electricDot.className = 'status-dot status-loading';
+                    electricStatus.title = 'Не удалось проверить статус электричества';
+                }
+            }
+            
+            electricStatus.addEventListener('click', async () => {
+                if (lastStatus && !lastStatus.ok && lastStatus.matches.length > 0) {
+                    alert('⚠️ Возможно отключение электричества!\n\n' + lastStatus.matches.join('\n\n'));
+                } else {
+                    electricDot.className = 'status-dot status-loading';
+                    try {
+                        const data = await API.electric.check();
+                        lastStatus = data;
+                        if (data.ok) {
+                            electricDot.className = 'status-dot status-ok';
+                            alert('✅ Отключений электричества не найдено');
+                        } else {
+                            electricDot.className = 'status-dot status-error';
+                            alert('⚠️ Возможно отключение электричества!\n\n' + data.matches.join('\n\n'));
+                        }
+                    } catch (e) {
+                        electricDot.className = 'status-dot status-ok';
+                        alert('Ошибка проверки: ' + e.message);
+                    }
+                }
+            });
+            
+            updateElectricStatus();
+            setInterval(updateElectricStatus, 30 * 60 * 1000);
+        })();
+
+        // Water Status Indicator
+        (function() {
+            const waterStatus = document.getElementById('waterStatus');
+            const waterDot = document.getElementById('waterDot');
+            
+            if (!waterStatus || !waterDot) return;
+            
+            let lastStatus = null;
+            
+            async function updateWaterStatus() {
+                try {
+                    const data = await API.acc.status();
+                    lastStatus = data;
+                    
+                    if (data.ok) {
+                        waterDot.className = 'status-dot status-ok';
+                        waterStatus.title = 'Вода: OK' + (data.last_check ? '\nПроверено: ' + new Date(data.last_check).toLocaleString() : '');
+                    } else {
+                        waterDot.className = 'status-dot status-error';
+                        waterStatus.title = '⚠️ Возможно отключение воды!\nНайдено: ' + data.matches_count + '\nПроверено: ' + new Date(data.last_check).toLocaleString();
+                    }
+                } catch (e) {
+                    waterDot.className = 'status-dot status-loading';
+                    waterStatus.title = 'Не удалось проверить статус воды';
+                }
+            }
+            
+            waterStatus.addEventListener('click', async () => {
+                if (lastStatus && !lastStatus.ok && lastStatus.matches.length > 0) {
+                    alert('⚠️ Возможно отключение воды!\n\n' + lastStatus.matches.join('\n\n'));
+                } else {
+                    waterDot.className = 'status-dot status-loading';
+                    try {
+                        const data = await API.acc.check();
+                        lastStatus = data;
+                        if (data.ok) {
+                            waterDot.className = 'status-dot status-ok';
+                            alert('✅ Отключений воды не найдено');
+                        } else {
+                            waterDot.className = 'status-dot status-error';
+                            alert('⚠️ Возможно отключение воды!\n\n' + data.matches.join('\n\n'));
+                        }
+                    } catch (e) {
+                        waterDot.className = 'status-dot status-ok';
+                        alert('Ошибка проверки: ' + e.message);
+                    }
+                }
+            });
+            
+            updateWaterStatus();
+            setInterval(updateWaterStatus, 30 * 60 * 1000);
+        })();
+    </script>
+</body>
+</html>

@@ -1,0 +1,63 @@
+# Адреса PoP для мониторинга электричества (только Chișinău)
+# Формат: Улица НомерДома
+
+# PoP TVRM
+Kaczynski 3
+
+# PoP ECB
+Ismail 33
+
+# PoP BDEC (два адреса)
+Alexandru cel Bun 49
+Alexandru cel Bun 62
+
+# PoP METEO
+Grenoble 193
+
+# PoP GEMENII
+Ștefan cel Mare 136
+
+# PoP MEZON
+Moscovei 21
+
+# PoP V.LUPU
+Vasile Lupu 18
+
+# PoP N.TESTIMITIANU
+Testemițanu 17/1
+
+# PoP MIORITA 1
+Miorița 1
+
+# PoP MIORITA 5
+Miorița 5
+
+# PoP CHIOCEILOR
+Ghioceilor 2
+
+# PoP CIOCANA
+Ciocana 12
+
+# PoP SIGMA
+Decebal 76
+
+# PoP UNIC
+Ștefan cel Mare 8
+
+# PoP OFFICE RAPIDLINK
+Asachi 71/7
+
+# PoP ZORILE
+Calea Ieșilor 8
+
+# PoP CONTINENTAL
+Cantemir 5
+
+# PoP TIGHINA
+Tighina 2/4
+
+# PoP ALBA IULIA
+Alba Iulia 77/20
+
+# PoP UZINELOR OS
+Uzinelor 210

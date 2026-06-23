@@ -1,0 +1,76 @@
+# ==============================================================================
+# MCP Server Monitor - Python Dependencies
+# ==============================================================================
+# Python 3.10+ required
+# Install:  pip install -r requirements.txt
+#
+# NOTE: Some features also require SYSTEM packages (not pip):
+#   - mysql client  -> billing/invoice DB queries (apt install mysql-client)
+#   - snmp / snmpwalk -> ONU monitoring          (apt install snmp)
+#   - openssh-client -> SSH operations           (usually preinstalled)
+# See README.md > Requirements for the full list.
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# Web framework
+# ------------------------------------------------------------------------------
+fastapi==0.109.2
+uvicorn[standard]==0.27.1
+
+# ------------------------------------------------------------------------------
+# SSH clients
+# ------------------------------------------------------------------------------
+asyncssh==2.14.2          # primary async SSH (core ssh_manager)
+paramiko==3.4.0           # sync SSH (invoice sender, netbox services)
+netmiko==4.3.0            # Cisco IOS automation (netbox-autofill)
+scp==0.14.5               # file copy over SSH (invoice/report transfer)
+
+# ------------------------------------------------------------------------------
+# Configuration
+# ------------------------------------------------------------------------------
+pyyaml==6.0.1
+pydantic==2.6.1
+pydantic-settings==2.1.0
+python-dotenv==1.0.1      # loads .env for business-automation modules
+
+# ------------------------------------------------------------------------------
+# Security / auth
+# ------------------------------------------------------------------------------
+bcrypt==4.1.2
+python-multipart==0.0.9
+itsdangerous==2.1.2
+
+# ------------------------------------------------------------------------------
+# Claude AI
+# ------------------------------------------------------------------------------
+anthropic==0.18.1
+
+# ------------------------------------------------------------------------------
+# HTTP clients
+# ------------------------------------------------------------------------------
+httpx==0.26.0             # health checks
+aiohttp==3.9.3            # electric/water disconnection scrapers
+requests==2.31.0          # NetBox REST helpers
+
+# ------------------------------------------------------------------------------
+# Email
+# ------------------------------------------------------------------------------
+aiosmtplib==3.0.1
+# (smtplib from stdlib is also used by some monitors)
+
+# ------------------------------------------------------------------------------
+# NetBox integration
+# ------------------------------------------------------------------------------
+pynetbox==7.3.3
+
+# ------------------------------------------------------------------------------
+# Document generation (invoices / reports)
+# ------------------------------------------------------------------------------
+openpyxl==3.1.2           # XLSX generation (Posta Moldovei, billing)
+fpdf2==2.7.8              # PDF invoices (imported as `fpdf`)
+
+# ------------------------------------------------------------------------------
+# Logging / async utils
+# ------------------------------------------------------------------------------
+loguru==0.7.2
+aiofiles==23.2.1
