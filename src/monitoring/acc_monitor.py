@@ -41,13 +41,18 @@ ACC_CONFIG = {
 }
 
 # Email configuration
-EMAIL_CONFIG = {
-    "enabled": os.getenv("ACC_EMAIL_ENABLED", "true").lower() == "true",
-    "smtp_server": os.getenv("ACC_SMTP_SERVER", "mail.rapidlink.md"),
-    "smtp_port": int(os.getenv("ACC_SMTP_PORT", 25)),
-    "from": os.getenv("ACC_EMAIL_FROM", "control@rapidlink.md"),
-    "to": os.getenv("ACC_EMAIL_TO", "admin@rapidlink.md").split(","),
-}
+def _email_config() -> dict:
+    """Read notification config live from the runtime store (with env fallback)."""
+    from src.web.runtime_config import get_notification_config, get_notification_recipients
+    cfg = dict(get_notification_config("acc"))
+    cfg["to"] = get_notification_recipients("acc")
+    return cfg
+
+
+def _acc_pattern() -> str:
+    """Read the ACC address pattern live from the runtime store."""
+    from src.web.runtime_config import get_acc_pattern
+    return get_acc_pattern()
 
 CACHE_FILE = Path(__file__).parent.parent.parent / "logs" / "acc_status.json"
 NOTIFIED_FILE = Path(__file__).parent.parent.parent / "logs" / "acc_notified.json"
@@ -59,6 +64,7 @@ _last_check_time: Optional[datetime] = None
 def send_email_notification(matches: list) -> bool:
     """Send email notification about water disconnection."""
     
+    EMAIL_CONFIG = _email_config()
     if not EMAIL_CONFIG["enabled"]:
         logger.debug("ACC email notifications disabled")
         return False
@@ -77,7 +83,7 @@ def send_email_notification(matches: list) -> bool:
         body = f"""⚠️ ВНИМАНИЕ! Обнаружено отключение воды!
 
 Дата проверки: {datetime.now().strftime('%d.%m.%Y %H:%M')}
-Адрес мониторинга: {ACC_CONFIG['address_pattern']}
+Адрес мониторинга: {_acc_pattern()}
 
 {'='*50}
 НАЙДЕНО:
@@ -99,6 +105,10 @@ MCP Server Monitor
         msg.attach(MIMEText(body, 'plain', 'utf-8'))
         
         server = smtplib.SMTP(EMAIL_CONFIG["smtp_server"], EMAIL_CONFIG["smtp_port"], timeout=30)
+        if EMAIL_CONFIG.get("smtp_tls"):
+            server.starttls()
+        if EMAIL_CONFIG.get("smtp_user"):
+            server.login(EMAIL_CONFIG["smtp_user"], EMAIL_CONFIG.get("smtp_password", ""))
         server.sendmail(EMAIL_CONFIG["from"], EMAIL_CONFIG["to"], msg.as_string())
         server.quit()
         
@@ -259,10 +269,10 @@ async def check_acc_status(force: bool = False) -> ACCStatus:
         if elapsed < ACC_CONFIG['check_interval']:
             return _cached_status
     
-    logger.info(f"ACC: checking for '{ACC_CONFIG['address_pattern']}'...")
+    logger.info(f"ACC: checking for '{_acc_pattern()}'...")
     
     today = datetime.now().strftime("%Y-%m-%d")
-    pattern = ACC_CONFIG['address_pattern']
+    pattern = _acc_pattern()
     all_matches = []
     
     # Tab 1 = Planned notifications (Уведомления)

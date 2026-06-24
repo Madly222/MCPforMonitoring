@@ -137,26 +137,16 @@ def verify_password(password: str, hashed: str) -> bool:
 
 def authenticate_user(username: str, password: str) -> Optional[dict]:
     """
-    Authenticate user against configuration.
+    Authenticate user against the user store.
     
     Returns user dict if successful, None otherwise.
     """
-    config = get_config()
-    secrets = config.load_secrets()
-    
-    for user in secrets.web_users:
-        if user.username == username:
-            if verify_password(password, user.password):
-                return {
-                    "username": user.username,
-                    "role": user.role
-                }
-            else:
-                logger.warning(f"Invalid password for user: {username}")
-                return None
-    
-    logger.warning(f"User not found: {username}")
-    return None
+    from src.web.users import get_user_store
+
+    result = get_user_store().verify(username, password)
+    if result is None:
+        logger.warning(f"Failed authentication for user: {username}")
+    return result
 
 
 # ==============================================================================
@@ -193,11 +183,21 @@ async def get_current_user(request: Request) -> UserInfo:
 
 
 async def require_admin(user: UserInfo = Depends(get_current_user)) -> UserInfo:
-    """Dependency to require admin role."""
-    if user.role != "admin":
+    """Dependency to require admin role (superadmin also allowed)."""
+    if user.role not in ("admin", "superadmin"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin access required"
+        )
+    return user
+
+
+async def require_superadmin(user: UserInfo = Depends(get_current_user)) -> UserInfo:
+    """Dependency to require superadmin role."""
+    if user.role != "superadmin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Superadmin access required"
         )
     return user
 
@@ -210,20 +210,37 @@ router = APIRouter()
 
 
 @router.post("/login", response_model=LoginResponse)
-async def login(request: LoginRequest, response: Response):
+async def login(request: LoginRequest, response: Response, http_request: Request):
     """
     Authenticate user and create session.
     
     Sets session cookie on successful authentication.
     """
+    from src.web.audit import get_audit_logger
+
+    client_ip = http_request.client.host if http_request.client else None
     user = authenticate_user(request.username, request.password)
     
     if not user:
         logger.warning(f"Failed login attempt for user: {request.username}")
+        get_audit_logger().log(
+            action="login_failed",
+            username=request.username,
+            ip=client_ip,
+            success=False,
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password"
         )
+    
+    get_audit_logger().log(
+        action="login",
+        username=user["username"],
+        role=user["role"],
+        ip=client_ip,
+        success=True,
+    )
     
     session_store = get_session_store()
     session_id = session_store.create_session(user["username"], user["role"])
@@ -257,6 +274,16 @@ async def logout(request: Request, response: Response):
     
     if session_id:
         session_store = get_session_store()
+        session = session_store.get_session(session_id)
+        if session:
+            from src.web.audit import get_audit_logger
+            get_audit_logger().log(
+                action="logout",
+                username=session["username"],
+                role=session["role"],
+                ip=request.client.host if request.client else None,
+                success=True,
+            )
         session_store.delete_session(session_id)
     
     response.delete_cookie("session_id")

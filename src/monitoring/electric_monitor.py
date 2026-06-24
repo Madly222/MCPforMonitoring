@@ -39,13 +39,12 @@ ELECTRIC_CONFIG = {
     "days_ahead": 3,
 }
 
-EMAIL_CONFIG = {
-    "enabled": os.getenv("ELECTRIC_EMAIL_ENABLED", "true").lower() == "true",
-    "smtp_server": os.getenv("ELECTRIC_SMTP_SERVER", os.getenv("ACC_SMTP_SERVER", "mail.rapidlink.md")),
-    "smtp_port": int(os.getenv("ELECTRIC_SMTP_PORT", os.getenv("ACC_SMTP_PORT", 25))),
-    "from": os.getenv("ELECTRIC_EMAIL_FROM", os.getenv("ACC_EMAIL_FROM", "control@rapidlink.md")),
-    "to": os.getenv("ELECTRIC_EMAIL_TO", os.getenv("ACC_EMAIL_TO", "admin@rapidlink.md")).split(","),
-}
+def _email_config() -> dict:
+    """Read notification config live from the runtime store (with env fallback)."""
+    from src.web.runtime_config import get_notification_config, get_notification_recipients
+    cfg = dict(get_notification_config("electric"))
+    cfg["to"] = get_notification_recipients("electric")
+    return cfg
 
 CONFIG_DIR = Path(__file__).parent.parent.parent / "config"
 ADDRESSES_FILE = CONFIG_DIR / "electric_addresses.txt"
@@ -106,6 +105,7 @@ def find_house_in_list(target: str, houses_text: str) -> bool:
 def send_email_notification(matches: list) -> bool:
     """Send email notification about electricity disconnection."""
     
+    EMAIL_CONFIG = _email_config()
     if not EMAIL_CONFIG["enabled"]:
         logger.debug("Electric email notifications disabled")
         return False
@@ -145,6 +145,10 @@ MCP Server Monitor
         msg.attach(MIMEText(body, 'plain', 'utf-8'))
         
         server = smtplib.SMTP(EMAIL_CONFIG["smtp_server"], EMAIL_CONFIG["smtp_port"], timeout=30)
+        if EMAIL_CONFIG.get("smtp_tls"):
+            server.starttls()
+        if EMAIL_CONFIG.get("smtp_user"):
+            server.login(EMAIL_CONFIG["smtp_user"], EMAIL_CONFIG.get("smtp_password", ""))
         server.sendmail(EMAIL_CONFIG["from"], EMAIL_CONFIG["to"], msg.as_string())
         server.quit()
         

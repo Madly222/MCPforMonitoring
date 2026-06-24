@@ -15,6 +15,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         currentUser = { username: authData.username, role: authData.role };
         initializeUI();
         await loadServerStatus();
+        populateConsoleServers();
+        checkClaudeHealth();
         refreshInterval = setInterval(loadServerStatus, 30000);
     } catch (error) {
         console.error('Auth check failed:', error);
@@ -168,7 +170,7 @@ async function showServerDetails(serverId) {
                 serverData.services.forEach(function(service) {
                     var icon = service.running ? '&#128994;' : '&#128308;';
                     html += '<div class="service-row"><div class="service-info"><strong>' + icon + ' ' + (service.name || service.type) + '</strong><span class="service-health">(' + (service.health || 'unknown') + ')</span></div>';
-                    if (currentUser.role === 'admin') {
+                    if (currentUser.role === 'admin' || currentUser.role === 'superadmin') {
                         html += '<div class="service-actions">';
                         html += '<button class="btn btn-sm btn-success" onclick="performAction(\'' + serverId + '\', \'' + service.type + '\', \'restart\')">Restart</button>';
                         html += '<button class="btn btn-sm btn-secondary" onclick="performAction(\'' + serverId + '\', \'' + service.type + '\', \'stop\')">Stop</button>';
@@ -181,7 +183,7 @@ async function showServerDetails(serverId) {
         } catch (e) { console.log('Services error:', e); }
         
         // Admin actions (without Install Updates)
-        if (currentUser.role === 'admin') {
+        if (currentUser.role === 'admin' || currentUser.role === 'superadmin') {
             html += '<div class="admin-actions"><h4>&#9889; System Actions</h4><div class="action-buttons">';
             html += '<button class="btn btn-secondary" onclick="checkUpdates(\'' + serverId + '\')">Check Updates</button>';
             html += '<button class="btn btn-secondary" onclick="showServerDetails(\'' + serverId + '\')">Refresh</button>';
@@ -236,7 +238,33 @@ async function handleExecute() {
     var output = document.getElementById('outputArea');
     var command = input.value.trim();
     if (!command) return;
+
+    var serverSel = document.getElementById('consoleServer');
+    var serverId = serverSel ? serverSel.value : '';
+    var useSudo = document.getElementById('consoleSudo') && document.getElementById('consoleSudo').checked;
+
     output.textContent = 'Executing...';
+
+    // Raw SSH console mode: a server is selected
+    if (serverId) {
+        try {
+            var r = await API.console.exec(serverId, command, useSudo);
+            var t = '[' + serverId + '] $ ' + (useSudo ? 'sudo ' : '') + command + '\n\n';
+            if (r.stdout) t += r.stdout;
+            if (r.stderr) t += (r.stdout ? '\n' : '') + '--- stderr ---\n' + r.stderr;
+            if (!r.stdout && !r.stderr) t += '(no output)';
+            t += '\n\n(exit code ' + r.exit_code + ')';
+            output.textContent = t;
+            addToHistory(serverId + ': ' + command, r.success);
+        } catch (error) {
+            output.textContent = 'Error: ' + error.message;
+            addToHistory(serverId + ': ' + command, false);
+        }
+        input.value = '';
+        return;
+    }
+
+    // Interpret mode (Claude / keyword fallback)
     try {
         var result = await API.commands.execute(command);
         var text = '';
@@ -260,6 +288,40 @@ async function handleExecute() {
         addToHistory(command, false);
     }
     input.value = '';
+}
+
+async function populateConsoleServers() {
+    var sel = document.getElementById('consoleServer');
+    if (!sel) return;
+    try {
+        var data = await API.servers.list();
+        var servers = data.servers || data || [];
+        servers.forEach(function(s) {
+            var opt = document.createElement('option');
+            opt.value = s.id;
+            opt.textContent = '🖥️ ' + s.id;
+            sel.appendChild(opt);
+        });
+    } catch (e) { /* ignore */ }
+}
+
+async function checkClaudeHealth() {
+    var dot = document.getElementById('claudeDot');
+    var wrap = document.getElementById('claudeStatus');
+    if (!dot) return;
+    try {
+        var h = await API.claude.health();
+        if (h.ok) {
+            dot.style.background = '#3fb950';
+            if (wrap) wrap.title = 'Claude API: OK (' + (h.model || '') + ')';
+        } else {
+            dot.style.background = '#f85149';
+            if (wrap) wrap.title = 'Claude API: ERROR — ' + (h.error || 'unknown');
+        }
+    } catch (e) {
+        dot.style.background = '#f85149';
+        if (wrap) wrap.title = 'Claude API: unreachable';
+    }
 }
 
 function addToHistory(command, success) {

@@ -257,3 +257,32 @@ web_users:
 ```
 
 `.env` is only needed once you enable the automation modules.
+
+---
+
+## Runtime store & roles (added)
+
+### `sessions/users.json` and `sessions/runtime_settings.json` (gitignored)
+The superadmin console writes to two runtime stores that take precedence over
+`secrets.yaml` (seed-and-own model):
+- **Users** seed from `secrets.yaml > web_users` into `sessions/users.json` on
+  first run; afterwards the JSON store is authoritative.
+- **Servers & OLTs** seed from `secrets.yaml` into `sessions/runtime_settings.json`
+  and are merged back by `config.load_secrets()`. A corrupt store falls back to
+  `secrets.yaml` (startup never breaks).
+- **Outage notification settings** (SMTP server/port/user/password/TLS/from/to),
+  the **ACC water pattern**, and the **electric address list** live in the runtime
+  store / `config/electric_addresses.txt` and are read **live** by the monitors.
+
+To re-seed from `secrets.yaml`, stop the app and delete the relevant key in
+`runtime_settings.json` (or delete `users.json`).
+
+### Roles
+`web_users[].role` now accepts **`superadmin`**, `admin`, `operator`. Set one
+account to `superadmin` before first run to bootstrap (or use
+`scripts/manage_users.py role <user> superadmin`). Permission matrix: see
+`docs/AGENTS.md` §5.
+
+### Claude model
+`secrets.yaml > claude.model` must be a **current** model — the old
+`claude-sonnet-4-20250514` now returns 404. Verify with `scripts/check_claude.py`.

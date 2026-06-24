@@ -212,3 +212,56 @@ Triggers the phpDHCPAdmin (MySQL) → NetBox MAC synchronization.
 - Errors are returned as standard FastAPI JSON error responses with appropriate
   HTTP status codes (401 unauthenticated, 403 insufficient role, 404 unknown
   server/service, 5xx execution failures).
+
+---
+
+## Admin & superadmin endpoints (added)
+
+All under `/api/admin`, **superadmin only** (`require_superadmin`). See AGENTS.md §5.
+
+### Users
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/admin/users` | List users (no hashes) + valid roles |
+| POST | `/api/admin/users` | Create `{username,password,role}` |
+| DELETE | `/api/admin/users/{username}` | Delete (not self / last superadmin) |
+| PUT | `/api/admin/users/{username}/password` | Change password |
+| PUT | `/api/admin/users/{username}/role` | Change role |
+
+### Audit
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/admin/audit` | Recent entries; filters `limit,username,action,since` |
+
+### Settings (live, no restart)
+| Method | Path | Description |
+|--------|------|-------------|
+| GET/PUT | `/api/admin/config/notifications/{electric\|acc}` | SMTP server/port/user/password/TLS/from/to/enabled (secrets masked on read) |
+| GET/PUT | `/api/admin/config/acc-pattern` | Water (acc.md) regex |
+| GET/PUT | `/api/admin/config/electric-addresses` | Electric watch list |
+
+### Servers & OLTs (apply after restart)
+| Method | Path | Description |
+|--------|------|-------------|
+| GET / POST | `/api/admin/config/servers` | List / add server (secrets masked on read, preserved on blank) |
+| PUT / DELETE | `/api/admin/config/servers/{id}` | Edit / delete |
+| GET / POST | `/api/admin/config/olts` | List / add OLT |
+| PUT / DELETE | `/api/admin/config/olts/{id}` | Edit / delete |
+| POST | `/api/admin/config/reload` | Reload config from disk |
+
+## Console & diagnostics (added)
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| POST | `/api/console/exec` | admin | Raw SSH command `{server_id,command,sudo}` → `{stdout,stderr,exit_code}` (audited) |
+| GET | `/api/claude/health` | any user | Minimal Claude ping → `{ok,model,error?}` |
+
+## Permission changes (added)
+- `/api/service/restart` → **superadmin only**.
+- `/api/invoice/generate`, `/api/invoice/send-emails` → **operator only**.
+
+## Audited actions
+`login`, `login_failed`, `logout`, `command`, `service_action`, `app_restart`,
+`console_exec`, `user_add/delete/role_change/password_change`,
+`server_add/edit/delete`, `olt_add/edit/delete`,
+`settings_notifications/acc_pattern/electric_addresses`, `config_reload`.

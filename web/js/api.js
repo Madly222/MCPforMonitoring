@@ -125,6 +125,104 @@ const API = {
         },
     },
 
+    // Raw SSH console
+    console: {
+        async exec(server_id, command, sudo) {
+            return API.request('/console/exec', {
+                method: 'POST',
+                body: JSON.stringify({ server_id, command, sudo: !!sudo }),
+            });
+        },
+    },
+
+    // Claude health
+    claude: {
+        async health() {
+            return API.request('/claude/health');
+        },
+    },
+
+    // Admin API (superadmin only)
+    admin: {
+        async listUsers() {
+            return API.request('/admin/users');
+        },
+        async createUser(username, password, role) {
+            return API.request('/admin/users', {
+                method: 'POST',
+                body: JSON.stringify({ username, password, role }),
+            });
+        },
+        async deleteUser(username) {
+            return API.request(`/admin/users/${encodeURIComponent(username)}`, { method: 'DELETE' });
+        },
+        async setPassword(username, password) {
+            return API.request(`/admin/users/${encodeURIComponent(username)}/password`, {
+                method: 'PUT',
+                body: JSON.stringify({ password }),
+            });
+        },
+        async setRole(username, role) {
+            return API.request(`/admin/users/${encodeURIComponent(username)}/role`, {
+                method: 'PUT',
+                body: JSON.stringify({ role }),
+            });
+        },
+        async audit(params = {}) {
+            const q = new URLSearchParams();
+            if (params.limit) q.set('limit', params.limit);
+            if (params.username) q.set('username', params.username);
+            if (params.action) q.set('action', params.action);
+            if (params.since) q.set('since', params.since);
+            const qs = q.toString();
+            return API.request(`/admin/audit${qs ? '?' + qs : ''}`);
+        },
+        async getNotifications(channel) {
+            return API.request(`/admin/config/notifications/${channel}`);
+        },
+        async saveNotifications(channel, cfg) {
+            return API.request(`/admin/config/notifications/${channel}`, {
+                method: 'PUT', body: JSON.stringify(cfg),
+            });
+        },
+        async getAccPattern() {
+            return API.request('/admin/config/acc-pattern');
+        },
+        async saveAccPattern(pattern) {
+            return API.request('/admin/config/acc-pattern', {
+                method: 'PUT', body: JSON.stringify({ pattern }),
+            });
+        },
+        async getElectricAddresses() {
+            return API.request('/admin/config/electric-addresses');
+        },
+        async saveElectricAddresses(addresses) {
+            return API.request('/admin/config/electric-addresses', {
+                method: 'PUT', body: JSON.stringify({ addresses }),
+            });
+        },
+        async listServers() { return API.request('/admin/config/servers'); },
+        async createServer(s) {
+            return API.request('/admin/config/servers', { method: 'POST', body: JSON.stringify(s) });
+        },
+        async editServer(id, s) {
+            return API.request(`/admin/config/servers/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(s) });
+        },
+        async deleteServer(id) {
+            return API.request(`/admin/config/servers/${encodeURIComponent(id)}`, { method: 'DELETE' });
+        },
+        async listOlts() { return API.request('/admin/config/olts'); },
+        async createOlt(o) {
+            return API.request('/admin/config/olts', { method: 'POST', body: JSON.stringify(o) });
+        },
+        async editOlt(id, o) {
+            return API.request(`/admin/config/olts/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(o) });
+        },
+        async deleteOlt(id) {
+            return API.request(`/admin/config/olts/${encodeURIComponent(id)}`, { method: 'DELETE' });
+        },
+    },
+
     async health() {
         return API.request('/health');
     },
