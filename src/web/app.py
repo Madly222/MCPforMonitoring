@@ -18,6 +18,7 @@ from src.monitoring.updates_checker import get_updates_checker
 from src.web.api import router as api_router
 from src.web.auth import router as auth_router
 from src.web.api_netbox import router as netbox_router
+from src.web.admin import router as admin_router
 
 async def handle_log_event(event: LogEvent):
     """Process log events from watcher."""
@@ -146,6 +147,7 @@ def create_app() -> FastAPI:
     app.include_router(auth_router, prefix="/api/auth", tags=["Authentication"])
     app.include_router(api_router, prefix="/api", tags=["API"])
     app.include_router(netbox_router, prefix="/api/netbox", tags=["NetBox Auto-Fill"])
+    app.include_router(admin_router, prefix="/api/admin", tags=["Admin"])
     
     static_dir = PROJECT_ROOT / "web"
     if static_dir.exists():

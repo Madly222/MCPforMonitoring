@@ -141,8 +141,8 @@ class WebUserConfig(BaseModel):
     @field_validator("role")
     @classmethod
     def validate_role(cls, v: str) -> str:
-        if v not in ("admin", "operator"):
-            raise ValueError("role must be 'admin' or 'operator'")
+        if v not in ("admin", "operator", "superadmin"):
+            raise ValueError("role must be 'superadmin', 'admin' or 'operator'")
         return v
 
 
@@ -288,11 +288,42 @@ class ConfigLoader:
         try:
             data = self.load_yaml(secrets_path)
             self._secrets = SecretsConfig(**data)
+            self._merge_runtime_overrides()
             logger.info("Secrets configuration loaded successfully")
             return self._secrets
         except Exception as e:
             logger.error(f"Failed to load secrets: {e}")
             sys.exit(1)
+    
+    def _merge_runtime_overrides(self) -> None:
+        """
+        Merge web-edited server/OLT overrides over secrets.yaml.
+        
+        Seed-and-own: on first load the runtime store is seeded from secrets.yaml;
+        afterwards the store is the source of truth. Any failure here is non-fatal
+        and falls back to the secrets.yaml values so startup never breaks.
+        """
+        try:
+            import src.web.runtime_config as rc
+        except Exception:
+            return
+        
+        try:
+            if not rc.servers_seeded():
+                rc.seed_servers([s.model_dump() for s in self._secrets.servers])
+            self._secrets.servers = [ServerConfig(**d) for d in rc.get_servers()]
+        except Exception as e:
+            logger.error(f"Runtime server override skipped (using secrets.yaml): {e}")
+        
+        try:
+            if self._secrets.onu_monitoring is not None:
+                if not rc.olts_seeded():
+                    rc.seed_olts([o.model_dump() for o in self._secrets.onu_monitoring.olts])
+                self._secrets.onu_monitoring.olts = [
+                    OLTConfig(**d) for d in rc.get_olts()
+                ]
+        except Exception as e:
+            logger.error(f"Runtime OLT override skipped (using secrets.yaml): {e}")
     
     def load_settings(self, path: Optional[Path] = None) -> SettingsConfig:
         if self._settings is not None:

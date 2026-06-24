@@ -7,7 +7,7 @@ Provides API for server monitoring and management.
 from typing import Optional
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from loguru import logger
 
@@ -62,6 +62,12 @@ class ActionResponse(BaseModel):
     success: bool
     message: str
     output: Optional[str] = None
+
+
+class ConsoleRequest(BaseModel):
+    server_id: str
+    command: str
+    sudo: bool = False
 
 
 router = APIRouter()
@@ -332,6 +338,7 @@ async def get_service_status(server_id: str, service_type: str) -> dict:
 async def perform_action(
     server_id: str,
     request: ActionRequest,
+    http_request: Request,
     user: UserInfo = Depends(require_admin)
 ):
     config = get_config()
@@ -382,10 +389,24 @@ async def perform_action(
             detail=f"Unknown action: {request.action}"
         )
     
+    from src.web.audit import get_audit_logger
+    client_ip = http_request.client.host if http_request.client else None
+    target = f"{request.service_type}@{server_id}"
+
     try:
-        logger.info(f"User {user.username} performing {request.action} on {request.service_type}@{server_id}")
+        logger.info(f"User {user.username} performing {request.action} on {target}")
         result = await action_fn()
-        
+
+        get_audit_logger().log(
+            action="service_action",
+            username=user.username,
+            role=user.role,
+            target=target,
+            detail=request.action,
+            success=result.success,
+            ip=client_ip,
+        )
+
         return ActionResponse(
             success=result.success,
             message=f"Action {request.action} completed",
@@ -394,6 +415,15 @@ async def perform_action(
     
     except Exception as e:
         logger.error(f"Action failed: {e}")
+        get_audit_logger().log(
+            action="service_action",
+            username=user.username,
+            role=user.role,
+            target=target,
+            detail=request.action,
+            success=False,
+            ip=client_ip,
+        )
         return ActionResponse(
             success=False,
             message=f"Action failed: {str(e)}"
@@ -517,6 +547,8 @@ async def check_electric_now(user: UserInfo = Depends(get_current_user)):
 @router.post("/invoice/generate")
 async def generate_invoice_endpoint(user: UserInfo = Depends(get_current_user)):
     """Generate invoices: Paynet (email+FTP) and Posta Moldovei (DB query+FTP)."""
+    if user.role != "operator":
+        raise HTTPException(status_code=403, detail="Operator access required")
     try:
         results = {}
         
@@ -691,11 +723,21 @@ async def poll_olt(
 @router.post("/execute", response_model=CommandResponse)
 async def execute_command(
     request: CommandRequest,
+    http_request: Request,
     user: UserInfo = Depends(require_admin)
 ):
     command = request.command.strip()
     
     logger.info(f"User {user.username} executing command: {command}")
+
+    from src.web.audit import get_audit_logger
+    get_audit_logger().log(
+        action="command",
+        username=user.username,
+        role=user.role,
+        detail=command,
+        ip=http_request.client.host if http_request.client else None,
+    )
     
     config = get_config()
     ssh = get_ssh_manager()
@@ -1339,6 +1381,8 @@ async def refresh_updates(user: UserInfo = Depends(require_admin)):
 @router.post("/invoice/send-emails")
 async def send_invoice_emails_endpoint(user: UserInfo = Depends(get_current_user)):
     """Send invoice emails to clients from invoice_clienti_email.txt."""
+    if user.role != "operator":
+        raise HTTPException(status_code=403, detail="Operator access required")
     try:
         from src.monitoring.email_invoice_sender import send_email_invoices
         result = send_email_invoices()
@@ -1352,10 +1396,13 @@ async def send_invoice_emails_endpoint(user: UserInfo = Depends(get_current_user
 # SERVICE RESTART (admin only)
 # ==============================================================================
 @router.post("/service/restart")
-async def restart_service(user: UserInfo = Depends(get_current_user)):
-    """Restart mcp-monitor service. Admin only."""
-    if user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
+async def restart_service(http_request: Request, user: UserInfo = Depends(get_current_user)):
+    """Restart mcp-monitor service. Superadmin only."""
+    if user.role != "superadmin":
+        raise HTTPException(status_code=403, detail="Superadmin access required")
+
+    from src.web.audit import get_audit_logger
+    client_ip = http_request.client.host if http_request.client else None
     try:
         import subprocess
         result = subprocess.run(
@@ -1364,10 +1411,101 @@ async def restart_service(user: UserInfo = Depends(get_current_user)):
             text=True,
             timeout=30
         )
-        if result.returncode == 0:
+        ok = result.returncode == 0
+        get_audit_logger().log(
+            action="app_restart",
+            username=user.username,
+            role=user.role,
+            target="mcp-monitor",
+            success=ok,
+            ip=client_ip,
+        )
+        if ok:
             return {"success": True, "message": "Service restart initiated"}
         else:
             return {"success": False, "message": f"Error: {result.stderr}"}
     except Exception as e:
         logger.error(f"Service restart error: {e}")
+        get_audit_logger().log(
+            action="app_restart", username=user.username, role=user.role,
+            target="mcp-monitor", success=False, ip=client_ip,
+        )
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==============================================================================
+# SSH CONSOLE — raw command execution on a target server
+# ==============================================================================
+
+@router.post("/console/exec")
+async def console_exec(
+    request: ConsoleRequest,
+    http_request: Request,
+    user: UserInfo = Depends(require_admin)
+):
+    """
+    Execute a raw shell command on a target server over SSH and return its
+    output, as if connected via SSH. Admin/superadmin only; every command is
+    audited.
+    """
+    ssh = get_ssh_manager()
+    command = request.command.strip()
+    server_id = request.server_id
+
+    from src.web.audit import get_audit_logger
+    client_ip = http_request.client.host if http_request.client else None
+    get_audit_logger().log(
+        action="console_exec",
+        username=user.username,
+        role=user.role,
+        target=server_id,
+        detail=("sudo " if request.sudo else "") + command,
+        ip=client_ip,
+    )
+
+    try:
+        if request.sudo:
+            result = await ssh.execute_sudo(server_id, command)
+        else:
+            # Non-login SSH shells often have a minimal PATH, so binaries like
+            # systemctl/ss/ip are "not found". Prepend a sane PATH.
+            wrapped = (
+                "export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH; "
+                + command
+            )
+            result = await ssh.execute(server_id, wrapped)
+        return {
+            "success": result.success,
+            "exit_code": result.exit_code,
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            "duration_ms": result.duration_ms,
+        }
+    except Exception as e:
+        logger.error(f"Console exec error on {server_id}: {e}")
+        return {"success": False, "exit_code": -1, "stdout": "", "stderr": str(e)}
+
+
+# ==============================================================================
+# CLAUDE HEALTH — verify the API key/model are working
+# ==============================================================================
+
+@router.get("/claude/health")
+async def claude_health(user: UserInfo = Depends(get_current_user)):
+    """Make a minimal Claude API call to verify the key and model are alive."""
+    from src.core.claude_client import get_claude_client
+    model = None
+    try:
+        secrets = get_config().load_secrets()
+        model = secrets.claude.model
+        if not secrets.claude.api_key:
+            return {"ok": False, "model": model, "error": "No API key configured"}
+        claude = get_claude_client()
+        claude.client.messages.create(
+            model=model,
+            max_tokens=5,
+            messages=[{"role": "user", "content": "ping"}],
+        )
+        return {"ok": True, "model": model}
+    except Exception as e:
+        return {"ok": False, "model": model, "error": str(e)}

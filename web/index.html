@@ -346,13 +346,17 @@
                 <h1>🖥️ MCP Server Monitor</h1>
             </div>
             <div class="header-right">
-                <button class="utility-status" id="restartBtn" title="Перезапустить сервис">
+                <span class="utility-status" id="claudeStatus" title="Claude API status">
+                    <span class="utility-icon">🤖</span>
+                    <span class="status-dot" id="claudeDot" style="background:#888;"></span>
+                </span>
+                <button class="utility-status" id="restartBtn" title="Перезапустить сервис" style="display:none;">
                     <span class="utility-icon">🔄</span>
                 </button>
-                <button class="utility-status" id="emailInvoiceBtn" title="Отправить счета по email">
+                <button class="utility-status" id="emailInvoiceBtn" title="Отправить счета по email" style="display:none;">
                     <span class="utility-icon">✉️</span>
                 </button>
-                <button class="utility-status" id="invoiceBtn" title="Сгенерировать счёт">
+                <button class="utility-status" id="invoiceBtn" title="Сгенерировать счёт" style="display:none;">
                     <span class="utility-icon">📄</span>
                 </button>
                 <span class="utility-status" id="electricStatus" title="Электричество">
@@ -380,13 +384,19 @@
                 <button class="tab-btn active" data-tab="servers">🖥️ Servers</button>
                 <button class="tab-btn" data-tab="onu">📡 ONU Monitoring</button>
                 <a href="/netbox.html" class="tab-btn" style="text-decoration:none;" title="NetBox Auto-Fill">📦 NetBox Auto-Fill</a>
+                <button class="tab-btn" data-tab="admin" id="adminTabBtn" style="display:none;">🛡️ Admin</button>
             </div>
 
             <div class="tab-content active" id="tab-servers">
                 <section class="command-section">
                     <div class="command-input-wrapper">
+                        <select id="consoleServer" title="Run as SSH on a server, or leave blank to interpret"
+                                style="padding:10px;background:#252540;border:1px solid #3a3a5a;border-radius:6px;color:#fff;min-width:160px;">
+                            <option value="">🧠 Interpret</option>
+                        </select>
                         <input type="text" class="command-input" id="commandInput"
-                               placeholder="Enter command (e.g., 'status', 'restart dhcp')">
+                               placeholder="Enter command (e.g., 'status', or pick a server and type 'journalctl -u isc-dhcp-server -n 50')">
+                        <label style="color:#9aa;font-size:13px;white-space:nowrap;"><input type="checkbox" id="consoleSudo"> sudo</label>
                         <button class="btn btn-primary" id="executeBtn">Execute</button>
                     </div>
                 </section>
@@ -419,6 +429,75 @@
                     <div class="onu-empty">Loading ONU data...</div>
                 </div>
             </div>
+
+            <div class="tab-content" id="tab-admin">
+                <section class="servers-section" style="margin-bottom:24px;">
+                    <h2>&#9881;&#65039; Settings</h2>
+
+                    <div style="background:#1e1e2e;padding:16px;border-radius:8px;margin:12px 0;">
+                        <h4 style="margin:0 0 8px;">&#9889; Electric outage addresses</h4>
+                        <p style="color:#9aa;font-size:13px;margin:0 0 8px;">One address per line (e.g. <code>Kaczynski 3</code>). Applied live.</p>
+                        <textarea id="electricAddresses" rows="6" style="width:100%;padding:8px;background:#252540;border:1px solid #3a3a5a;border-radius:6px;color:#fff;font-family:monospace;"></textarea>
+                        <button class="btn btn-primary" id="saveAddressesBtn" style="margin-top:8px;">Save Addresses</button>
+                    </div>
+
+                    <div style="background:#1e1e2e;padding:16px;border-radius:8px;margin:12px 0;">
+                        <h4 style="margin:0 0 8px;">&#128167; Water outage pattern (acc.md)</h4>
+                        <p style="color:#9aa;font-size:13px;margin:0 0 8px;">Regex matched against acc.md (e.g. <code>Asachi\s*,?\s*71</code>). Applied live.</p>
+                        <input type="text" id="accPattern" style="width:100%;padding:8px;background:#252540;border:1px solid #3a3a5a;border-radius:6px;color:#fff;font-family:monospace;">
+                        <button class="btn btn-primary" id="saveAccPatternBtn" style="margin-top:8px;">Save Pattern</button>
+                    </div>
+
+                    <div style="background:#1e1e2e;padding:16px;border-radius:8px;margin:12px 0;">
+                        <h4 style="margin:0 0 8px;">&#128231; Notification email</h4>
+                        <p style="color:#9aa;font-size:13px;margin:0 0 8px;">SMTP server and recipients for outage alerts. Applied live.</p>
+                        <div id="notifElectric"></div>
+                        <div id="notifAcc"></div>
+                    </div>
+                </section>
+
+                <section class="servers-section" style="margin-bottom:24px;">
+                    <h2>&#128421;&#65039; Monitored Servers</h2>
+                    <p style="color:#e0a030;font-size:13px;margin:4px 0;">&#9888;&#65039; Changes apply after a service restart.</p>
+                    <div id="serversAdmin"><div class="loading">Loading servers...</div></div>
+                </section>
+
+                <section class="servers-section" style="margin-bottom:24px;">
+                    <h2>&#128225; OLT / ONU Devices</h2>
+                    <p style="color:#e0a030;font-size:13px;margin:4px 0;">&#9888;&#65039; Changes apply after a service restart.</p>
+                    <div id="oltsAdmin"><div class="loading">Loading OLTs...</div></div>
+                </section>
+
+                <section class="servers-section" style="margin-bottom:24px;">
+                    <h2>&#128100; Users</h2>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:12px 0;background:#1e1e2e;padding:12px;border-radius:8px;">
+                        <input type="text" id="newUserName" placeholder="username"
+                               style="padding:8px;background:#252540;border:1px solid #3a3a5a;border-radius:6px;color:#fff;">
+                        <input type="password" id="newUserPass" placeholder="password"
+                               style="padding:8px;background:#252540;border:1px solid #3a3a5a;border-radius:6px;color:#fff;">
+                        <select id="newUserRole"
+                                style="padding:8px;background:#252540;border:1px solid #3a3a5a;border-radius:6px;color:#fff;">
+                            <option value="operator">operator</option>
+                            <option value="admin">admin</option>
+                            <option value="superadmin">superadmin</option>
+                        </select>
+                        <button class="btn btn-primary" id="addUserBtn">Add User</button>
+                    </div>
+                    <div id="usersTable"><div class="loading">Loading users...</div></div>
+                </section>
+
+                <section class="history-section">
+                    <h2>&#128220; Audit Log</h2>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:12px 0;background:#1e1e2e;padding:12px;border-radius:8px;">
+                        <input type="text" id="auditUser" placeholder="filter by user"
+                               style="padding:8px;background:#252540;border:1px solid #3a3a5a;border-radius:6px;color:#fff;">
+                        <input type="text" id="auditAction" placeholder="filter by action"
+                               style="padding:8px;background:#252540;border:1px solid #3a3a5a;border-radius:6px;color:#fff;">
+                        <button class="btn btn-secondary" id="auditRefreshBtn">Refresh</button>
+                    </div>
+                    <div id="auditTable"><div class="loading">Loading audit log...</div></div>
+                </section>
+            </div>
         </main>
 
         <footer class="footer">
@@ -442,6 +521,28 @@
     <script src="/js/api.js"></script>
     <script src="/js/app.js"></script>
     <script src="/js/onu.js"></script>
+    <script src="/js/admin.js"></script>
+    <script>
+        // Role-based visibility for header action buttons:
+        //   restart  -> superadmin only
+        //   invoices -> operator only
+        (async function() {
+            try {
+                const me = await API.auth.me();
+                const role = me && me.role;
+                if (role === 'superadmin') {
+                    const b = document.getElementById('restartBtn');
+                    if (b) b.style.display = '';
+                }
+                if (role === 'operator') {
+                    const e = document.getElementById('emailInvoiceBtn');
+                    const i = document.getElementById('invoiceBtn');
+                    if (e) e.style.display = '';
+                    if (i) i.style.display = '';
+                }
+            } catch (err) { /* not authenticated */ }
+        })();
+    </script>
     <script>
         // Invoice Generator Button
         (function() {
