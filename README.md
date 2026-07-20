@@ -7,7 +7,7 @@
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Status](https://img.shields.io/badge/status-production-success)
 
-A self-hosted control plane that watches a fleet of Linux servers over SSH, detects problems in real time, lets operators run natural-language commands (interpreted by Claude), and automates a set of recurring operational and billing tasks. It exposes a FastAPI backend and a lightweight web dashboard.
+A self-hosted control plane that watches a fleet of Linux servers over SSH, detects problems in real time, lets operators run natural-language commands (interpreted by Claude), and automates a set of recurring operational and billing tasks. It exposes a FastAPI backend, a lightweight web dashboard, and a role-gated superadmin console for managing users, servers, OLTs, and runtime settings without editing files by hand.
 
 ---
 
@@ -42,6 +42,7 @@ MCP Server Monitor connects to remote servers over SSH and provides:
 - **Service management** — first-class handlers for DHCP, DNS, and RADIUS (status, restart/reload, health diagnostics, log inspection). Postfix, Dovecot, Apache, and SpamAssassin are supported at a generic level (status/restart via SSH) without dedicated diagnostic handlers.
 - **Operations automation** — a set of scheduled jobs handling utility-outage alerts, invoice generation/delivery, and inventory sync (see [Monitoring & Automation Modules](#monitoring--automation-modules)).
 - **GPON visibility** — SNMP-based ONU monitoring for ZTE C320 OLTs (signal levels, status, MAC retrieval).
+- **Administration** — a superadmin console for user/role management, live server & OLT CRUD, editable runtime settings (notifications, outage patterns/addresses), an append-only audit log, an SSH command console, and a Claude API health probe.
 
 The application runs as a single ASGI service (Uvicorn + FastAPI) on port **4455** by default, plus optional systemd timer units for the scheduled jobs.
 
@@ -56,8 +57,9 @@ flowchart TB
     end
 
     subgraph App["FastAPI Application (port 4455)"]
-        AUTH[Auth & Sessions<br/>bcrypt + cookies]
+        AUTH[Auth & Sessions<br/>bcrypt + cookies<br/>superadmin / admin / operator]
         API[REST API<br/>api.py / api_netbox.py]
+        ADMIN[Superadmin console<br/>admin.py: users, servers,<br/>OLTs, settings, audit]
         LIFESPAN[Lifespan<br/>starts background monitors]
     end
 
@@ -93,8 +95,12 @@ flowchart TB
     TARGETS[(Monitored Servers<br/>DHCP / DNS / RADIUS / Mail / Web)]
     OLT[(ZTE C320 OLT)]
     NB[(NetBox)]
+    STORE[(Runtime store<br/>sessions/users.json<br/>sessions/runtime_settings.json<br/>logs/audit.jsonl)]
 
     UI --> AUTH --> API
+    UI --> ADMIN
+    ADMIN --> STORE
+    AUTH --> STORE
     API --> Core
     API --> Services
     LIFESPAN --> Monitors
@@ -145,9 +151,17 @@ flowchart TB
 - Cisco switch → NetBox interface/VLAN/cable auto-fill.
 
 ### Web & API
-- Session-based auth (bcrypt) with `admin` / `operator` roles.
+- Session-based auth (bcrypt) with three roles: `superadmin` > `admin` > `operator`.
 - Dashboard for servers, services, ONUs, utilities, and NetBox auto-fill.
 - Full REST API (see below).
+
+### Administration (superadmin)
+- **User management** — create/delete users, change passwords and roles from the UI (`manage_users.py` CLI also available). The last remaining superadmin cannot be deleted or demoted.
+- **Live infrastructure config** — add/edit/remove monitored servers and OLTs, then hot-reload without a restart. Seeded once from `secrets.yaml`, after which the runtime store is authoritative.
+- **Editable runtime settings** — notification channels, the water-outage (acc.md) match pattern, and the power-outage address list.
+- **Audit log** — every privileged action (user/role changes, config edits, console commands) is appended to `logs/audit.jsonl` and viewable in the console.
+- **SSH command console** — run raw commands on a monitored server from the browser (admin/superadmin only; every command is audited).
+- **Claude health probe** — one-click check that the configured Claude key and model respond.
 
 ---
 
@@ -181,6 +195,10 @@ ServersMonitoringMCP/
 │   │   ├── dhcp.py
 │   │   ├── dns.py
 │   │   └── radius.py
+│   ├── actions/                # (scaffolding) auto-remediation action layer
+│   ├── knowledge/              # (scaffolding) knowledge-base helpers
+│   ├── notifications/          # (scaffolding) notification dispatch
+│   ├── storage/                # (scaffolding) persistence helpers
 │   ├── monitoring/             # Background monitors + automation jobs
 │   │   ├── log_watcher.py
 │   │   ├── error_detector.py
@@ -195,9 +213,13 @@ ServersMonitoringMCP/
 │   │   └── dhcp_mac_sync.py
 │   └── web/
 │       ├── app.py              # FastAPI app factory + lifespan
-│       ├── api.py              # Main REST API
+│       ├── api.py              # Main REST API (incl. console/exec, claude/health)
 │       ├── api_netbox.py       # NetBox auto-fill API
-│       └── auth.py             # Login, sessions, roles
+│       ├── admin.py            # Superadmin console API (/api/admin/*)
+│       ├── auth.py             # Login, sessions, 3-role model
+│       ├── users.py            # JSON-backed runtime user store
+│       ├── runtime_config.py   # Live-editable settings + server/OLT store
+│       └── audit.py            # Append-only audit log (logs/audit.jsonl)
 ├── services/
 │   └── netbox-autofill/        # Standalone Cisco→NetBox automation
 │       ├── orchestrator.py
@@ -214,8 +236,14 @@ ServersMonitoringMCP/
 │   ├── known_errors.yaml       # Regex error patterns + diagnoses
 │   ├── ignore_patterns.yaml    # Log noise filters
 │   └── learned/                # Runtime-learned patterns
-├── web/                        # Static dashboard (HTML/CSS/JS)
-├── scripts/                    # Test scripts + systemd unit/timer files
+├── web/                        # Static dashboard
+│   ├── index.html              # Dashboard + superadmin console
+│   ├── login.html
+│   ├── netbox.html
+│   ├── css/style.css
+│   └── js/                     # app.js, api.js, admin.js, onu.js, login.js
+├── scripts/                    # Test/util scripts + systemd unit/timer files
+│                               #   incl. manage_users.py, check_claude.py, check_electric.py
 ├── fonts/                      # DejaVu fonts (PDF generation)
 ├── secrets.example.yaml        # Template -> copy to secrets.yaml
 ├── .env.example                # Template -> copy to .env
@@ -300,7 +328,9 @@ Defines monitored servers, SSH/sudo credentials, Claude API key, web users, emai
 - `mcp_server` — web host/port, session secret, session expiry.
 - `claude` — API key, model, token limit, timeout.
 - `email` — SMTP for built-in notifications.
-- `web_users[]` — dashboard logins (`admin` / `operator`); plaintext passwords are hashed on first run.
+- `web_users[]` — dashboard logins (`superadmin` / `admin` / `operator`); plaintext passwords are hashed on first run.
+
+> **Runtime store — read this.** On first run, `web_users`, `servers`, and `onu_monitoring` seed a JSON-backed runtime store (`sessions/users.json`, `sessions/runtime_settings.json`). **After seeding, that store — not `secrets.yaml` — is the source of truth** for users, servers, and OLTs, so later edits are done through the superadmin console (or `scripts/manage_users.py`). Editing `secrets.yaml` after the first run has no effect unless you clear the corresponding store file. Claude/email/session secrets are still read from `secrets.yaml`.
 
 ### 2. `.env` — automation secrets
 Read by the business-automation modules (electric/water outage, invoicing, MAC sync). Copy from `.env.example`. Covers SMTP, FTP (posta.md), billing DB, NetBox token, and per-job email recipients. **This layer is separate from `secrets.yaml`** — both are gitignored.
@@ -365,11 +395,12 @@ sudo systemctl enable --now acc-monitor.timer
 
 ## Web Interface
 
-- **Login** at `/login.html` with credentials from `secrets.yaml`.
+- **Login** at `/login.html`; credentials come from the runtime user store (seeded from `secrets.yaml` on first run).
 - **Dashboard** (`/`): server cards with live status, service controls, recent errors/health, utility (electric/water) indicators, ONU overview, and a natural-language command box.
+- **Superadmin console** (in the dashboard, superadmin only): user & role management, live server/OLT CRUD, editable notification/outage settings, the audit-log viewer, an SSH command console, and the Claude health check.
 - **NetBox** (`/netbox.html`): scan a Cisco switch and apply interface/VLAN/cable updates to NetBox.
 
-Roles: `admin` can execute commands and trigger actions; `operator` is read-only.
+Roles: `superadmin` has full control including the admin console; `admin` can execute commands and trigger actions; `operator` is read-only.
 
 ---
 
@@ -392,6 +423,8 @@ All endpoints are under `/api`. Authentication is session-based; most require a 
 |--------|------|-------------|
 | POST | `/api/execute` | Natural-language command (Claude + fallback) |
 | POST | `/api/service/restart` | Restart a service |
+| POST | `/api/console/exec` | Run a raw command on a server (admin, audited) |
+| GET | `/api/claude/health` | Verify Claude key/model are reachable |
 | GET | `/api/monitoring/status` | Monitor subsystem status |
 | GET | `/api/monitoring/errors` | Recent detected errors |
 | GET | `/api/monitoring/health` | Latest health reports |
@@ -425,6 +458,26 @@ All endpoints are under `/api`. Authentication is session-based; most require a 
 |--------|------|-------------|
 | POST | `/api/auth/login` · `/api/auth/logout` | Session login/logout |
 | GET | `/api/auth/me` · `/api/auth/check` | Current user / auth check |
+
+### Admin console (superadmin only)
+All endpoints are under `/api/admin` and require the `superadmin` role.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/admin/users` | List users + valid roles |
+| POST | `/api/admin/users` | Create a user |
+| DELETE | `/api/admin/users/{username}` | Delete a user (not the last superadmin) |
+| PUT | `/api/admin/users/{username}/password` | Change a user's password |
+| PUT | `/api/admin/users/{username}/role` | Change a user's role (not the last superadmin) |
+| GET | `/api/admin/audit` | Read the audit log |
+| GET/PUT | `/api/admin/config/notifications/{channel}` | Get/set a notification channel |
+| GET/PUT | `/api/admin/config/acc-pattern` | Get/set the water-outage match pattern |
+| GET/PUT | `/api/admin/config/electric-addresses` | Get/set the power-outage address list |
+| GET/POST | `/api/admin/config/servers` | List / add monitored servers |
+| PUT/DELETE | `/api/admin/config/servers/{id}` | Edit / remove a server |
+| GET/POST | `/api/admin/config/olts` | List / add OLTs |
+| PUT/DELETE | `/api/admin/config/olts/{id}` | Edit / remove an OLT |
+| POST | `/api/admin/config/reload` | Hot-reload config from the runtime store |
 
 ### NetBox auto-fill
 | Method | Path | Description |
@@ -478,6 +531,8 @@ Auto-remediation is gated by **`config/safe_actions.yaml`**, which classifies ac
 - Secrets live in `secrets.yaml` and `.env`, both gitignored — never commit them.
 - SSH private keys live in `keys/` (chmod `600`), gitignored.
 - Web passwords are bcrypt-hashed; sessions are signed cookies with configurable expiry.
+- The runtime store (`sessions/users.json`, `sessions/runtime_settings.json`) and audit log (`logs/audit.jsonl`) live under gitignored directories — never commit them.
+- Privileged actions are role-gated: the admin console requires `superadmin`, and the SSH command console (`POST /api/console/exec`) requires at least `admin`. Every such action is written to the audit log.
 - Auto-remediation is constrained by an explicit risk policy (`safe_actions.yaml`).
 - Rotate the `session_secret` and all credentials before any production deployment.
 
@@ -493,6 +548,9 @@ python scripts/test_ssh.py <server-id>        # SSH connectivity
 python scripts/test_dhcp.py <server-id>       # DHCP handler
 python scripts/test_monitoring.py             # monitoring pipeline
 python scripts/test_claude.py                 # Claude API
+python scripts/check_claude.py                # Claude key/model health
+python scripts/check_electric.py              # power-outage checker
+python scripts/manage_users.py                # CLI user management
 ```
 
 ### Adding a new service handler
@@ -523,3 +581,4 @@ Extended docs live in [`docs/`](docs/):
 ## License
 
 MIT License.
+test
