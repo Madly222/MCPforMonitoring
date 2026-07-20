@@ -14,6 +14,7 @@ Covers:
 
 import json
 import os
+import re
 import threading
 from pathlib import Path
 from typing import Optional
@@ -148,6 +149,10 @@ def set_acc_pattern(pattern: str) -> str:
     pattern = (pattern or "").strip()
     if not pattern:
         raise ValueError("Pattern is required")
+    try:
+        re.compile(pattern)
+    except re.error as e:
+        raise ValueError(f"Invalid regex pattern: {e}")
     with _lock:
         data = _load()
         data["acc_pattern"] = pattern
@@ -316,3 +321,38 @@ def delete_olt(olt_id: str) -> None:
     if len(new) == len(olts):
         raise ValueError(f"OLT not found: {olt_id}")
     _save_olts(new)
+
+
+# ==============================================================================
+# OUTAGE CHECK SCHEDULE  (daily time the electric/water checks run, HH:MM)
+# ==============================================================================
+
+_DEFAULT_SCHEDULE = "08:00"
+_TIME_RE = re.compile(r'^([01]?\d|2[0-3]):([0-5]\d)$')
+
+
+def get_schedule_time(channel: str) -> str:
+    """Return the daily check time 'HH:MM' for a channel ('electric' | 'acc')."""
+    stored = _load().get("schedules", {}).get(channel)
+    if stored and _TIME_RE.match(stored):
+        return stored
+    env_key = {"electric": "ELECTRIC_CHECK_TIME", "acc": "ACC_CHECK_TIME"}.get(channel, "")
+    if env_key:
+        ev = _env(env_key, default="")
+        if _TIME_RE.match(ev):
+            return ev
+    return _DEFAULT_SCHEDULE
+
+
+def set_schedule_time(channel: str, value: str) -> str:
+    """Persist the daily check time for a channel. Returns the normalized value."""
+    value = (value or "").strip()
+    m = _TIME_RE.match(value)
+    if not m:
+        raise ValueError("Time must be HH:MM (00:00–23:59)")
+    value = f"{int(m.group(1)):02d}:{m.group(2)}"
+    with _lock:
+        data = _load()
+        data.setdefault("schedules", {})[channel] = value
+        _save(data)
+    return value

@@ -87,7 +87,7 @@ table.nb-tbl{width:100%;border-collapse:collapse;font-size:12px}
         <div><div class="nb-logo-text">NetBox Auto-Fill</div><div class="nb-logo-sub">Cisco SSH → NetBox Automation</div></div>
       </div>
     </div>
-    <button class="nb-btn nb-btn-primary" id="nbSyncMac" onclick="nbSyncMac()" style="margin-right:16px" title="Синхронизация MAC адресов из DHCP в NetBox">🔄 Sync MAC</button><div class="nb-health" id="nbHealth">Checking NetBox...</div>
+    <button class="nb-btn nb-btn-primary" id="nbSyncMac" onclick="nbSyncMac()" style="margin-right:16px" title="Синхронизация MAC адресов из DHCP в NetBox">🔄 Sync MAC</button><button class="nb-btn nb-btn-primary" id="nbSyncPorts" onclick="nbSyncPorts()" style="margin-right:8px" title="Найти листовой порт каждого MAC и привязать IP к интерфейсу устройства">🔗 Sync Ports</button><input id="nbRadUser" class="nb-input" placeholder="RADIUS login" autocomplete="off" style="width:100px;margin-right:4px" title="RADIUS-аккаунт для входа на свичи. Пробуется первым"><input id="nbRadPass" class="nb-input" type="password" placeholder="RADIUS pass" autocomplete="new-password" style="width:100px;margin-right:8px" title="Пароль RADIUS"><input id="nbSshUser" class="nb-input" placeholder="SSH login" autocomplete="off" style="width:90px;margin-right:4px" title="Локальный SSH-аккаунт. Пробуется вторым. Пусто = из .env"><input id="nbSshPass" class="nb-input" type="password" placeholder="SSH pass" autocomplete="new-password" style="width:90px;margin-right:16px" title="Пароль локального SSH"><div class="nb-health" id="nbHealth">Checking NetBox...</div>
   </div>
 
   <div class="nb-tabs">
@@ -303,6 +303,32 @@ async function nbSyncMac(){
     }
   }catch(e){alert("❌ Error: "+e.message)}
   finally{btn.disabled=false;btn.innerHTML="🔄 Sync MAC"}
+}
+async function nbSyncPorts(){
+  const btn=document.getElementById("nbSyncPorts");
+  btn.disabled=true;btn.innerHTML="<span class=\"nb-spinner\"></span> Tracing...";
+  try{
+    const body={
+      radius_username:(document.getElementById("nbRadUser")||{}).value||"",
+      radius_password:(document.getElementById("nbRadPass")||{}).value||"",
+      ssh_username:(document.getElementById("nbSshUser")||{}).value||"",
+      ssh_password:(document.getElementById("nbSshPass")||{}).value||""
+    };
+    const res=await fetch(NB_API+"/sync-interfaces",{method:"POST",headers:{...authHeaders(),"Content-Type":"application/json"},credentials:"include",body:JSON.stringify(body)});
+    const data=await res.json();
+    if(data.success){
+      const s=data.stats||{};
+      const fails=(data.failures||[]).length;
+      alert("✅ Port Sync Complete\n\nAssigned: "+s.assigned+"\nAlready OK: "+s.already_ok+"\nNo leaf found: "+s.no_leaf+"\n   • unseen (MAC nowhere): "+(s.no_leaf_unseen||0)+"\n   • trunk (only busy ports): "+(s.no_leaf_trunk||0)+"\nInterface missing: "+s.iface_missing+"\nDevice missing: "+s.dev_missing+"\nErrors: "+s.errors+"\n\nDevices scanned: "+s.devices_scanned+" (failed: "+s.devices_failed+", skipped: "+(s.devices_skipped||0)+")"+(fails?"\n\n⚠ "+fails+" device(s) unreachable — see log below":""));
+    }else{
+      alert("❌ Error: "+(data.error||"Unknown error"));
+    }
+    if(data.logs?.length){
+      nbRenderLogs(data.logs,"nbScanLog","Port Sync Log");
+      document.getElementById("nbScanLog").classList.remove("nb-hidden");
+    }
+  }catch(e){alert("❌ Error: "+e.message)}
+  finally{btn.disabled=false;btn.innerHTML="🔗 Sync Ports"}
 }
 
 async function nbApplyRouter(){

@@ -10,6 +10,7 @@ import aiohttp
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.utils import formatdate, make_msgid
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -78,6 +79,9 @@ def send_email_notification(matches: list) -> bool:
         msg = MIMEMultipart()
         msg['From'] = EMAIL_CONFIG["from"]
         msg['To'] = ', '.join(EMAIL_CONFIG["to"])
+        _domain = EMAIL_CONFIG["from"].split("@")[-1] if "@" in EMAIL_CONFIG["from"] else None
+        msg['Date'] = formatdate(localtime=True)
+        msg['Message-ID'] = make_msgid(domain=_domain)
         msg['Subject'] = f"⚠️ ACC.md - Возможно отключение воды! ({datetime.now().strftime('%d.%m.%Y')})"
         
         body = f"""⚠️ ВНИМАНИЕ! Обнаружено отключение воды!
@@ -120,26 +124,76 @@ MCP Server Monitor
         return False
 
 
-def was_notified_today() -> bool:
-    """Check if we already sent notification today."""
+def _match_signature(match: str) -> str:
+    """Stable id for one disconnection: its first line."""
+    return match.split('\n', 1)[0].strip()
+
+
+def _match_end(match: str) -> Optional[datetime]:
+    """Parse the restoration time ('Восст: dd.mm.yyyy hh:mm') if present."""
+    m = re.search(r'Восст[^0-9]*(\d{2})\.(\d{2})\.(\d{4})(?:\s+(\d{2}):(\d{2}))?', match)
+    if not m:
+        return None
+    try:
+        return datetime(
+            int(m.group(3)), int(m.group(2)), int(m.group(1)),
+            int(m.group(4) or 23), int(m.group(5) or 59),
+        )
+    except ValueError:
+        return None
+
+
+def filter_current_matches(matches: list) -> list:
+    """Drop disconnections whose restoration time has already passed. Entries
+    without a parseable end time (plain notifications) are kept for the day and
+    expire via the day-level cache reset."""
+    now = datetime.now()
+    out = []
+    for m in matches:
+        end = _match_end(m)
+        if end and now > end:
+            continue
+        out.append(m)
+    return out
+
+
+def get_notified_signatures() -> dict:
+    """Return {signature: date} of disconnections already emailed about."""
     try:
         if NOTIFIED_FILE.exists():
             with open(NOTIFIED_FILE, 'r') as f:
                 data = json.load(f)
-                return data.get('date') == datetime.now().strftime('%Y-%m-%d')
-    except:
+            sigs = data.get('sigs')
+            if isinstance(sigs, dict):
+                return sigs
+    except Exception:
         pass
-    return False
+    return {}
 
 
-def mark_notified():
-    """Mark that we sent notification today."""
+def mark_notified(matches: list):
+    """Record disconnections as emailed; prune entries older than today."""
     try:
+        today = datetime.now().strftime('%Y-%m-%d')
+        sigs = get_notified_signatures()
+        for m in matches:
+            sigs[_match_signature(m)] = today
+        sigs = {s: d for s, d in sigs.items() if d >= today}
+
         NOTIFIED_FILE.parent.mkdir(parents=True, exist_ok=True)
         with open(NOTIFIED_FILE, 'w') as f:
-            json.dump({'date': datetime.now().strftime('%Y-%m-%d')}, f)
+            json.dump({'sigs': sigs, 'updated': datetime.now().isoformat()}, f)
     except Exception as e:
         logger.debug(f"ACC: failed to mark notified: {e}")
+
+
+def invalidate():
+    """Drop the in-memory cache so the next check re-fetches immediately.
+    Called when the monitored address pattern changes."""
+    global _cached_status, _last_check_time
+    _cached_status = None
+    _last_check_time = None
+    logger.info("ACC: cache invalidated (pattern changed)")
 
 
 async def fetch_acc_page(date_str: str, tab: int = 2) -> str:
@@ -184,10 +238,9 @@ def decode_html_entities(text: str) -> str:
     return text
 
 
-def parse_notifications(html: str, pattern: str) -> list:
+def parse_notifications(html: str, regex) -> list:
     """Parse tab=1 notifications (text format with planned works)."""
     matches = []
-    regex = re.compile(pattern, re.IGNORECASE)
     
     time_match = re.search(
         r'intervalul[^<]*<em><strong>([^<]+)</strong></em>.*?următoarele străzi.*?</p>\s*<p[^>]*><span[^>]*><strong><em>([^<]+)</em></strong>',
@@ -206,10 +259,9 @@ def parse_notifications(html: str, pattern: str) -> list:
     return matches
 
 
-def parse_table_rows(html: str, pattern: str) -> list:
+def parse_table_rows(html: str, regex) -> list:
     """Parse tab=2 HTML table and find matching addresses."""
     matches = []
-    regex = re.compile(pattern, re.IGNORECASE)
     
     current_sector = ""
     
@@ -267,30 +319,50 @@ async def check_acc_status(force: bool = False) -> ACCStatus:
     if not force and _cached_status and _last_check_time:
         elapsed = (datetime.now() - _last_check_time).total_seconds()
         if elapsed < ACC_CONFIG['check_interval']:
+            _cached_status.matches = filter_current_matches(_cached_status.matches)
+            _cached_status.ok = len(_cached_status.matches) == 0
             return _cached_status
     
     logger.info(f"ACC: checking for '{_acc_pattern()}'...")
     
     today = datetime.now().strftime("%Y-%m-%d")
     pattern = _acc_pattern()
+
+    try:
+        regex = re.compile(pattern, re.IGNORECASE)
+    except re.error as e:
+        logger.error(
+            f"ACC: invalid address pattern {pattern!r}: {e}. "
+            "Fix it in the admin panel (Water outage pattern), e.g. 'Asachi\\s*,?\\s*71'."
+        )
+        status = ACCStatus(ok=True, last_check=datetime.now(), matches=[], error=f"invalid pattern: {e}")
+        _cached_status = status
+        _last_check_time = datetime.now()
+        return status
+
     all_matches = []
     
     # Tab 1 = Planned notifications (Уведомления)
     content1 = await fetch_acc_page(today, tab=1)
     if content1:
-        matches1 = parse_notifications(content1, pattern)
+        matches1 = parse_notifications(content1, regex)
         all_matches.extend(matches1)
     
     # Tab 2 = Current works (Текущие работы)
     content2 = await fetch_acc_page(today, tab=2)
     if content2:
-        matches2 = parse_table_rows(content2, pattern)
+        matches2 = parse_table_rows(content2, regex)
         all_matches.extend(matches2)
     
-    # Send email if found and not already notified today
-    if all_matches and not was_notified_today():
-        if send_email_notification(all_matches):
-            mark_notified()
+    all_matches = filter_current_matches(all_matches)
+
+    # Send email for disconnections we haven't emailed about yet (by content,
+    # so a newly added address still triggers even if today was already notified)
+    if all_matches:
+        notified = get_notified_signatures()
+        new_matches = [m for m in all_matches if _match_signature(m) not in notified]
+        if new_matches and send_email_notification(new_matches):
+            mark_notified(new_matches)
     
     status = ACCStatus(
         ok=len(all_matches) == 0,
@@ -325,6 +397,8 @@ def load_cached_status() -> Optional[ACCStatus]:
     global _cached_status, _last_check_time
     
     if _cached_status:
+        _cached_status.matches = filter_current_matches(_cached_status.matches)
+        _cached_status.ok = len(_cached_status.matches) == 0
         return _cached_status
     
     try:
@@ -337,10 +411,11 @@ def load_cached_status() -> Optional[ACCStatus]:
                 if cached_date != today:
                     return None
                 
+                matches = filter_current_matches(data.get('matches', []))
                 _cached_status = ACCStatus(
-                    ok=data.get('ok', True),
+                    ok=len(matches) == 0,
                     last_check=datetime.fromisoformat(data['last_check']) if data.get('last_check') else None,
-                    matches=data.get('matches', []),
+                    matches=matches,
                 )
                 if _cached_status.last_check:
                     _last_check_time = _cached_status.last_check

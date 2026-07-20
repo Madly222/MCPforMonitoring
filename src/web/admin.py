@@ -40,6 +40,10 @@ class AddressesRequest(BaseModel):
     addresses: list[str]
 
 
+class ScheduleRequest(BaseModel):
+    time: str
+
+
 router = APIRouter()
 
 
@@ -253,12 +257,47 @@ async def set_acc_pattern_ep(
         pattern = rc.set_acc_pattern(body.pattern)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    try:
+        from src.monitoring.acc_monitor import invalidate as _acc_invalidate
+        _acc_invalidate()
+    except Exception as e:
+        logger.debug(f"ACC invalidate skipped: {e}")
     get_audit_logger().log(
         action="settings_acc_pattern",
         username=user.username, role=user.role,
         detail=pattern, success=True, ip=_client_ip(request),
     )
     return {"success": True, "pattern": pattern}
+
+
+@router.get("/config/schedule/{channel}")
+async def get_schedule_ep(channel: str, user: UserInfo = Depends(require_superadmin)):
+    """Get the daily outage-check time for 'electric' or 'acc'."""
+    if channel not in ("electric", "acc"):
+        raise HTTPException(status_code=400, detail="Unknown channel")
+    return {"time": rc.get_schedule_time(channel)}
+
+
+@router.put("/config/schedule/{channel}")
+async def set_schedule_ep(
+    channel: str,
+    body: ScheduleRequest,
+    request: Request,
+    user: UserInfo = Depends(require_superadmin),
+):
+    """Set the daily outage-check time (HH:MM) for 'electric' or 'acc'."""
+    if channel not in ("electric", "acc"):
+        raise HTTPException(status_code=400, detail="Unknown channel")
+    try:
+        new_time = rc.set_schedule_time(channel, body.time)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    get_audit_logger().log(
+        action="settings_schedule",
+        username=user.username, role=user.role,
+        detail=f"{channel}={new_time}", success=True, ip=_client_ip(request),
+    )
+    return {"success": True, "time": new_time}
 
 
 @router.get("/config/electric-addresses")
@@ -275,6 +314,11 @@ async def set_electric_addresses_ep(
 ):
     """Replace the list of monitored electric addresses."""
     addresses = rc.set_electric_addresses(body.addresses)
+    try:
+        from src.monitoring.electric_monitor import invalidate as _electric_invalidate
+        _electric_invalidate()
+    except Exception as e:
+        logger.debug(f"Electric invalidate skipped: {e}")
     get_audit_logger().log(
         action="settings_electric_addresses",
         username=user.username, role=user.role,

@@ -1,8 +1,8 @@
 [Unit]
-Description=Run Electric Monitor daily at 9:00
+Description=Run Electric Monitor daily at 8:00
 
 [Timer]
-OnCalendar=*-*-* 09:00:00
+OnCalendar=*-*-* 08:00:00
 Persistent=true
 
 [Install]

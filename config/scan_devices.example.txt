@@ -1,0 +1,18 @@
+# Optional fallback inventory for "Sync Ports".
+# Devices listed here are scanned IN ADDITION to NetBox devices with a primary IP.
+# Use it only for switches that are missing / incomplete in NetBox.
+#
+# Copy this file to config/scan_devices.txt (or point MAC_SCAN_DEVICES_FILE at it).
+#
+# Format, one device per line:   ip,vendor[,name]
+#   vendor: cisco | cisco_sg | tplink | mikrotik | dlink
+#   name:   optional; must match the device hostname in NetBox for IP assignment to work
+#
+# Lines starting with # and blank lines are ignored.
+# SSH credentials come from the button (login/password) or .env, same as NetBox devices.
+#
+# Examples:
+# 10.10.10.61,cisco,CIS-2960-SW61-XYZ
+# 10.10.10.62,tplink,TPL-SG3428-SW62
+# 10.10.10.63,dlink,DL-DGS1210-SW63
+# 10.10.10.64,mikrotik,MK-CRS326-SW64

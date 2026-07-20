@@ -17,6 +17,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.getElementById('auditRefreshBtn').addEventListener('click', loadAudit);
             document.getElementById('saveAddressesBtn').addEventListener('click', saveElectricAddresses);
             document.getElementById('saveAccPatternBtn').addEventListener('click', saveAccPattern);
+            document.getElementById('saveScheduleBtn').addEventListener('click', saveSchedule);
         }
     } catch (e) {
         // not authenticated or not superadmin: leave admin tab hidden
@@ -167,6 +168,12 @@ async function loadSettings() {
         const ap = await API.admin.getAccPattern();
         document.getElementById('accPattern').value = ap.pattern || '';
     } catch (e) { /* ignore */ }
+    try {
+        const se = await API.admin.getSchedule('electric');
+        document.getElementById('scheduleElectric').value = se.time || '08:00';
+        const sa = await API.admin.getSchedule('acc');
+        document.getElementById('scheduleAcc').value = sa.time || '08:00';
+    } catch (e) { /* ignore */ }
     renderNotifChannel('electric', 'notifElectric', '⚡ Electric');
     renderNotifChannel('acc', 'notifAcc', '💧 Water (acc.md)');
     loadServersAdmin();
@@ -243,6 +250,20 @@ async function saveAccPattern() {
         await API.admin.saveAccPattern(pattern);
         loadAudit();
         alert('Saved');
+    } catch (e) {
+        alert('Error: ' + e.message);
+    }
+}
+
+async function saveSchedule() {
+    const et = document.getElementById('scheduleElectric').value;
+    const at = document.getElementById('scheduleAcc').value;
+    if (!et || !at) { alert('Set both times (HH:MM)'); return; }
+    try {
+        await API.admin.saveSchedule('electric', et);
+        await API.admin.saveSchedule('acc', at);
+        loadAudit();
+        alert(`Schedule saved — electric ${et}, water ${at}`);
     } catch (e) {
         alert('Error: ' + e.message);
     }

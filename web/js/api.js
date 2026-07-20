@@ -193,6 +193,14 @@ const API = {
                 method: 'PUT', body: JSON.stringify({ pattern }),
             });
         },
+        async getSchedule(channel) {
+            return API.request(`/admin/config/schedule/${channel}`);
+        },
+        async saveSchedule(channel, time) {
+            return API.request(`/admin/config/schedule/${channel}`, {
+                method: 'PUT', body: JSON.stringify({ time }),
+            });
+        },
         async getElectricAddresses() {
             return API.request('/admin/config/electric-addresses');
         },
