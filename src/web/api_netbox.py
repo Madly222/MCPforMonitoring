@@ -6,7 +6,7 @@ import os
 import sys
 from pathlib import Path
 from dataclasses import asdict
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Body
 from pydantic import BaseModel
 from loguru import logger
 from dotenv import load_dotenv
@@ -395,4 +395,29 @@ async def netbox_sync_mac(user: UserInfo = Depends(get_current_user)):
         return result
     except Exception as e:
         logger.error(f"DHCP-MAC sync error: {e}")
+        return {"success": False, "logs": [f"Error: {str(e)}"], "error": str(e)}
+
+
+@router.post("/sync-interfaces")
+async def netbox_sync_interfaces(payload: dict = Body(default={}), user: UserInfo = Depends(get_current_user)):
+    """Trace each MAC to its leaf port and assign the IP to that interface in NetBox."""
+    if user.role == "operator":
+        raise HTTPException(403, "Access denied for operator role")
+
+    p = payload or {}
+    cred_sets = []
+    if p.get("radius_username") and p.get("radius_password"):
+        cred_sets.append((p["radius_username"], p["radius_password"]))
+    if p.get("ssh_username") and p.get("ssh_password"):
+        cred_sets.append((p["ssh_username"], p["ssh_password"]))
+    if not cred_sets and p.get("username") and p.get("password"):
+        cred_sets.append((p["username"], p["password"]))
+
+    try:
+        import asyncio
+        from src.monitoring.mac_port_sync import sync_ports_to_netbox
+        result = await asyncio.to_thread(sync_ports_to_netbox, None, cred_sets)
+        return result
+    except Exception as e:
+        logger.error(f"MAC-PORT sync error: {e}")
         return {"success": False, "logs": [f"Error: {str(e)}"], "error": str(e)}

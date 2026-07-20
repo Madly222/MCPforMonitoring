@@ -449,6 +449,18 @@
                     </div>
 
                     <div style="background:#1e1e2e;padding:16px;border-radius:8px;margin:12px 0;">
+                        <h4 style="margin:0 0 8px;">&#9201;&#65039; Daily check time</h4>
+                        <p style="color:#9aa;font-size:13px;margin:0 0 8px;">Time of day the outage checks run (server local time). Applied within a minute &mdash; no restart needed.</p>
+                        <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;">
+                            <label style="color:#9aa;">&#9889; Electric</label>
+                            <input type="time" id="scheduleElectric" style="padding:6px;background:#252540;border:1px solid #3a3a5a;border-radius:6px;color:#fff;">
+                            <label style="color:#9aa;">&#128167; Water</label>
+                            <input type="time" id="scheduleAcc" style="padding:6px;background:#252540;border:1px solid #3a3a5a;border-radius:6px;color:#fff;">
+                            <button class="btn btn-primary" id="saveScheduleBtn">Save Schedule</button>
+                        </div>
+                    </div>
+
+                    <div style="background:#1e1e2e;padding:16px;border-radius:8px;margin:12px 0;">
                         <h4 style="margin:0 0 8px;">&#128231; Notification email</h4>
                         <p style="color:#9aa;font-size:13px;margin:0 0 8px;">SMTP server and recipients for outage alerts. Applied live.</p>
                         <div id="notifElectric"></div>

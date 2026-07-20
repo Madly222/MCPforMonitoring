@@ -4,6 +4,7 @@ Main web application for MCP Server Monitor.
 Provides REST API and serves static files.
 """
 from pathlib import Path
+import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
@@ -102,10 +103,20 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.error(f"Failed to start ONU monitor: {e}")
     
+    # Start the in-app outage scheduler (electricity + water, time set in panel)
+    from src.monitoring.outage_scheduler import scheduler_loop
+    outage_task = asyncio.create_task(scheduler_loop())
+    
     yield
     
     # Shutdown
     logger.info("Shutting down MCP Server Monitor...")
+    
+    outage_task.cancel()
+    try:
+        await outage_task
+    except asyncio.CancelledError:
+        pass
     
     await log_watcher.stop()
     await health_checker.stop()

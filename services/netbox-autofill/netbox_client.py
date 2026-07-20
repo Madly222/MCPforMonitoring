@@ -503,3 +503,91 @@ class NetBoxClient:
             return {"success": True, "interface_id": iface.id}
         except Exception as e:
             return {"success": False, "error": str(e)}
+
+    # ── MAC → Port assignment ──────────────────────────────────────
+
+    def list_devices_with_primary_ip(self) -> list[dict]:
+        """List active devices that have a primary IP, with vendor hints."""
+        result = []
+        for d in self.nb.dcim.devices.filter(has_primary_ip=True):
+            primary_ip = None
+            if d.primary_ip:
+                primary_ip = str(d.primary_ip.address).split("/")[0]
+            manufacturer = ""
+            try:
+                if d.device_type and d.device_type.manufacturer:
+                    manufacturer = str(d.device_type.manufacturer)
+            except Exception:
+                pass
+            platform = str(d.platform) if d.platform else ""
+            result.append({
+                "id": d.id,
+                "name": str(d.name),
+                "primary_ip": primary_ip,
+                "manufacturer": manufacturer,
+                "platform": platform,
+            })
+        return result
+
+    def iter_ips_with_mac(self, mac_field: str = "MAC"):
+        """Yield {id, address, mac} for every IP that has the MAC custom field set."""
+        for ip in self.nb.ipam.ip_addresses.all():
+            cf = ip.custom_fields or {}
+            mac = cf.get(mac_field)
+            if not mac:
+                continue
+            assigned = None
+            if ip.assigned_object_id:
+                assigned = ip.assigned_object_id
+            yield {
+                "id": ip.id,
+                "address": str(ip.address),
+                "mac": mac,
+                "assigned_object_id": assigned,
+            }
+
+    def assign_ip_to_interface(self, ip_id: int, interface_id: int) -> dict:
+        """Point an existing IP at an interface, preserving custom fields and data."""
+        try:
+            ip = self.nb.ipam.ip_addresses.get(ip_id)
+            if not ip:
+                return {"success": False, "error": f"IP {ip_id} not found"}
+            ip.assigned_object_type = "dcim.interface"
+            ip.assigned_object_id = interface_id
+            ip.save()
+            return {"success": True, "id": ip_id, "interface_id": interface_id}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def list_devices_in_prefix(self, prefix: str) -> list[dict]:
+        """List devices that have ANY IP inside a management prefix (not just primary)."""
+        result = {}
+        try:
+            ips = self.nb.ipam.ip_addresses.filter(parent=prefix)
+        except Exception:
+            return []
+        for ip in ips:
+            try:
+                if str(ip.assigned_object_type or "") != "dcim.interface":
+                    continue
+                ao = ip.assigned_object
+                dev = getattr(ao, "device", None) if ao else None
+                if not dev:
+                    continue
+                name = str(dev.name)
+                addr = str(ip.address).split("/")[0]
+                if name not in result:
+                    result[name] = {"name": name, "primary_ip": addr, "manufacturer": "", "platform": ""}
+            except Exception:
+                continue
+        return list(result.values())
+
+    def get_device_manufacturer(self, name: str) -> str:
+        """Return the manufacturer name for a device (empty string if unknown)."""
+        try:
+            dev = self.nb.dcim.devices.get(name=name)
+            if dev and dev.device_type and dev.device_type.manufacturer:
+                return str(dev.device_type.manufacturer)
+        except Exception:
+            pass
+        return ""

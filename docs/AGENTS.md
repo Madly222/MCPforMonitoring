@@ -153,13 +153,26 @@ returns `{stdout, stderr, exit_code}`. Non-sudo commands get a PATH prefix so
 `systemctl`/`ss`/`ip` resolve. Audited as `console_exec`.
 
 **Interpret mode** (`POST /api/execute`, admin):
-Claude `interpret_command` → if confidence > 0.7 run it, else keyword fallback
-(`status`/`restart`/`logs`|`errors`/`health`). `source` = `claude`|`local`.
-> Known limitation / next task: `logs`/`errors` map to `error_detector`, not real
-> server logs, and the fallback is systemd-centric. The intended design is a
-> **capability-aware command resolver**: detect each server's init/distro once
-> (cached), serve simple intents from a template registry (0 tokens), and use
-> Claude only as a fallback that caches the resolved intent→command per server.
+A **capability-aware command resolver** now runs first (`src/core/command_resolver.py`):
+1. **Profile** the target server once (init/distro/journalctl), cached in
+   `sessions/server_profiles.json` (`src/core/server_profile.py`, seed-and-detect,
+   0 round-trips in steady state).
+2. **Template registry** renders simple intents — status / logs / errors /
+   restart / start / stop / host-status — straight to a profile-correct command
+   (systemd→`journalctl`/`systemctl`, sysvinit→`/etc/init.d` + log tails).
+   **0 Claude tokens.**
+3. **Per-server cache** (`sessions/resolver_cache.json`, scoped by profile
+   signature) serves previously Claude-resolved intents for free.
+4. **Claude fallback** (`claude_client.resolve_shell_command`) only on a miss;
+   its result is written back to the cache. Unsafe/destructive requests are
+   refused (`safe=false`).
+
+If the resolver yields nothing (e.g. no target server named), it falls through to
+the legacy path: Claude `interpret_command` → if confidence > 0.7 run it, else
+keyword fallback (`status`/`restart`/`logs`|`errors`/`health`). Managed-service
+lifecycle (dhcp/dns/radius restart/start/stop) still routes through the validated
+service handlers. `source` = `template`|`cache`|`claude`|`local`.
+Offline test: `python scripts/test_resolver.py` (no live server / key needed).
 
 ---
 
@@ -171,6 +184,8 @@ Claude `interpret_command` → if confidence > 0.7 run it, else keyword fallback
 | `.env` | automation defaults | ❌ |
 | `sessions/users.json` | runtime user store (source of truth after seed) | ❌ |
 | `sessions/runtime_settings.json` | notifications, ACC pattern, server & OLT overrides | ❌ |
+| `sessions/server_profiles.json` | detected init/distro per server (resolver) | ❌ |
+| `sessions/resolver_cache.json` | cached intent→command per server+profile | ❌ |
 | `config/settings.yaml` | intervals, logging, cache/rate-limit | ✅ |
 | `config/safe_actions.yaml` | auto-remediation risk policy | ✅ |
 | `config/services/*.yaml` | per-service detection | ✅ |

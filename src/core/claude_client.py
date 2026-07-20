@@ -421,6 +421,70 @@ Context:
                 confidence=0.0
             )
     
+    async def resolve_shell_command(
+        self,
+        request: str,
+        profile,
+    ) -> Optional[tuple]:
+        """Resolve a single operator request to one safe shell command.
+
+        Fallback for the command resolver: used only when no template or cache
+        entry matches. ``profile`` is a ServerProfile (init system + distro), so
+        the model can pick the right syntax. Returns ``(command, sudo)`` or
+        ``None`` if the request is unsafe/destructive or could not be resolved.
+        """
+        system_prompt = (
+            "You translate one server-operations request into ONE shell command "
+            "for a specific Linux host. Respond ONLY with JSON: "
+            '{"command": "<single shell command>", "sudo": true|false, '
+            '"safe": true|false}. '
+            "Set safe=false (and leave command empty) for anything destructive "
+            "or ambiguous: deleting data, editing configs, package removal, "
+            "shutdown/reboot, piping to shell, fork bombs. Prefer read-only "
+            "diagnostics. Use the host's init system."
+        )
+        user_prompt = (
+            f"Host init system: {profile.init_system}\n"
+            f"Distro: {profile.distro}\n"
+            f"journalctl available: {profile.has_journalctl}\n\n"
+            f"Request: {request}"
+        )
+
+        cache_key = self._get_cache_key(f"resolve:{profile.signature}:{request}")
+        cached = self._get_cached(cache_key)
+        if cached is not None:
+            return cached
+
+        if not self._check_rate_limit():
+            return None
+
+        try:
+            secrets = self.config.load_secrets()
+            self._record_request()
+            response = self.client.messages.create(
+                model=secrets.claude.model,
+                max_tokens=256,
+                system=system_prompt,
+                messages=[{"role": "user", "content": user_prompt}],
+            )
+            content = response.content[0].text.strip()
+            if "```json" in content:
+                content = content.split("```json")[1].split("```")[0]
+            elif "```" in content:
+                content = content.split("```")[1].split("```")[0]
+            data = json.loads(content.strip())
+
+            if not data.get("safe") or not data.get("command"):
+                self._set_cached(cache_key, None)
+                return None
+            result = (data["command"].strip(), bool(data.get("sudo", False)))
+            self._set_cached(cache_key, result)
+            logger.info(f"Claude resolved command: {result[0][:60]}")
+            return result
+        except Exception as e:
+            logger.error(f"Claude resolve_shell_command error: {e}")
+            return None
+
     def get_stats(self) -> dict:
         """Get client statistics."""
         now = datetime.now()

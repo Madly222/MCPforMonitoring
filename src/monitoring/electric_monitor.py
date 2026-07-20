@@ -10,6 +10,7 @@ import aiohttp
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.utils import formatdate, make_msgid
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional, Tuple
@@ -119,6 +120,9 @@ def send_email_notification(matches: list) -> bool:
         msg = MIMEMultipart()
         msg['From'] = EMAIL_CONFIG["from"]
         msg['To'] = ', '.join(EMAIL_CONFIG["to"])
+        _domain = EMAIL_CONFIG["from"].split("@")[-1] if "@" in EMAIL_CONFIG["from"] else None
+        msg['Date'] = formatdate(localtime=True)
+        msg['Message-ID'] = make_msgid(domain=_domain)
         msg['Subject'] = f"⚡ Premier Energy - Запланированное отключение электричества! ({datetime.now().strftime('%d.%m.%Y')})"
         
         body = f"""⚡ ВНИМАНИЕ! Запланированное отключение электричества!
@@ -160,50 +164,69 @@ MCP Server Monitor
         return False
 
 
-def get_notified_dates() -> set:
-    """Get set of dates for which notifications were already sent."""
+def _match_signature(match: str) -> str:
+    """Stable id for one outage: its first line (date + address + time)."""
+    return match.split('\n', 1)[0].strip()
+
+
+def _match_date(match: str) -> Optional[str]:
+    m = re.search(r'\[(\d{4}-\d{2}-\d{2})\]', match)
+    return m.group(1) if m else None
+
+
+def get_notified_signatures() -> dict:
+    """Return {signature: date} of outages already emailed about."""
     try:
         if NOTIFIED_FILE.exists():
             with open(NOTIFIED_FILE, 'r') as f:
                 data = json.load(f)
-                return set(data.get('dates', []))
-    except:
+            sigs = data.get('sigs')
+            if isinstance(sigs, dict):
+                return sigs
+    except Exception:
         pass
-    return set()
+    return {}
 
 
-def mark_notified(dates: list):
-    """Mark dates as notified."""
+def mark_notified(matches: list):
+    """Record outages as emailed; prune entries whose date is in the past."""
     try:
-        existing = get_notified_dates()
-        existing.update(dates)
         today = datetime.now().strftime('%Y-%m-%d')
-        existing = {d for d in existing if d >= today}
-        
+        sigs = get_notified_signatures()
+        for m in matches:
+            sigs[_match_signature(m)] = _match_date(m) or today
+        sigs = {s: d for s, d in sigs.items() if d >= today}
+
         NOTIFIED_FILE.parent.mkdir(parents=True, exist_ok=True)
         with open(NOTIFIED_FILE, 'w') as f:
-            json.dump({'dates': list(existing), 'updated': datetime.now().isoformat()}, f)
+            json.dump({'sigs': sigs, 'updated': datetime.now().isoformat()}, f)
     except Exception as e:
         logger.debug(f"Electric: failed to mark notified: {e}")
 
 
 def cleanup_old_notifications():
-    """Remove old notification records."""
+    """Drop notification records whose outage date has passed."""
     try:
-        if NOTIFIED_FILE.exists():
-            today = datetime.now().strftime('%Y-%m-%d')
-            with open(NOTIFIED_FILE, 'r') as f:
-                data = json.load(f)
-            
-            old_dates = data.get('dates', [])
-            new_dates = [d for d in old_dates if d >= today]
-            
-            if len(new_dates) != len(old_dates):
-                with open(NOTIFIED_FILE, 'w') as f:
-                    json.dump({'dates': new_dates, 'updated': datetime.now().isoformat()}, f)
-                logger.debug(f"Electric: cleaned {len(old_dates) - len(new_dates)} old notifications")
+        if not NOTIFIED_FILE.exists():
+            return
+        today = datetime.now().strftime('%Y-%m-%d')
+        sigs = get_notified_signatures()
+        kept = {s: d for s, d in sigs.items() if d >= today}
+        if len(kept) != len(sigs):
+            with open(NOTIFIED_FILE, 'w') as f:
+                json.dump({'sigs': kept, 'updated': datetime.now().isoformat()}, f)
+            logger.debug(f"Electric: cleaned {len(sigs) - len(kept)} old notifications")
     except Exception as e:
         logger.debug(f"Electric: cleanup error: {e}")
+
+
+def invalidate():
+    """Drop the in-memory cache so the next check re-fetches immediately.
+    Called when the monitored address list changes."""
+    global _cached_status, _last_check_time
+    _cached_status = None
+    _last_check_time = None
+    logger.info("Electric: cache invalidated (addresses changed)")
 
 
 def load_addresses() -> list:
@@ -329,19 +352,34 @@ def find_in_chisinau(content: str, addresses: list, date_str: str) -> list:
 
 
 def filter_current_matches(matches: list) -> list:
-    """Filter out past dates, keep only today and future."""
-    today = datetime.now().strftime('%Y-%m-%d')
+    """Keep today and future outages; drop past days AND today's outages whose
+    end time has already passed (so the ⚡ indicator clears after the window)."""
+    now = datetime.now()
+    today = now.strftime('%Y-%m-%d')
     filtered = []
-    
+
     for match in matches:
         date_match = re.search(r'\[(\d{4}-\d{2}-\d{2})\]', match)
-        if date_match:
-            match_date = date_match.group(1)
-            if match_date >= today:
-                filtered.append(match)
-        else:
+        if not date_match:
             filtered.append(match)
-    
+            continue
+
+        match_date = date_match.group(1)
+        if match_date < today:
+            continue
+
+        if match_date == today:
+            time_match = re.search(r'(\d{1,2}:\d{2})\s*[-–]\s*(\d{1,2}:\d{2})', match)
+            if time_match:
+                try:
+                    end = datetime.strptime(f"{today} {time_match.group(2)}", '%Y-%m-%d %H:%M')
+                    if now > end:
+                        continue
+                except ValueError:
+                    pass
+
+        filtered.append(match)
+
     return filtered
 
 
@@ -399,13 +437,10 @@ async def check_electric_status(force: bool = False) -> ElectricStatus:
     all_matches = filter_current_matches(all_matches)
     
     if all_matches:
-        notified_dates = get_notified_dates()
-        new_dates = [d for d in matched_dates if d not in notified_dates and d >= today]
-        
-        if new_dates:
-            new_matches = [m for m in all_matches if any(d in m for d in new_dates)]
-            if new_matches and send_email_notification(new_matches):
-                mark_notified(new_dates)
+        notified = get_notified_signatures()
+        new_matches = [m for m in all_matches if _match_signature(m) not in notified]
+        if new_matches and send_email_notification(new_matches):
+            mark_notified(new_matches)
     
     status = ElectricStatus(
         ok=len(all_matches) == 0,

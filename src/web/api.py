@@ -744,7 +744,51 @@ async def execute_command(
     
     servers = config.get_enabled_servers()
     server_ids = [s.id for s in servers]
-    
+
+    # Stage 0: capability-aware resolver. Simple intents (status/logs/errors/
+    # restart) render to a profile-correct command with zero Claude tokens;
+    # unknown requests fall back to Claude and get cached per server.
+    try:
+        from src.core.command_resolver import get_command_resolver, LIFECYCLE
+
+        resolver = get_command_resolver()
+
+        async def _claude_fallback(req: str, profile):
+            from src.core.claude_client import get_claude_client
+            return await get_claude_client().resolve_shell_command(req, profile)
+
+        resolved = await resolver.resolve(
+            command, servers, ssh, claude_fallback=_claude_fallback,
+        )
+
+        # Managed-service lifecycle keeps using the validated handler path below.
+        managed_lifecycle = (
+            resolved is not None
+            and resolved.intent in LIFECYCLE
+            and resolved.service in ("dhcp", "dns", "radius")
+        )
+
+        if resolved and not managed_lifecycle:
+            if resolved.sudo:
+                exec_result = await ssh.execute_sudo(resolved.server_id, resolved.command)
+            else:
+                wrapped = (
+                    "export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:"
+                    "/usr/bin:/sbin:/bin:$PATH; " + resolved.command
+                )
+                exec_result = await ssh.execute(resolved.server_id, wrapped)
+
+            return CommandResponse(
+                success=exec_result.success,
+                interpretation=resolved.description or resolved.intent,
+                commands_executed=[{"command": resolved.command, "output": exec_result.output}],
+                result=exec_result.output,
+                error=exec_result.stderr if not exec_result.success else None,
+                source=resolved.source,
+            )
+    except Exception as e:
+        logger.warning(f"Command resolver stage failed: {e}, continuing to interpreter")
+
     try:
         from src.core.claude_client import get_claude_client
         
