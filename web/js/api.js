@@ -213,6 +213,7 @@ const API = {
             });
         },
         async listServers() { return API.request('/admin/config/servers'); },
+        async serviceTypes() { return API.request('/admin/config/service-types'); },
         async createServer(s) {
             return API.request('/admin/config/servers', { method: 'POST', body: JSON.stringify(s) });
         },

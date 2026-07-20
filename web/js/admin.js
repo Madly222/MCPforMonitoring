@@ -272,10 +272,23 @@ async function saveSchedule() {
 // ===== Servers management =====
 
 let editingServerId = null;
+let serviceTypesCache = null;
+
+async function ensureServiceTypes() {
+    if (serviceTypesCache) return serviceTypesCache;
+    try {
+        const r = await API.admin.serviceTypes();
+        serviceTypesCache = r.types || [];
+    } catch (e) {
+        serviceTypesCache = [];
+    }
+    return serviceTypesCache;
+}
 
 async function loadServersAdmin() {
     const container = document.getElementById('serversAdmin');
     try {
+        await ensureServiceTypes();
         const data = await API.admin.listServers();
         container.innerHTML = serverFormHtml() + serversTableHtml(data.servers);
         document.getElementById('serverSaveBtn').addEventListener('click', saveServer);
@@ -307,8 +320,18 @@ function serverFormHtml(s) {
         + `<div>auth_value (password or key filename)<br><input id="srv_auth_value" type="password" placeholder="${pwPh}" style="padding:6px;background:#252540;border:1px solid #3a3a5a;border-radius:6px;color:#fff;width:100%;"></div>`
         + `<div>sudo_password<br><input id="srv_sudo_password" type="password" placeholder="${sudoPh}" style="padding:6px;background:#252540;border:1px solid #3a3a5a;border-radius:6px;color:#fff;width:100%;"></div>`
         + `<div>distro<br>${fld('distro', s.distro, 'text', 'debian / ubuntu...')}</div>`
-        + `<div>services (comma)<br>${fld('services', (s.services || []).join(','))}</div>`
         + '</div>'
+        + (() => {
+            const chosen = new Set(s.services || []);
+            const types = serviceTypesCache || [];
+            const boxes = types.length
+                ? types.map(t =>
+                    `<label style="display:inline-flex;align-items:center;gap:4px;margin-right:14px;color:#cdd;">`
+                    + `<input type="checkbox" class="srv-svc" value="${escapeHtml(t)}" ${chosen.has(t) ? 'checked' : ''}> ${escapeHtml(t)}</label>`
+                  ).join('')
+                : '<small style="color:#c66;">No service types available (add one in code)</small>';
+            return `<div style="margin:4px 0 10px;">services<br>${boxes}</div>`;
+        })()
         + `<label style="color:#9aa;"><input type="checkbox" id="srv_enabled" ${s.enabled === false ? '' : 'checked'}> enabled</label> `
         + '<button class="btn btn-primary btn-sm" id="serverSaveBtn" style="margin-left:12px;">Save</button> '
         + '<button class="btn btn-secondary btn-sm" id="serverCancelBtn">Clear</button>'
@@ -340,6 +363,7 @@ function serversTableHtml(servers) {
 }
 
 async function editServer(id) {
+    await ensureServiceTypes();
     const data = await API.admin.listServers();
     const s = data.servers.find(x => x.id === id);
     if (!s) return;
@@ -362,7 +386,7 @@ function collectServer() {
         auth_value: document.getElementById('srv_auth_value').value,
         sudo_password: document.getElementById('srv_sudo_password').value,
         distro: v('distro').trim() || null,
-        services: v('services').split(',').map(x => x.trim()).filter(Boolean),
+        services: Array.from(document.querySelectorAll('.srv-svc:checked')).map(el => el.value),
         enabled: document.getElementById('srv_enabled').checked,
     };
     return body;
