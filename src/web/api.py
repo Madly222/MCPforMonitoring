@@ -106,75 +106,85 @@ def get_package_manager_commands(distro: str) -> dict:
         }
 
 
+async def build_server_status(server) -> dict:
+    """Collect one server's status in full isolation.
+
+    Any failure — unreachable host, connect timeout, bad service probe — is
+    caught here and returned as ``connected=False`` plus an ``error`` string, so
+    a single misconfigured or dead server can never raise out of here and take
+    down the rest of the fleet's status. The SSH layer time-bounds the connect,
+    so this can't hang either.
+    """
+    import asyncio
+    ssh = get_ssh_manager()
+    server_status = {
+        "id": server.id,
+        "host": server.host,
+        "enabled": server.enabled,
+        "connected": False,
+        "services": [],
+        "system_info": None,
+        "updates": None
+    }
+    
+    try:
+        connected = await ssh.test_connection(server.id)
+        server_status["connected"] = connected
+        
+        if connected:
+            system_info_task = ssh.get_system_info(server.id)
+            service_tasks = [
+                get_service_status(server.id, svc_type)
+                for svc_type in server.services
+            ]
+            
+            results = await asyncio.gather(
+                system_info_task,
+                *service_tasks,
+                return_exceptions=True
+            )
+            
+            if not isinstance(results[0], Exception):
+                server_status["system_info"] = results[0]
+            
+            for i, svc_result in enumerate(results[1:]):
+                if isinstance(svc_result, Exception):
+                    server_status["services"].append({
+                        "type": server.services[i],
+                        "name": server.services[i],
+                        "running": False,
+                        "health": "error",
+                        "error": str(svc_result)
+                    })
+                else:
+                    server_status["services"].append(svc_result)
+            
+            updates_checker = get_updates_checker()
+            update_status = updates_checker.get_status(server.id)
+            if update_status:
+                server_status["updates"] = {
+                    "available": update_status.updates_available,
+                    "security": update_status.security_updates,
+                    "status": update_status.status,
+                    "checked_at": update_status.checked_at.isoformat()
+                }
+    
+    except Exception as e:
+        logger.error(f"Error getting status for {server.id}: {e}")
+        server_status["error"] = str(e)
+    
+    return server_status
+
+
 @router.get("/status")
 async def get_overall_status(user: UserInfo = Depends(get_current_user)):
     import asyncio
     
     config = get_config()
     servers = config.get_enabled_servers()
-    ssh = get_ssh_manager()
-    
-    async def check_server(server):
-        server_status = {
-            "id": server.id,
-            "host": server.host,
-            "enabled": server.enabled,
-            "connected": False,
-            "services": [],
-            "system_info": None,
-            "updates": None
-        }
-        
-        try:
-            connected = await ssh.test_connection(server.id)
-            server_status["connected"] = connected
-            
-            if connected:
-                system_info_task = ssh.get_system_info(server.id)
-                service_tasks = [
-                    get_service_status(server.id, svc_type)
-                    for svc_type in server.services
-                ]
-                
-                results = await asyncio.gather(
-                    system_info_task,
-                    *service_tasks,
-                    return_exceptions=True
-                )
-                
-                if not isinstance(results[0], Exception):
-                    server_status["system_info"] = results[0]
-                
-                for i, svc_result in enumerate(results[1:]):
-                    if isinstance(svc_result, Exception):
-                        server_status["services"].append({
-                            "type": server.services[i],
-                            "name": server.services[i],
-                            "running": False,
-                            "health": "error",
-                            "error": str(svc_result)
-                        })
-                    else:
-                        server_status["services"].append(svc_result)
-                
-                updates_checker = get_updates_checker()
-                update_status = updates_checker.get_status(server.id)
-                if update_status:
-                    server_status["updates"] = {
-                        "available": update_status.updates_available,
-                        "security": update_status.security_updates,
-                        "status": update_status.status,
-                        "checked_at": update_status.checked_at.isoformat()
-                    }
-        
-        except Exception as e:
-            logger.error(f"Error getting status for {server.id}: {e}")
-            server_status["error"] = str(e)
-        
-        return server_status
     
     server_statuses = await asyncio.gather(
-        *[check_server(server) for server in servers],
+        *[build_server_status(server) for server in servers],
         return_exceptions=True
     )
     
@@ -196,6 +206,28 @@ async def get_overall_status(user: UserInfo = Depends(get_current_user)):
         "servers": result_servers,
         "timestamp": datetime.now().isoformat()
     }
+
+
+@router.post("/servers/{server_id}/reconnect")
+async def reconnect_server(
+    server_id: str,
+    user: UserInfo = Depends(get_current_user)
+):
+    """Drop the cached SSH connection for one server and re-probe it.
+
+    Backs the dashboard's per-server retry button. It only touches this server,
+    so the rest of the fleet is untouched, and it cannot hang the UI because the
+    connect attempt is time-bounded in the SSH layer. Returns the same shape as
+    one entry of ``/status`` so the client can refresh just that card.
+    """
+    config = get_config()
+    server = config.get_server_by_id(server_id)
+    if not server:
+        raise HTTPException(status_code=404, detail=f"Server not found: {server_id}")
+
+    ssh = get_ssh_manager()
+    await ssh.disconnect(server_id)
+    return await build_server_status(server)
 
 
 @router.get("/servers")
