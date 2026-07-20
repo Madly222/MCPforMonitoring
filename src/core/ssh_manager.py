@@ -20,6 +20,12 @@ from loguru import logger
 
 from src.core.config import get_config, ServerConfig, KEYS_DIR
 
+# Hard ceiling for establishing an SSH connection (TCP + auth). Without this,
+# an unreachable / misconfigured host makes asyncssh.connect() hang for the OS
+# default (tens of seconds up to minutes), which used to freeze the whole
+# dashboard because status collection waits on every server at once.
+SSH_CONNECT_TIMEOUT = 8.0
+
 
 class InitSystem(Enum):
     SYSTEMD = "systemd"
@@ -92,6 +98,8 @@ class SSHConnectionPool:
             "port": server.port,
             "username": server.user,
             "known_hosts": None,
+            # asyncssh's own timeout for the TCP connect + auth handshake.
+            "connect_timeout": SSH_CONNECT_TIMEOUT,
         }
         
         if server.auth_type == "key":
@@ -104,7 +112,19 @@ class SSHConnectionPool:
         
         logger.debug(f"Connecting to {server.id} ({server.host}:{server.port})")
         
-        conn = await asyncssh.connect(**connect_kwargs)
+        # Belt-and-suspenders: even if connect_timeout doesn't fire (e.g. a DNS
+        # resolution stall or a network black hole), this hard ceiling guarantees
+        # the coroutine returns instead of hanging forever and blocking the fleet.
+        try:
+            conn = await asyncio.wait_for(
+                asyncssh.connect(**connect_kwargs),
+                timeout=SSH_CONNECT_TIMEOUT + 2.0,
+            )
+        except asyncio.TimeoutError:
+            raise ConnectionError(
+                f"Timed out connecting to {server.id} "
+                f"({server.host}:{server.port}) after {SSH_CONNECT_TIMEOUT:.0f}s"
+            )
         
         logger.info(f"Connected to {server.id} ({server.host})")
         
@@ -197,7 +217,10 @@ class SSHManager:
         start_time = datetime.now()
         
         try:
-            conn = await self._pool.get_connection(server)
+            conn = await asyncio.wait_for(
+                self._pool.get_connection(server),
+                timeout=SSH_CONNECT_TIMEOUT + 5.0,
+            )
             
             result = await asyncio.wait_for(
                 conn.run(command),
@@ -597,6 +620,14 @@ class SSHManager:
             logger.debug(f"Sudo test failed for {server_id}: {e}")
             return False
     
+    async def disconnect(self, server_id: str) -> None:
+        """Drop any cached connection for one server so the next call reconnects.
+
+        Used by the dashboard's per-server retry so a single stuck/stale host can
+        be re-probed without touching the others.
+        """
+        await self._pool._close_connection(server_id)
+
     async def close(self) -> None:
         await self._pool.close_all()
     

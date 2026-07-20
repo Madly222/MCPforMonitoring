@@ -44,30 +44,133 @@ async function handleLogout() {
     window.location.href = '/login.html';
 }
 
-async function loadServerStatus() {
+// Single delegated handler on the grid so dynamically re-rendered cards
+// (skeletons, retries) keep working without ever double-binding.
+let _serversGridBound = false;
+function bindServersGrid() {
+    if (_serversGridBound) return;
     const grid = document.getElementById('serversGrid');
-    try {
-        const data = await API.servers.status();
-        if (data.servers.length === 0) {
-            grid.innerHTML = '<p class="loading">No servers configured</p>';
+    grid.addEventListener('click', (e) => {
+        const retry = e.target.closest('.server-retry');
+        if (retry) {
+            e.stopPropagation();
+            retryServer(retry.dataset.serverId);
             return;
         }
-        grid.innerHTML = data.servers.map(server => createServerCard(server)).join('');
-        document.querySelectorAll('.server-card').forEach(card => {
-            card.addEventListener('click', () => showServerDetails(card.dataset.serverId));
-        });
+        const card = e.target.closest('.server-card');
+        // Don't open details for a card that's still checking or unreachable.
+        if (card && card.dataset.serverId && !card.classList.contains('checking')
+            && !card.classList.contains('disconnected')) {
+            showServerDetails(card.dataset.serverId);
+        }
+    });
+    _serversGridBound = true;
+}
+
+function escapeHtml(str) {
+    return String(str == null ? '' : str)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+async function loadServerStatus() {
+    const grid = document.getElementById('serversGrid');
+    bindServersGrid();
+
+    // 1) Fast skeleton from /servers (no SSH): every server immediately shows a
+    //    loading spinner, and a slow/dead host can no longer blank the grid.
+    let configured = [];
+    try {
+        const list = await API.servers.list();
+        configured = list.servers || [];
+    } catch (error) {
+        console.error('Failed to load server list:', error);
+        updateConnectionStatus(false);
+        grid.innerHTML = '<p class="loading">Failed to load servers</p>';
+        return;
+    }
+
+    if (configured.length === 0) {
+        grid.innerHTML = '<p class="loading">No servers configured</p>';
+        return;
+    }
+
+    grid.innerHTML = configured.map(s => createServerCard(s, 'checking')).join('');
+    updateConnectionStatus(true);
+
+    // 2) Real status. Each server is independent: the endpoint returns one entry
+    //    per server (dead ones as connected=false), so a single failure only
+    //    paints that one card red — the rest render normally.
+    try {
+        const data = await API.servers.status();
+        grid.innerHTML = data.servers.map(s => createServerCard(s)).join('');
         updateConnectionStatus(true);
     } catch (error) {
         console.error('Failed to load status:', error);
         updateConnectionStatus(false);
-        grid.innerHTML = '<p class="loading">Failed to load servers</p>';
+        grid.innerHTML = configured.map(s => createServerCard({
+            id: s.id, host: s.host, enabled: s.enabled,
+            connected: false, services: [], error: 'Не удалось получить статус'
+        })).join('');
     }
 }
 
-function createServerCard(server) {
-    const statusClass = server.connected ? 'status-ok' : 'status-error';
-    const cardClass = server.connected ? '' : 'disconnected';
-    
+// Per-server retry: re-probe only this host and repaint only its card.
+async function retryServer(serverId) {
+    const replaceCard = (html) => {
+        const el = document.querySelector(`.server-card[data-server-id="${serverId}"]`);
+        if (el) el.outerHTML = html;
+    };
+    const existing = document.querySelector(`.server-card[data-server-id="${serverId}"]`);
+    const host = existing ? (existing.querySelector('.server-host')?.textContent || '') : '';
+
+    replaceCard(createServerCard({ id: serverId, host }, 'checking'));
+    try {
+        const status = await API.servers.reconnect(serverId);
+        replaceCard(createServerCard(status));
+    } catch (error) {
+        console.error('Retry failed for', serverId, error);
+        replaceCard(createServerCard({
+            id: serverId, host, connected: false, services: [],
+            error: String(error.message || error)
+        }));
+    }
+}
+
+// state: 'checking' | 'connected' | 'error' (defaults from server.connected)
+function createServerCard(server, state) {
+    if (!state) state = server.connected ? 'connected' : 'error';
+
+    if (state === 'checking') {
+        return `
+        <div class="server-card checking" data-server-id="${server.id}">
+            <div class="server-card-header">
+                <div class="server-name"><span class="spinner spinner-sm"></span>${server.id}</div>
+            </div>
+            <div class="server-host">${server.host || ''}</div>
+            <div class="server-state-label">Проверка подключения…</div>
+        </div>`;
+    }
+
+    if (state === 'error') {
+        const errMsg = server.error
+            ? `<div class="server-error-msg">${escapeHtml(server.error)}</div>` : '';
+        return `
+        <div class="server-card disconnected" data-server-id="${server.id}">
+            <div class="server-card-header">
+                <div class="server-name"><span class="status-dot status-error"></span>${server.id}</div>
+                <span class="server-state-label error">Не отвечает</span>
+            </div>
+            <div class="server-host">${server.host || ''}</div>
+            ${errMsg}
+            <button class="server-retry" data-server-id="${server.id}" type="button">&#8635; Повторить попытку</button>
+        </div>`;
+    }
+
+    // connected
+    const statusClass = 'status-ok';
+    const cardClass = '';
+
     const servicesHtml = server.services.map(service => {
         const running = service.running ? 'running' : 'stopped';
         const icon = service.health === 'healthy' ? '&#10004;' : service.health === 'unhealthy' ? '&#10008;' : '?';

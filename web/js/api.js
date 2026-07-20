@@ -52,6 +52,9 @@ const API = {
         async status() {
             return API.request('/status');
         },
+        async reconnect(serverId) {
+            return API.request(`/servers/${serverId}/reconnect`, { method: 'POST' });
+        },
         async get(serverId) {
             return API.request(`/servers/${serverId}`);
         },
