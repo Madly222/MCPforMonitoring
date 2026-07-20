@@ -65,6 +65,7 @@ flowchart TB
 
     subgraph Core
         SSH[SSH Manager<br/>asyncssh pool]
+        RESOLVER[Command Resolver<br/>+ ServerProfile<br/>0-token templates + cache]
         CLAUDE[Claude Client<br/>NL command + error analysis]
         SYSINFO[System Info Collector]
         CONFIG[Config Loader<br/>secrets.yaml + settings.yaml]
@@ -84,26 +85,31 @@ flowchart TB
         ONU[ONU SNMP Monitor]
     end
 
-    subgraph Automation["Scheduled Automation (.env)"]
+    subgraph Automation["Scheduled Automation"]
+        SCHED[In-app Scheduler<br/>daily, time set in panel]
         ELEC[Electric Outage]
         ACC[Water Outage]
         INV[Invoice / Posta]
         MACSYNC[DHCP→NetBox MAC Sync]
+        MACPORT[MAC→Port→NetBox<br/>Interface Assignment]
     end
 
     KB[(Knowledge Base<br/>known_errors / ignore_patterns)]
     TARGETS[(Monitored Servers<br/>DHCP / DNS / RADIUS / Mail / Web)]
     OLT[(ZTE C320 OLT)]
     NB[(NetBox)]
-    STORE[(Runtime store<br/>sessions/users.json<br/>sessions/runtime_settings.json<br/>logs/audit.jsonl)]
+    STORE[(Runtime store<br/>sessions/users.json<br/>sessions/runtime_settings.json<br/>sessions/server_profiles.json<br/>logs/audit.jsonl)]
 
     UI --> AUTH --> API
     UI --> ADMIN
     ADMIN --> STORE
     AUTH --> STORE
     API --> Core
+    API --> RESOLVER
+    RESOLVER --> STORE
     API --> Services
     LIFESPAN --> Monitors
+    LIFESPAN --> SCHED
     Services --> SSH --> TARGETS
     Monitors --> SSH
     LOGW --> ERRD --> KB
@@ -114,7 +120,7 @@ flowchart TB
 ```
 
 **Request flow (natural-language command):**
-`Web UI → POST /api/execute → Claude interpret_command → execute_interpreted_command → Service handler / SSH → result`. If Claude confidence ≤ 0.7 or the API errors, the system falls back to keyword parsing (`status` / `restart` / `logs` / `health`).
+`Web UI → POST /api/execute → command resolver (templates + per-server cache) → Service handler / SSH → result`. The resolver uses each host's `ServerProfile` to build a correct command with no Claude tokens; only novel requests fall through to Claude (`resolve_shell_command` / `interpret_command`). If Claude confidence ≤ 0.7 or the API errors, the system falls back to keyword parsing (`status` / `restart` / `logs` / `health`).
 
 ---
 
@@ -128,6 +134,7 @@ flowchart TB
 - Support for both **systemd** and **SysVinit** init systems (auto-detected).
 
 ### AI integration (Claude)
+- **Capability-aware command resolver** — common intents (status / logs / errors / restart / start / stop) render straight to a profile-correct shell command with **zero Claude tokens**; per-server results are cached, and Claude is only called as a fallback for novel requests.
 - Natural-language command interpretation with confidence scoring.
 - Unknown-error analysis (diagnosis, severity, suggested fixes).
 - Response caching and rate limiting to control API usage.
@@ -188,6 +195,8 @@ ServersMonitoringMCP/
 │   ├── core/
 │   │   ├── config.py           # Pydantic config loader (secrets + settings)
 │   │   ├── ssh_manager.py      # Async SSH pool, command/service execution
+│   │   ├── command_resolver.py # Capability-aware resolver (0-token templates + cache)
+│   │   ├── server_profile.py   # Per-server capability probe (init/distro/tools)
 │   │   ├── claude_client.py    # Claude API: NL interpretation + error analysis
 │   │   └── system_info.py      # Server hardware/OS/network info collector
 │   ├── services/               # Service handlers (extend BaseService)
@@ -207,10 +216,12 @@ ServersMonitoringMCP/
 │   │   ├── onu_monitor.py
 │   │   ├── electric_monitor.py
 │   │   ├── acc_monitor.py
+│   │   ├── outage_scheduler.py # In-app daily scheduler (electric + water)
 │   │   ├── invoice_generator.py
 │   │   ├── posta_generator.py
 │   │   ├── email_invoice_sender.py
-│   │   └── dhcp_mac_sync.py
+│   │   ├── dhcp_mac_sync.py
+│   │   └── mac_port_sync.py    # MAC→leaf port→NetBox interface assignment
 │   └── web/
 │       ├── app.py              # FastAPI app factory + lifespan
 │       ├── api.py              # Main REST API (incl. console/exec, claude/health)
@@ -230,6 +241,7 @@ ServersMonitoringMCP/
 │   ├── safe_actions.yaml       # Auto-remediation risk policy
 │   ├── services/               # Per-service detection/config (dhcp/dns/radius)
 │   ├── electric_addresses.txt  # Addresses watched for power outages
+│   ├── scan_devices.example.txt # Template: devices for MAC→port scan
 │   ├── invoice_clienti_email.txt
 │   └── postamoldovei_clienti.txt
 ├── knowledge_base/
@@ -243,7 +255,9 @@ ServersMonitoringMCP/
 │   ├── css/style.css
 │   └── js/                     # app.js, api.js, admin.js, onu.js, login.js
 ├── scripts/                    # Test/util scripts + systemd unit/timer files
-│                               #   incl. manage_users.py, check_claude.py, check_electric.py
+│                               #   incl. manage_users.py, check_claude.py, check_electric.py,
+│                               #   test_resolver.py, test_schedule.py, test_outage_filters.py
+├── tests/                      # Pytest suite (e.g. test_mac_port_sync.py)
 ├── fonts/                      # DejaVu fonts (PDF generation)
 ├── secrets.example.yaml        # Template -> copy to secrets.yaml
 ├── .env.example                # Template -> copy to .env
@@ -330,7 +344,7 @@ Defines monitored servers, SSH/sudo credentials, Claude API key, web users, emai
 - `email` — SMTP for built-in notifications.
 - `web_users[]` — dashboard logins (`superadmin` / `admin` / `operator`); plaintext passwords are hashed on first run.
 
-> **Runtime store — read this.** On first run, `web_users`, `servers`, and `onu_monitoring` seed a JSON-backed runtime store (`sessions/users.json`, `sessions/runtime_settings.json`). **After seeding, that store — not `secrets.yaml` — is the source of truth** for users, servers, and OLTs, so later edits are done through the superadmin console (or `scripts/manage_users.py`). Editing `secrets.yaml` after the first run has no effect unless you clear the corresponding store file. Claude/email/session secrets are still read from `secrets.yaml`.
+> **Runtime store — read this.** On first run, `web_users`, `servers`, and `onu_monitoring` seed a JSON-backed runtime store (`sessions/users.json`, `sessions/runtime_settings.json`; server capability profiles are auto-detected into `sessions/server_profiles.json`). **After seeding, that store — not `secrets.yaml` — is the source of truth** for users, servers, and OLTs, so later edits are done through the superadmin console (or `scripts/manage_users.py`). Editing `secrets.yaml` after the first run has no effect unless you clear the corresponding store file. Claude/email/session secrets are still read from `secrets.yaml`.
 
 ### 2. `.env` — automation secrets
 Read by the business-automation modules (electric/water outage, invoicing, MAC sync). Copy from `.env.example`. Covers SMTP, FTP (posta.md), billing DB, NetBox token, and per-job email recipients. **This layer is separate from `secrets.yaml`** — both are gitignored.
@@ -390,6 +404,8 @@ The `scripts/` directory ships systemd `.service` + `.timer` units for the perio
 sudo systemctl enable --now electric-monitor.timer
 sudo systemctl enable --now acc-monitor.timer
 ```
+
+> **In-app scheduler alternative.** The web service also runs an in-process daily scheduler (`outage_scheduler`) for the electric/water checks, with the run time editable from the superadmin panel (`/api/admin/config/schedule/{channel}`). It persists last-run state and de-duplicates emails by content, so you can use it *instead of* the systemd timers if you prefer to manage timing from the UI — don't enable both for the same channel.
 
 ---
 
@@ -472,6 +488,7 @@ All endpoints are under `/api/admin` and require the `superadmin` role.
 | GET | `/api/admin/audit` | Read the audit log |
 | GET/PUT | `/api/admin/config/notifications/{channel}` | Get/set a notification channel |
 | GET/PUT | `/api/admin/config/acc-pattern` | Get/set the water-outage match pattern |
+| GET/PUT | `/api/admin/config/schedule/{channel}` | Get/set the daily run time for an outage channel |
 | GET/PUT | `/api/admin/config/electric-addresses` | Get/set the power-outage address list |
 | GET/POST | `/api/admin/config/servers` | List / add monitored servers |
 | PUT/DELETE | `/api/admin/config/servers/{id}` | Edit / remove a server |
@@ -486,6 +503,7 @@ All endpoints are under `/api/admin` and require the `superadmin` role.
 | POST | `/api/netbox/scan` · `/api/netbox/apply` · `/api/netbox/auto` | Switch scan / apply / one-shot |
 | POST | `/api/netbox/scan-router` · `/api/netbox/apply-router` | Router variants |
 | POST | `/api/netbox/sync-mac` | DHCP→NetBox MAC sync |
+| POST | `/api/netbox/sync-interfaces` | MAC→leaf port→NetBox interface assignment |
 
 > Interactive API docs are available at `/docs` (Swagger UI) when the server is running.
 
@@ -501,11 +519,13 @@ All endpoints are under `/api/admin` and require the `superadmin` role.
 | `updates_checker` | Daily system-update tracking | `settings.yaml` |
 | `onu_monitor` | ZTE C320 ONU SNMP monitoring | `secrets.yaml` (OLTs) |
 | `electric_monitor` | Premier Energy outage alerts | `.env`, `config/electric_addresses.txt` |
-| `acc_monitor` | acc.md water outage alerts | `.env` |
+| `acc_monitor` | acc.md water outage alerts | `.env`, panel (pattern) |
+| `outage_scheduler` | In-app daily runner for electric + water checks | run time set in superadmin panel |
 | `invoice_generator` ⚠️ | Billing → XLS → email (Paynet) | `.env`, `config/invoice_clienti_email.txt` |
 | `posta_generator` ⚠️ | Billing → XLSX → FTP (posta.md) | `.env`, `config/postamoldovei_clienti.txt` |
 | `email_invoice_sender` ⚠️ | Billing → PDF → email (WHMCS) | `.env` |
 | `dhcp_mac_sync` | phpDHCPAdmin MySQL → NetBox | `.env` |
+| `mac_port_sync` | MAC→leaf port→NetBox interface assignment | `.env`, `config/scan_devices.example.txt` |
 
 > ⚠️ **Temporary feature — scheduled for removal.** The invoicing modules and
 > their UI buttons / endpoints (`POST /api/invoice/generate`,
@@ -551,7 +571,12 @@ python scripts/test_claude.py                 # Claude API
 python scripts/check_claude.py                # Claude key/model health
 python scripts/check_electric.py              # power-outage checker
 python scripts/manage_users.py                # CLI user management
+python scripts/test_resolver.py               # command resolver
+python scripts/test_schedule.py               # in-app scheduler
+python scripts/test_outage_filters.py         # outage message filters
 ```
+
+The `tests/` directory holds the pytest suite (e.g. `tests/test_mac_port_sync.py`); run it with `pytest`.
 
 ### Adding a new service handler
 1. Create `src/services/<name>.py` extending `BaseService`.
