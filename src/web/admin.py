@@ -15,7 +15,7 @@ from src.web.auth import UserInfo, require_superadmin
 from src.web.users import get_user_store, VALID_ROLES
 from src.web.audit import get_audit_logger
 from src.web import runtime_config as rc
-from src.core.config import get_config, ServerConfig, OLTConfig
+from src.core.config import get_config, ServerConfig, OLTConfig, VALID_SERVICE_TYPES
 
 
 class CreateUserRequest(BaseModel):
@@ -361,11 +361,34 @@ async def list_servers(user: UserInfo = Depends(require_superadmin)):
     return {"servers": [_mask(s.model_dump(), _SERVER_SECRETS) for s in servers]}
 
 
+@router.get("/config/service-types")
+async def get_service_types(user: UserInfo = Depends(require_superadmin)):
+    """The service types the monitor supports. Drives the add/edit-server
+    dropdown so operators can only pick types that actually have a handler in
+    code; new types are added via code, not here."""
+    return {"types": list(VALID_SERVICE_TYPES)}
+
+
+def _validate_services(services) -> None:
+    """Reject unknown service types up front so a typo can't create a server the
+    monitor has no handler for."""
+    unknown = [s for s in (services or []) if s not in VALID_SERVICE_TYPES]
+    if unknown:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Unknown service type(s): {', '.join(unknown)}. "
+                f"Allowed: {', '.join(VALID_SERVICE_TYPES)}"
+            ),
+        )
+
+
 @router.post("/config/servers")
 async def create_server(body: dict, request: Request, user: UserInfo = Depends(require_superadmin)):
     """Add a monitored server. Takes effect after restart."""
     body.pop("auth_value_set", None)
     body.pop("sudo_password_set", None)
+    _validate_services(body.get("services"))
     try:
         validated = ServerConfig(**body)
     except Exception as e:
@@ -388,6 +411,7 @@ async def edit_server(server_id: str, body: dict, request: Request, user: UserIn
         raise HTTPException(status_code=404, detail=f"Server not found: {server_id}")
     merged = _merge_secrets(body, existing, _SERVER_SECRETS)
     merged["id"] = server_id
+    _validate_services(merged.get("services"))
     try:
         validated = ServerConfig(**merged)
     except Exception as e:

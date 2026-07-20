@@ -32,6 +32,13 @@ LOGS_DIR = PROJECT_ROOT / "logs"
 SESSIONS_DIR = PROJECT_ROOT / "sessions"
 
 
+# Service types the monitor has handlers for (mirrors service_handlers /
+# config/services/<type>.yaml). New types are added in code alongside a handler
+# class; the superadmin console only lets operators pick from this list, never
+# invent new ones. Extend this tuple when you add a handler.
+VALID_SERVICE_TYPES = ("dhcp", "dns", "radius")
+
+
 class ServerConfig(BaseModel):
     id: str
     host: str
@@ -311,7 +318,18 @@ class ConfigLoader:
         try:
             if not rc.servers_seeded():
                 rc.seed_servers([s.model_dump() for s in self._secrets.servers])
-            self._secrets.servers = [ServerConfig(**d) for d in rc.get_servers()]
+            # Rebuild per-entry so one malformed stored server is skipped (and
+            # logged) instead of discarding every runtime edit for the fleet.
+            merged = []
+            for d in rc.get_servers():
+                try:
+                    merged.append(ServerConfig(**d))
+                except Exception as ex:
+                    logger.error(
+                        f"Skipping invalid server '{d.get('id', '?')}' "
+                        f"from runtime store: {ex}"
+                    )
+            self._secrets.servers = merged
         except Exception as e:
             logger.error(f"Runtime server override skipped (using secrets.yaml): {e}")
         
