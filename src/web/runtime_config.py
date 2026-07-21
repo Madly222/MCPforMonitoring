@@ -211,6 +211,44 @@ def reload_cache() -> None:
 
 
 # ==============================================================================
+# DASHBOARD AUTO CONNECTION-CHECK
+# ==============================================================================
+# Controls the dashboard's automatic re-probing of server connections.
+
+_DEFAULT_AUTOCHECK_INTERVAL = 30
+_MIN_AUTOCHECK_INTERVAL = 5
+
+
+def get_auto_check() -> dict:
+    """Return the dashboard auto-check setting: {enabled, interval_seconds}."""
+    stored = _load().get("auto_check", {}) or {}
+    enabled = stored.get("enabled", True)
+    interval = stored.get("interval_seconds", _DEFAULT_AUTOCHECK_INTERVAL)
+    try:
+        interval = int(interval)
+    except (TypeError, ValueError):
+        interval = _DEFAULT_AUTOCHECK_INTERVAL
+    if interval < _MIN_AUTOCHECK_INTERVAL:
+        interval = _MIN_AUTOCHECK_INTERVAL
+    return {"enabled": bool(enabled), "interval_seconds": interval}
+
+
+def set_auto_check(enabled: bool, interval_seconds) -> dict:
+    """Persist the auto-check setting. Returns the normalized value."""
+    try:
+        interval = int(interval_seconds)
+    except (TypeError, ValueError):
+        raise ValueError("interval_seconds must be an integer")
+    if interval < _MIN_AUTOCHECK_INTERVAL:
+        raise ValueError(f"interval_seconds must be >= {_MIN_AUTOCHECK_INTERVAL}")
+    with _lock:
+        data = _load()
+        data["auto_check"] = {"enabled": bool(enabled), "interval_seconds": interval}
+        _save(data)
+    return get_auto_check()
+
+
+# ==============================================================================
 # SERVERS STORE  (seed-and-own, like the user store)
 # ==============================================================================
 # Seeded once from secrets.yaml on first config load, then this store is the

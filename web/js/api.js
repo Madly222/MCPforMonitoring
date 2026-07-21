@@ -55,6 +55,9 @@ const API = {
         async reconnect(serverId) {
             return API.request(`/servers/${serverId}/reconnect`, { method: 'POST' });
         },
+        async autoCheck() {
+            return API.request('/settings/auto-check');
+        },
         async get(serverId) {
             return API.request(`/servers/${serverId}`);
         },
@@ -214,6 +217,13 @@ const API = {
         },
         async listServers() { return API.request('/admin/config/servers'); },
         async serviceTypes() { return API.request('/admin/config/service-types'); },
+        async getAutoCheck() { return API.request('/admin/config/auto-check'); },
+        async saveAutoCheck(enabled, interval_seconds) {
+            return API.request('/admin/config/auto-check', {
+                method: 'PUT',
+                body: JSON.stringify({ enabled, interval_seconds }),
+            });
+        },
         async createServer(s) {
             return API.request('/admin/config/servers', { method: 'POST', body: JSON.stringify(s) });
         },

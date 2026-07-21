@@ -18,6 +18,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.getElementById('saveAddressesBtn').addEventListener('click', saveElectricAddresses);
             document.getElementById('saveAccPatternBtn').addEventListener('click', saveAccPattern);
             document.getElementById('saveScheduleBtn').addEventListener('click', saveSchedule);
+            document.getElementById('saveAutoCheckBtn').addEventListener('click', saveAutoCheck);
         }
     } catch (e) {
         // not authenticated or not superadmin: leave admin tab hidden
@@ -174,6 +175,11 @@ async function loadSettings() {
         const sa = await API.admin.getSchedule('acc');
         document.getElementById('scheduleAcc').value = sa.time || '08:00';
     } catch (e) { /* ignore */ }
+    try {
+        const ac = await API.admin.getAutoCheck();
+        document.getElementById('autoCheckEnabled').checked = ac.enabled !== false;
+        document.getElementById('autoCheckInterval').value = ac.interval_seconds || 30;
+    } catch (e) { /* ignore */ }
     renderNotifChannel('electric', 'notifElectric', '⚡ Electric');
     renderNotifChannel('acc', 'notifAcc', '💧 Water (acc.md)');
     loadServersAdmin();
@@ -264,6 +270,19 @@ async function saveSchedule() {
         await API.admin.saveSchedule('acc', at);
         loadAudit();
         alert(`Schedule saved — electric ${et}, water ${at}`);
+    } catch (e) {
+        alert('Error: ' + e.message);
+    }
+}
+
+async function saveAutoCheck() {
+    const enabled = document.getElementById('autoCheckEnabled').checked;
+    const interval = parseInt(document.getElementById('autoCheckInterval').value, 10);
+    if (!interval || interval < 5) { alert('Interval must be at least 5 seconds'); return; }
+    try {
+        const r = await API.admin.saveAutoCheck(enabled, interval);
+        loadAudit();
+        alert(`Auto-check saved — ${r.enabled ? 'on' : 'off'}, every ${r.interval_seconds}s (applies on next dashboard load)`);
     } catch (e) {
         alert('Error: ' + e.message);
     }
