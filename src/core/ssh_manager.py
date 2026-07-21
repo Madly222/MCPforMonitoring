@@ -27,6 +27,30 @@ from src.core.config import get_config, ServerConfig, KEYS_DIR
 SSH_CONNECT_TIMEOUT = 8.0
 
 
+def _friendly_ssh_error(raw: str) -> str:
+    """Turn a raw SSH/OS error into a short, readable reason for the dashboard,
+    while keeping the original text appended so it's still a real log line."""
+    raw = (raw or "").strip()
+    if not raw:
+        return "Не удалось подключиться (причина неизвестна)"
+    low = raw.lower()
+    if "timed out" in low or "timeout" in low:
+        return f"Таймаут подключения — хост недоступен или порт фильтруется. {raw}"
+    if "refused" in low:
+        return f"Соединение отклонено — SSH не слушает на этом порту. {raw}"
+    if "no route to host" in low or "unreachable" in low:
+        return f"Хост недоступен — нет маршрута. {raw}"
+    if "permission denied" in low or "authentication" in low:
+        return f"Ошибка авторизации — проверь user/ключ/пароль. {raw}"
+    if "key" in low and ("not found" in low or "no such" in low):
+        return f"SSH-ключ не найден. {raw}"
+    if "name or service not known" in low or "getaddrinfo" in low:
+        return f"Не удаётся разрешить имя хоста. {raw}"
+    if "disabled" in low:
+        return f"Сервер отключён в конфиге. {raw}"
+    return raw
+
+
 class InitSystem(Enum):
     SYSTEMD = "systemd"
     SYSVINIT = "sysvinit"
@@ -610,6 +634,23 @@ class SSHManager:
         except Exception as e:
             logger.debug(f"Connection test failed for {server_id}: {e}")
             return False
+
+    async def probe_connection(self, server_id: str) -> tuple[bool, Optional[str]]:
+        """Like test_connection, but also returns a human-readable failure reason.
+
+        The dashboard uses this so a down server can show *why* it's down
+        (timeout / refused / auth / DNS / key) instead of a bare "not responding".
+        Returns (True, None) on success, (False, reason) otherwise.
+        """
+        try:
+            result = await self.execute(server_id, "echo ok", timeout=10.0)
+            if result.success and result.stdout.strip() == "ok":
+                return True, None
+            raw = (result.stderr or "").strip() or f"exit code {result.exit_code}"
+            return False, _friendly_ssh_error(raw)
+        except Exception as e:
+            logger.debug(f"Connection probe failed for {server_id}: {e}")
+            return False, _friendly_ssh_error(str(e))
     
     async def test_sudo(self, server_id: str) -> bool:
         """Test if sudo works correctly on the server."""

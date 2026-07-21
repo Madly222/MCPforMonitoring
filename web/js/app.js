@@ -123,17 +123,25 @@ async function retryServer(serverId) {
     };
     const existing = document.querySelector(`.server-card[data-server-id="${serverId}"]`);
     const host = existing ? (existing.querySelector('.server-host')?.textContent || '') : '';
+    const out = document.getElementById('outputArea');
 
+    if (out) out.textContent = `Переподключение к ${serverId}…`;
     replaceCard(createServerCard({ id: serverId, host }, 'checking'));
     try {
         const status = await API.servers.reconnect(serverId);
         replaceCard(createServerCard(status));
+        if (out) {
+            out.textContent = status.connected
+                ? `OK: ${serverId} — соединение восстановлено`
+                : `${serverId} — НЕ ОТВЕЧАЕТ\n\n${status.error || 'причина неизвестна'}`;
+        }
     } catch (error) {
         console.error('Retry failed for', serverId, error);
+        const msg = String(error.message || error);
         replaceCard(createServerCard({
-            id: serverId, host, connected: false, services: [],
-            error: String(error.message || error)
+            id: serverId, host, connected: false, services: [], error: msg
         }));
+        if (out) out.textContent = `${serverId} — ошибка запроса\n\n${msg}`;
     }
 }
 
