@@ -208,18 +208,40 @@ class LogWatcher:
         logger.info(f"Log watch stopped: {task_id}")
     
     async def start(self):
-        """Start watching all configured log files."""
+        """Start watching all configured log files.
+
+        Non-blocking: the per-server setup runs in the background and
+        concurrently, so one unreachable host can't serialize (and stall)
+        startup. The web app comes up immediately; watchers attach as each
+        server responds.
+        """
         if self._running:
             logger.warning("Log watcher already running")
             return
         
         self._running = True
         logger.info("Starting log watcher...")
-        
+        self._setup_task = asyncio.create_task(self._setup_all())
+
+    async def _setup_all(self):
         servers = self.config.get_enabled_servers()
+        await asyncio.gather(
+            *[self._setup_server(server) for server in servers],
+            return_exceptions=True,
+        )
+        logger.info(f"Log watcher ready with {len(self._tasks)} log file(s)")
+
+    async def _setup_server(self, server):
+        # One fast reachability probe first: if the host is down, skip all its
+        # detection/file probes — each would otherwise burn the full connect
+        # timeout, and a few dead hosts add up to minutes.
+        ok, reason = await self.ssh.probe_connection(server.id)
+        if not ok:
+            logger.warning(f"Log watcher: skipping {server.id} — {reason}")
+            return
         
-        for server in servers:
-            for service_type in server.services:
+        for service_type in server.services:
+            try:
                 service_config = self.config.load_service_config(service_type)
                 
                 # Get log files for this service
@@ -267,8 +289,8 @@ class LogWatcher:
                         logger.info(f"Watching: {task_id}")
                     else:
                         logger.debug(f"Log file not found: {log_path} on {server.id}")
-        
-        logger.info(f"Log watcher started with {len(self._tasks)} log file(s)")
+            except Exception as e:
+                logger.error(f"Log watcher setup failed for {server.id}/{service_type}: {e}")
     
     async def stop(self):
         """Stop watching all log files."""
@@ -277,6 +299,14 @@ class LogWatcher:
         
         logger.info("Stopping log watcher...")
         self._running = False
+        
+        setup_task = getattr(self, "_setup_task", None)
+        if setup_task and not setup_task.done():
+            setup_task.cancel()
+            try:
+                await setup_task
+            except asyncio.CancelledError:
+                pass
         
         for task_id, task in self._tasks.items():
             task.cancel()

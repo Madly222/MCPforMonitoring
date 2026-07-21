@@ -232,6 +232,13 @@ async def reconnect_server(
     return await build_server_status(server)
 
 
+@router.get("/settings/auto-check")
+async def get_auto_check_setting(user: UserInfo = Depends(get_current_user)):
+    """Dashboard auto connection-check setting (readable by any logged-in user)."""
+    import src.web.runtime_config as rc
+    return rc.get_auto_check()
+
+
 @router.get("/servers")
 async def list_servers(user: UserInfo = Depends(get_current_user)):
     config = get_config()

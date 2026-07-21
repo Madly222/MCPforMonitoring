@@ -17,12 +17,27 @@ document.addEventListener('DOMContentLoaded', async () => {
         await loadServerStatus();
         populateConsoleServers();
         checkClaudeHealth();
-        refreshInterval = setInterval(loadServerStatus, 30000);
+        await setupAutoRefresh();
     } catch (error) {
         console.error('Auth check failed:', error);
         window.location.href = '/login.html';
     }
 });
+
+// Configure the dashboard's automatic connection re-check from the saved setting
+// (superadmin panel → auto connection-check). Can be re-run to apply changes.
+async function setupAutoRefresh() {
+    if (refreshInterval) { clearInterval(refreshInterval); refreshInterval = null; }
+    let cfg = { enabled: true, interval_seconds: 30 };
+    try {
+        cfg = await API.servers.autoCheck();
+    } catch (e) {
+        console.warn('Auto-check setting unavailable, using defaults:', e);
+    }
+    if (cfg.enabled && cfg.interval_seconds >= 5) {
+        refreshInterval = setInterval(loadServerStatus, cfg.interval_seconds * 1000);
+    }
+}
 
 function initializeUI() {
     document.getElementById('username').textContent = currentUser.username;
@@ -82,7 +97,9 @@ async function loadServerStatus() {
     let configured = [];
     try {
         const list = await API.servers.list();
-        configured = list.servers || [];
+        // Never probe/show servers marked enabled:false — they're excluded here
+        // and also on the backend (/status returns only enabled servers).
+        configured = (list.servers || []).filter(s => s.enabled !== false);
     } catch (error) {
         console.error('Failed to load server list:', error);
         updateConnectionStatus(false);

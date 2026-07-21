@@ -327,6 +327,35 @@ async def set_electric_addresses_ep(
     return {"success": True, "addresses": addresses}
 
 
+@router.get("/config/auto-check")
+async def get_auto_check_ep(user: UserInfo = Depends(require_superadmin)):
+    """Get the dashboard auto connection-check setting."""
+    return rc.get_auto_check()
+
+
+@router.put("/config/auto-check")
+async def set_auto_check_ep(
+    body: dict,
+    request: Request,
+    user: UserInfo = Depends(require_superadmin),
+):
+    """Set the dashboard auto connection-check setting (enabled + interval)."""
+    try:
+        result = rc.set_auto_check(
+            bool(body.get("enabled", True)),
+            body.get("interval_seconds", 30),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    get_audit_logger().log(
+        action="settings_auto_check",
+        username=user.username, role=user.role,
+        detail=f"enabled={result['enabled']} interval={result['interval_seconds']}",
+        success=True, ip=_client_ip(request),
+    )
+    return {"success": True, **result}
+
+
 # ==============================================================================
 # SERVERS (monitored hosts) — add / edit / delete
 # ==============================================================================
