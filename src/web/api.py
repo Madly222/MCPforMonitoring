@@ -128,8 +128,10 @@ async def build_server_status(server) -> dict:
     }
     
     try:
-        connected = await ssh.test_connection(server.id)
+        connected, reason = await ssh.probe_connection(server.id)
         server_status["connected"] = connected
+        if not connected and reason:
+            server_status["error"] = reason
         
         if connected:
             system_info_task = ssh.get_system_info(server.id)
