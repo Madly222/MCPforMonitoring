@@ -9,7 +9,9 @@ detection:
     - name: technitium
       service_name: dns
       process_name: dotnet
-      check: "systemctl is-active dns 2>/dev/null | grep -q '^active' && echo 'found' || (pgrep -f DnsServerApp.dll >/dev/null 2>&1 && echo 'found') || echo 'not found'"
+      # NOTE: no `pgrep -f` here on purpose — it matches its own command line
+      # over SSH and would report 'found' on every host. Unit + install paths only.
+      check: "if systemctl is-active --quiet dns 2>/dev/null || systemctl list-unit-files 2>/dev/null | grep -q '^dns\\.service' || [ -f /etc/dns/config/dns.config ] || [ -d /opt/technitium/dns ]; then echo 'found'; else echo 'not found'; fi"
     
     - name: bind9
       service_name: bind9
