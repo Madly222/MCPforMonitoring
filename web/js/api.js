@@ -217,6 +217,13 @@ const API = {
         },
         async listServers() { return API.request('/admin/config/servers'); },
         async serviceTypes() { return API.request('/admin/config/service-types'); },
+        async getSshTimeout() { return API.request('/admin/config/ssh-timeout'); },
+        async saveSshTimeout(seconds) {
+            return API.request('/admin/config/ssh-timeout', {
+                method: 'PUT',
+                body: JSON.stringify({ seconds }),
+            });
+        },
         async getAutoCheck() { return API.request('/admin/config/auto-check'); },
         async saveAutoCheck(enabled, interval_seconds) {
             return API.request('/admin/config/auto-check', {

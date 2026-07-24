@@ -472,6 +472,16 @@
                     </div>
 
                     <div style="background:#1e1e2e;padding:16px;border-radius:8px;margin:12px 0;">
+                        <h4 style="margin:0 0 8px;">&#9203; SSH connect timeout</h4>
+                        <p style="color:#9aa;font-size:13px;margin:0 0 8px;">How long to wait for an SSH connection before marking a server unreachable (3&ndash;120 sec). Applied live &mdash; no restart. Raise it only for hosts with a slow sshd handshake; a high value makes dead servers slower to detect.</p>
+                        <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;">
+                            <label style="color:#9aa;">Timeout (sec)</label>
+                            <input type="number" id="sshTimeout" min="3" max="120" step="1" style="width:90px;padding:6px;background:#252540;border:1px solid #3a3a5a;border-radius:6px;color:#fff;">
+                            <button class="btn btn-primary" id="saveSshTimeoutBtn">Save</button>
+                        </div>
+                    </div>
+
+                    <div style="background:#1e1e2e;padding:16px;border-radius:8px;margin:12px 0;">
                         <h4 style="margin:0 0 8px;">&#128231; Notification email</h4>
                         <p style="color:#9aa;font-size:13px;margin:0 0 8px;">SMTP server and recipients for outage alerts. Applied live.</p>
                         <div id="notifElectric"></div>
