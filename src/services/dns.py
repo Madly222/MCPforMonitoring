@@ -228,12 +228,21 @@ class DNSService(BaseService):
             details={"path": config_file} if config_file else None
         ))
         
-        # Check DNS resolution (query localhost)
+        # Check DNS resolution. A variant can define its own probe in
+        # dns.yaml -> resolution_test (e.g. Technitium, which answers for its
+        # own zones rather than a generic 'localhost' lookup); otherwise use the
+        # generic check below.
+        det = await self.detect()
+        variant = det["name"] if det else None
+        custom_test = self.service_config.get("resolution_test", {}).get(variant)
+        
         dns_test = await self.ssh.execute(
             self.server_id,
-            "dig @127.0.0.1 localhost +short +time=2 +tries=1 >/dev/null 2>&1 && echo 'ok' || "
-            "nslookup localhost 127.0.0.1 >/dev/null 2>&1 && echo 'ok' || "
-            "host localhost 127.0.0.1 >/dev/null 2>&1 && echo 'ok' || echo 'fail'"
+            custom_test or (
+                "dig @127.0.0.1 localhost +short +time=2 +tries=1 >/dev/null 2>&1 && echo 'ok' || "
+                "nslookup localhost 127.0.0.1 >/dev/null 2>&1 && echo 'ok' || "
+                "host localhost 127.0.0.1 >/dev/null 2>&1 && echo 'ok' || echo 'fail'"
+            )
         )
         dns_works = "ok" in dns_test.stdout
         results.append(HealthCheckResult(

@@ -6,6 +6,11 @@
 
 detection:
   commands:
+    - name: technitium
+      service_name: dns
+      process_name: dotnet
+      check: "systemctl is-active dns 2>/dev/null | grep -q '^active' && echo 'found' || (pgrep -f DnsServerApp.dll >/dev/null 2>&1 && echo 'found') || echo 'not found'"
+    
     - name: bind9
       service_name: bind9
       process_name: named
@@ -25,11 +30,6 @@ detection:
       service_name: pdns
       process_name: pdns_server
       check: "pgrep -x pdns_server >/dev/null 2>&1 && echo 'found' || (dpkg -l pdns-server 2>/dev/null | grep -q '^ii' && echo 'found') || echo 'not found'"
-    
-    - name: technitium
-      service_name: dns
-      process_name: dotnet
-      check: "systemctl is-active dns 2>/dev/null | grep -q '^active' && echo 'found' || (pgrep -f DnsServerApp.dll >/dev/null 2>&1 && echo 'found') || echo 'not found'"
 
 file_paths:
   bind9:
@@ -120,6 +120,12 @@ log_files:
       type: general
     - path: /opt/technitium/dns/logs
       type: general
+
+# Resolution health check, per variant. Falls back to the generic localhost
+# query when a variant has no entry here. Change the zone to one this server is
+# actually authoritative for.
+resolution_test:
+  technitium: "dig +short SOA rapidlink.md @127.0.0.1 +time=2 +tries=1 2>/dev/null | grep -q . && echo 'ok' || (nslookup -type=SOA rapidlink.md 127.0.0.1 >/dev/null 2>&1 && echo 'ok') || echo 'fail'"
 
 health_checks:
   - name: process_running
