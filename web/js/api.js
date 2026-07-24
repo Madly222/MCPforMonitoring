@@ -217,6 +217,12 @@ const API = {
         },
         async listServers() { return API.request('/admin/config/servers'); },
         async serviceTypes() { return API.request('/admin/config/service-types'); },
+        async getDnsZone() { return API.request('/admin/config/dns-zone'); },
+        async saveDnsZone(zone) {
+            return API.request('/admin/config/dns-zone', {
+                method: 'PUT', body: JSON.stringify({ zone }),
+            });
+        },
         async getSshTimeout() { return API.request('/admin/config/ssh-timeout'); },
         async saveSshTimeout(seconds) {
             return API.request('/admin/config/ssh-timeout', {

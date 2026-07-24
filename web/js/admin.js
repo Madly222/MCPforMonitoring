@@ -20,6 +20,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.getElementById('saveScheduleBtn').addEventListener('click', saveSchedule);
             document.getElementById('saveAutoCheckBtn').addEventListener('click', saveAutoCheck);
             document.getElementById('saveSshTimeoutBtn').addEventListener('click', saveSshTimeout);
+            document.getElementById('saveDnsZoneBtn').addEventListener('click', saveDnsZone);
         }
     } catch (e) {
         // not authenticated or not superadmin: leave admin tab hidden
@@ -177,6 +178,10 @@ async function loadSettings() {
         document.getElementById('scheduleAcc').value = sa.time || '08:00';
     } catch (e) { /* ignore */ }
     try {
+        const dz = await API.admin.getDnsZone();
+        document.getElementById('dnsTestZone').value = dz.zone || '';
+    } catch (e) { /* ignore */ }
+    try {
         const st = await API.admin.getSshTimeout();
         document.getElementById('sshTimeout').value = st.seconds || 8;
     } catch (e) { /* ignore */ }
@@ -288,6 +293,18 @@ async function saveAutoCheck() {
         const r = await API.admin.saveAutoCheck(enabled, interval);
         loadAudit();
         alert(`Auto-check saved — ${r.enabled ? 'on' : 'off'}, every ${r.interval_seconds}s (applies on next dashboard load)`);
+    } catch (e) {
+        alert('Error: ' + e.message);
+    }
+}
+
+async function saveDnsZone() {
+    const zone = document.getElementById('dnsTestZone').value.trim();
+    if (!zone) { alert('Enter a zone, e.g. example.com'); return; }
+    try {
+        const r = await API.admin.saveDnsZone(zone);
+        loadAudit();
+        alert(`DNS test zone saved — ${r.zone}`);
     } catch (e) {
         alert('Error: ' + e.message);
     }
