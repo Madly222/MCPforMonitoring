@@ -249,6 +249,35 @@ def set_auto_check(enabled: bool, interval_seconds) -> dict:
 
 
 # ==============================================================================
+# DNS TEST ZONE
+# ==============================================================================
+# Zone used by the DNS resolution health check (SOA lookup against the server's
+# own listening IP). Set it to a zone the monitored DNS servers are actually
+# authoritative for, otherwise the check will fail on healthy servers.
+
+_DEFAULT_DNS_TEST_ZONE = "rapidlink.md"
+_DNS_ZONE_RE = re.compile(r'^(?=.{1,253}$)([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,63}$')
+
+
+def get_dns_test_zone() -> str:
+    """Return the zone used for the DNS resolution health check."""
+    value = (_load().get("dns_test_zone") or "").strip()
+    return value or _DEFAULT_DNS_TEST_ZONE
+
+
+def set_dns_test_zone(zone: str) -> str:
+    """Persist the DNS health-check zone. Returns the normalized value."""
+    zone = (zone or "").strip().rstrip(".")
+    if not zone or not _DNS_ZONE_RE.match(zone):
+        raise ValueError("Enter a valid domain, e.g. example.com")
+    with _lock:
+        data = _load()
+        data["dns_test_zone"] = zone
+        _save(data)
+    return zone
+
+
+# ==============================================================================
 # SSH CONNECT TIMEOUT
 # ==============================================================================
 # How long to wait for an SSH connection (TCP + handshake + auth) before giving

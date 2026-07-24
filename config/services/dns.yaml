@@ -11,7 +11,7 @@ detection:
       process_name: dotnet
       # NOTE: no `pgrep -f` here on purpose — it matches its own command line
       # over SSH and would report 'found' on every host. Unit + install paths only.
-      check: "if systemctl is-active --quiet dns 2>/dev/null || systemctl list-unit-files 2>/dev/null | grep -q '^dns\\.service' || [ -f /etc/dns/config/dns.config ] || [ -d /opt/technitium/dns ]; then echo 'found'; else echo 'not found'; fi"
+      check: "if systemctl is-active --quiet dns 2>/dev/null || systemctl list-unit-files 2>/dev/null | grep -q '^dns\\.service' || [ -f /etc/dns/dns.config ] || [ -d /opt/technitium/dns ]; then echo 'found'; else echo 'not found'; fi"
     
     - name: bind9
       service_name: bind9
@@ -66,14 +66,16 @@ file_paths:
       - /var/lib/powerdns
   
   technitium:
-    # Technitium config is a binary dns.config; paths cover the common installs.
-    # VERIFY on the box: `sudo find / -name dns.config 2>/dev/null`
+    # Technitium stores a binary dns.config. Default install puts it in /etc/dns.
     config:
+      - /etc/dns/dns.config
       - /etc/dns/config/dns.config
+      - /opt/technitium/dns/dns.config
       - /opt/technitium/dns/config/dns.config
     zones:
+      - /etc/dns/zones
       - /etc/dns/config/zones
-      - /opt/technitium/dns/config/zones
+      - /opt/technitium/dns/zones
 
 log_files:
   bind9:
@@ -127,7 +129,11 @@ log_files:
 # query when a variant has no entry here. Change the zone to one this server is
 # actually authoritative for.
 resolution_test:
-  technitium: "dig +short SOA rapidlink.md @127.0.0.1 +time=2 +tries=1 2>/dev/null | grep -q . && echo 'ok' || (nslookup -type=SOA rapidlink.md 127.0.0.1 >/dev/null 2>&1 && echo 'ok') || echo 'fail'"
+  # {zone} is filled from the "DNS test zone" setting in the admin panel.
+  # The listening IP is discovered on the host: Technitium often binds only
+  # to specific addresses (not 127.0.0.1), and that IP is not necessarily the
+  # SSH address we reach the server on.
+  technitium: "ip=$(ss -tuln 2>/dev/null | grep -oE '[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+:53' | head -1 | cut -d: -f1); [ -z \"$ip\" ] && ip=127.0.0.1; if dig +short SOA {zone} @\"$ip\" +time=2 +tries=1 2>/dev/null | grep -q .; then echo 'ok'; else echo 'fail'; fi"
 
 health_checks:
   - name: process_running

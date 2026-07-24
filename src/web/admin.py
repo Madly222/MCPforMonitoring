@@ -327,6 +327,31 @@ async def set_electric_addresses_ep(
     return {"success": True, "addresses": addresses}
 
 
+@router.get("/config/dns-zone")
+async def get_dns_zone_ep(user: UserInfo = Depends(require_superadmin)):
+    """Get the zone used by the DNS resolution health check."""
+    return {"zone": rc.get_dns_test_zone()}
+
+
+@router.put("/config/dns-zone")
+async def set_dns_zone_ep(
+    body: dict,
+    request: Request,
+    user: UserInfo = Depends(require_superadmin),
+):
+    """Set the DNS health-check zone. Applies on the next health check."""
+    try:
+        zone = rc.set_dns_test_zone(body.get("zone"))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    get_audit_logger().log(
+        action="settings_dns_zone",
+        username=user.username, role=user.role,
+        detail=f"zone={zone}", success=True, ip=_client_ip(request),
+    )
+    return {"success": True, "zone": zone}
+
+
 @router.get("/config/ssh-timeout")
 async def get_ssh_timeout_ep(user: UserInfo = Depends(require_superadmin)):
     """Get the SSH connect timeout (seconds)."""

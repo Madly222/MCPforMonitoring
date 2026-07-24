@@ -472,6 +472,15 @@
                     </div>
 
                     <div style="background:#1e1e2e;padding:16px;border-radius:8px;margin:12px 0;">
+                        <h4 style="margin:0 0 8px;">&#127760; DNS test zone</h4>
+                        <p style="color:#9aa;font-size:13px;margin:0 0 8px;">Zone used by the DNS health check (SOA lookup against the server's own listening IP). Must be a zone your DNS servers are authoritative for, or healthy servers will show a failed check.</p>
+                        <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;">
+                            <input type="text" id="dnsTestZone" placeholder="example.com" style="width:220px;padding:6px;background:#252540;border:1px solid #3a3a5a;border-radius:6px;color:#fff;">
+                            <button class="btn btn-primary" id="saveDnsZoneBtn">Save</button>
+                        </div>
+                    </div>
+
+                    <div style="background:#1e1e2e;padding:16px;border-radius:8px;margin:12px 0;">
                         <h4 style="margin:0 0 8px;">&#9203; SSH connect timeout</h4>
                         <p style="color:#9aa;font-size:13px;margin:0 0 8px;">How long to wait for an SSH connection before marking a server unreachable (3&ndash;120 sec). Applied live &mdash; no restart. Raise it only for hosts with a slow sshd handshake; a high value makes dead servers slower to detect.</p>
                         <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;">

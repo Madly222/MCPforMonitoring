@@ -235,6 +235,13 @@ class DNSService(BaseService):
         det = await self.detect()
         variant = det["name"] if det else None
         custom_test = self.service_config.get("resolution_test", {}).get(variant)
+        if custom_test and "{zone}" in custom_test:
+            try:
+                from src.web import runtime_config as rc
+                zone = rc.get_dns_test_zone()
+            except Exception:
+                zone = "rapidlink.md"
+            custom_test = custom_test.replace("{zone}", zone)
         
         dns_test = await self.ssh.execute(
             self.server_id,
