@@ -1,7 +1,7 @@
 # ==============================================================================
 # DNS Service Configuration
 # ==============================================================================
-# Supports: bind9 (named), dnsmasq, unbound, PowerDNS
+# Supports: bind9 (named), dnsmasq, unbound, PowerDNS, Technitium DNS Server
 # ==============================================================================
 
 detection:
@@ -25,6 +25,11 @@ detection:
       service_name: pdns
       process_name: pdns_server
       check: "pgrep -x pdns_server >/dev/null 2>&1 && echo 'found' || (dpkg -l pdns-server 2>/dev/null | grep -q '^ii' && echo 'found') || echo 'not found'"
+    
+    - name: technitium
+      service_name: dns
+      process_name: dotnet
+      check: "systemctl is-active dns 2>/dev/null | grep -q '^active' && echo 'found' || (pgrep -f DnsServerApp.dll >/dev/null 2>&1 && echo 'found') || echo 'not found'"
 
 file_paths:
   bind9:
@@ -57,6 +62,16 @@ file_paths:
     zones:
       - /etc/powerdns/zones
       - /var/lib/powerdns
+  
+  technitium:
+    # Technitium config is a binary dns.config; paths cover the common installs.
+    # VERIFY on the box: `sudo find / -name dns.config 2>/dev/null`
+    config:
+      - /etc/dns/config/dns.config
+      - /opt/technitium/dns/config/dns.config
+    zones:
+      - /etc/dns/config/zones
+      - /opt/technitium/dns/config/zones
 
 log_files:
   bind9:
@@ -94,6 +109,17 @@ log_files:
     - path: /var/log/syslog
       type: syslog
       filter: pdns
+  
+  technitium:
+    # NOTE: Technitium logs to dated files (YYYY-MM-DD.log) in its own folder,
+    # NOT syslog. Realtime tail of a fixed path won't follow the daily rotation,
+    # so live log-watching is limited for Technitium — up/down + resolution
+    # health checks below are software-agnostic and work fully.
+    # VERIFY log folder: `sudo find / -path '*dns/logs*' -name '*.log' 2>/dev/null`
+    - path: /etc/dns/logs
+      type: general
+    - path: /opt/technitium/dns/logs
+      type: general
 
 health_checks:
   - name: process_running
@@ -178,3 +204,15 @@ error_patterns:
     - pattern: "SERVFAIL"
       severity: warning
       diagnosis: "DNS query returned SERVFAIL"
+
+  
+  technitium:
+    - pattern: "SERVFAIL"
+      severity: warning
+      diagnosis: "DNS query returned SERVFAIL"
+    - pattern: "REFUSED"
+      severity: warning
+      diagnosis: "DNS query was refused"
+    - pattern: "NXDOMAIN"
+      severity: info
+      diagnosis: "Domain not found (normal for non-existent domains)"

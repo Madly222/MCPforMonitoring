@@ -24,7 +24,21 @@ from src.core.config import get_config, ServerConfig, KEYS_DIR
 # an unreachable / misconfigured host makes asyncssh.connect() hang for the OS
 # default (tens of seconds up to minutes), which used to freeze the whole
 # dashboard because status collection waits on every server at once.
-SSH_CONNECT_TIMEOUT = 8.0
+SSH_CONNECT_TIMEOUT = 8.0  # fallback default; the live value comes from the store
+
+
+def get_connect_timeout() -> float:
+    """Current SSH connect timeout in seconds.
+
+    Read from the runtime store on every attempt so a change in the superadmin
+    panel applies immediately, with no restart. Falls back to the constant above
+    if the store isn't available (standalone scripts, tests).
+    """
+    try:
+        from src.web import runtime_config as rc
+        return float(rc.get_ssh_timeout())
+    except Exception:
+        return SSH_CONNECT_TIMEOUT
 
 
 def _friendly_ssh_error(raw: str) -> str:
@@ -117,13 +131,14 @@ class SSHConnectionPool:
         self, 
         server: ServerConfig
     ) -> asyncssh.SSHClientConnection:
+        connect_timeout = get_connect_timeout()
         connect_kwargs = {
             "host": server.host,
             "port": server.port,
             "username": server.user,
             "known_hosts": None,
             # asyncssh's own timeout for the TCP connect + auth handshake.
-            "connect_timeout": SSH_CONNECT_TIMEOUT,
+            "connect_timeout": connect_timeout,
         }
         
         if server.auth_type == "key":
@@ -142,12 +157,12 @@ class SSHConnectionPool:
         try:
             conn = await asyncio.wait_for(
                 asyncssh.connect(**connect_kwargs),
-                timeout=SSH_CONNECT_TIMEOUT + 2.0,
+                timeout=connect_timeout + 2.0,
             )
         except asyncio.TimeoutError:
             raise ConnectionError(
                 f"Timed out connecting to {server.id} "
-                f"({server.host}:{server.port}) after {SSH_CONNECT_TIMEOUT:.0f}s"
+                f"({server.host}:{server.port}) after {connect_timeout:.0f}s"
             )
         
         logger.info(f"Connected to {server.id} ({server.host})")
@@ -243,7 +258,7 @@ class SSHManager:
         try:
             conn = await asyncio.wait_for(
                 self._pool.get_connection(server),
-                timeout=SSH_CONNECT_TIMEOUT + 5.0,
+                timeout=get_connect_timeout() + 5.0,
             )
             
             result = await asyncio.wait_for(

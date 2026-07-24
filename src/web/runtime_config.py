@@ -249,6 +249,49 @@ def set_auto_check(enabled: bool, interval_seconds) -> dict:
 
 
 # ==============================================================================
+# SSH CONNECT TIMEOUT
+# ==============================================================================
+# How long to wait for an SSH connection (TCP + handshake + auth) before giving
+# up on a server. Read live on every connection attempt, so changes apply
+# without a restart. Raise it for hosts with a slow sshd handshake (e.g. one
+# doing reverse-DNS/GSSAPI lookups); the real fix is on the server, but this
+# keeps such hosts monitorable meanwhile.
+
+_DEFAULT_SSH_TIMEOUT = 8
+_MIN_SSH_TIMEOUT = 3
+_MAX_SSH_TIMEOUT = 120
+
+
+def get_ssh_timeout() -> int:
+    """Return the SSH connect timeout in seconds."""
+    stored = _load().get("ssh_connect_timeout", _DEFAULT_SSH_TIMEOUT)
+    try:
+        value = int(stored)
+    except (TypeError, ValueError):
+        return _DEFAULT_SSH_TIMEOUT
+    if value < _MIN_SSH_TIMEOUT or value > _MAX_SSH_TIMEOUT:
+        return _DEFAULT_SSH_TIMEOUT
+    return value
+
+
+def set_ssh_timeout(seconds) -> int:
+    """Persist the SSH connect timeout. Returns the normalized value."""
+    try:
+        value = int(seconds)
+    except (TypeError, ValueError):
+        raise ValueError("Timeout must be an integer number of seconds")
+    if value < _MIN_SSH_TIMEOUT or value > _MAX_SSH_TIMEOUT:
+        raise ValueError(
+            f"Timeout must be between {_MIN_SSH_TIMEOUT} and {_MAX_SSH_TIMEOUT} seconds"
+        )
+    with _lock:
+        data = _load()
+        data["ssh_connect_timeout"] = value
+        _save(data)
+    return value
+
+
+# ==============================================================================
 # SERVERS STORE  (seed-and-own, like the user store)
 # ==============================================================================
 # Seeded once from secrets.yaml on first config load, then this store is the

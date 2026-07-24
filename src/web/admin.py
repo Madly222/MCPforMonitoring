@@ -327,6 +327,32 @@ async def set_electric_addresses_ep(
     return {"success": True, "addresses": addresses}
 
 
+@router.get("/config/ssh-timeout")
+async def get_ssh_timeout_ep(user: UserInfo = Depends(require_superadmin)):
+    """Get the SSH connect timeout (seconds)."""
+    return {"seconds": rc.get_ssh_timeout()}
+
+
+@router.put("/config/ssh-timeout")
+async def set_ssh_timeout_ep(
+    body: dict,
+    request: Request,
+    user: UserInfo = Depends(require_superadmin),
+):
+    """Set the SSH connect timeout. Applies live — no restart needed."""
+    try:
+        value = rc.set_ssh_timeout(body.get("seconds"))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    get_audit_logger().log(
+        action="settings_ssh_timeout",
+        username=user.username, role=user.role,
+        detail=f"seconds={value}",
+        success=True, ip=_client_ip(request),
+    )
+    return {"success": True, "seconds": value}
+
+
 @router.get("/config/auto-check")
 async def get_auto_check_ep(user: UserInfo = Depends(require_superadmin)):
     """Get the dashboard auto connection-check setting."""

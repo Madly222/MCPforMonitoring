@@ -19,6 +19,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.getElementById('saveAccPatternBtn').addEventListener('click', saveAccPattern);
             document.getElementById('saveScheduleBtn').addEventListener('click', saveSchedule);
             document.getElementById('saveAutoCheckBtn').addEventListener('click', saveAutoCheck);
+            document.getElementById('saveSshTimeoutBtn').addEventListener('click', saveSshTimeout);
         }
     } catch (e) {
         // not authenticated or not superadmin: leave admin tab hidden
@@ -176,6 +177,10 @@ async function loadSettings() {
         document.getElementById('scheduleAcc').value = sa.time || '08:00';
     } catch (e) { /* ignore */ }
     try {
+        const st = await API.admin.getSshTimeout();
+        document.getElementById('sshTimeout').value = st.seconds || 8;
+    } catch (e) { /* ignore */ }
+    try {
         const ac = await API.admin.getAutoCheck();
         document.getElementById('autoCheckEnabled').checked = ac.enabled !== false;
         document.getElementById('autoCheckInterval').value = ac.interval_seconds || 30;
@@ -283,6 +288,18 @@ async function saveAutoCheck() {
         const r = await API.admin.saveAutoCheck(enabled, interval);
         loadAudit();
         alert(`Auto-check saved — ${r.enabled ? 'on' : 'off'}, every ${r.interval_seconds}s (applies on next dashboard load)`);
+    } catch (e) {
+        alert('Error: ' + e.message);
+    }
+}
+
+async function saveSshTimeout() {
+    const seconds = parseInt(document.getElementById('sshTimeout').value, 10);
+    if (!seconds || seconds < 3 || seconds > 120) { alert('Timeout must be between 3 and 120 seconds'); return; }
+    try {
+        const r = await API.admin.saveSshTimeout(seconds);
+        loadAudit();
+        alert(`SSH connect timeout saved — ${r.seconds}s (applies immediately)`);
     } catch (e) {
         alert('Error: ' + e.message);
     }
