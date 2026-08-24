@@ -15,6 +15,7 @@ from src.web.auth import UserInfo, require_superadmin
 from src.web.users import get_user_store, VALID_ROLES
 from src.web.audit import get_audit_logger
 from src.web import runtime_config as rc
+from src.web import env_config as envc
 from src.core.config import get_config, ServerConfig, OLTConfig, VALID_SERVICE_TYPES
 
 
@@ -325,6 +326,37 @@ async def set_electric_addresses_ep(
         detail=f"count={len(addresses)}", success=True, ip=_client_ip(request),
     )
     return {"success": True, "addresses": addresses}
+
+
+@router.get("/config/env")
+async def get_env_ep(user: UserInfo = Depends(require_superadmin)):
+    """Return editable .env entries (secret values masked)."""
+    return {"entries": envc.read_env()}
+
+
+@router.put("/config/env")
+async def set_env_ep(
+    body: dict,
+    request: Request,
+    user: UserInfo = Depends(require_superadmin),
+):
+    """Update .env values. Secret keys with an empty value are left unchanged.
+    Takes effect after a service restart (values are read at import time)."""
+    values = body.get("values") or {}
+    clean = {}
+    for k, v in values.items():
+        if envc.is_secret_key(k) and (v is None or str(v) == ""):
+            continue  # blank secret means 'keep current'
+        clean[k] = v
+    try:
+        n = envc.write_env(clean)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    get_audit_logger().log(
+        action="settings_env", username=user.username, role=user.role,
+        detail=f"keys={','.join(sorted(clean))}", success=True, ip=_client_ip(request),
+    )
+    return {"success": True, "written": n, "restart_required": True}
 
 
 @router.get("/config/dns-zone")

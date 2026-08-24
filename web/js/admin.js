@@ -21,6 +21,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.getElementById('saveAutoCheckBtn').addEventListener('click', saveAutoCheck);
             document.getElementById('saveSshTimeoutBtn').addEventListener('click', saveSshTimeout);
             document.getElementById('saveDnsZoneBtn').addEventListener('click', saveDnsZone);
+            document.getElementById('saveEnvBtn').addEventListener('click', saveEnv);
+            document.getElementById('envFilter').addEventListener('input', filterEnv);
         }
     } catch (e) {
         // not authenticated or not superadmin: leave admin tab hidden
@@ -182,6 +184,12 @@ async function loadSettings() {
         document.getElementById('dnsTestZone').value = dz.zone || '';
     } catch (e) { /* ignore */ }
     try {
+        const env = await API.admin.getEnv();
+        renderEnvEditor(env.entries || []);
+    } catch (e) {
+        document.getElementById('envEditor').innerHTML = '<span style="color:#c66;">Error loading .env</span>';
+    }
+    try {
         const st = await API.admin.getSshTimeout();
         document.getElementById('sshTimeout').value = st.seconds || 8;
     } catch (e) { /* ignore */ }
@@ -305,6 +313,47 @@ async function saveDnsZone() {
         const r = await API.admin.saveDnsZone(zone);
         loadAudit();
         alert(`DNS test zone saved — ${r.zone}`);
+    } catch (e) {
+        alert('Error: ' + e.message);
+    }
+}
+
+function renderEnvEditor(entries) {
+    const box = document.getElementById('envEditor');
+    if (!entries.length) { box.innerHTML = '<span style="color:#9aa;">No .env file found</span>'; return; }
+    box.innerHTML = entries.map(e => {
+        const ph = e.secret ? (e.has_value ? '•••• (set — blank keeps it)' : '(not set)') : '';
+        const type = e.secret ? 'password' : 'text';
+        const val = e.secret ? '' : (e.value || '');
+        return `<div class="env-row" data-key="${e.key.toLowerCase()}" style="display:flex;gap:8px;align-items:center;margin:4px 0;">
+            <label style="flex:0 0 240px;color:#cdd;font-family:monospace;font-size:12px;word-break:break-all;">${e.key}</label>
+            <input type="${type}" class="env-input" data-key="${e.key}" data-secret="${e.secret ? 1 : 0}"
+                   value="${String(val).replace(/"/g,'&quot;')}" placeholder="${ph}"
+                   style="flex:1;padding:5px;background:#252540;border:1px solid #3a3a5a;border-radius:5px;color:#fff;font-family:monospace;font-size:12px;">
+        </div>`;
+    }).join('');
+}
+
+function filterEnv() {
+    const q = document.getElementById('envFilter').value.toLowerCase();
+    document.querySelectorAll('#envEditor .env-row').forEach(row => {
+        row.style.display = row.dataset.key.includes(q) ? '' : 'none';
+    });
+}
+
+async function saveEnv() {
+    const values = {};
+    document.querySelectorAll('#envEditor .env-input').forEach(inp => {
+        const secret = inp.dataset.secret === '1';
+        const v = inp.value;
+        if (secret && v === '') return;      // blank secret = keep current
+        values[inp.dataset.key] = v;
+    });
+    if (!Object.keys(values).length) { alert('Nothing to save'); return; }
+    try {
+        const r = await API.admin.saveEnv(values);
+        loadAudit();
+        alert(`.env saved — ${r.written} key(s) updated.\nRestart the service to apply:\n  sudo systemctl restart mcp-monitor`);
     } catch (e) {
         alert('Error: ' + e.message);
     }
