@@ -472,6 +472,14 @@
                     </div>
 
                     <div style="background:#1e1e2e;padding:16px;border-radius:8px;margin:12px 0;">
+                        <h4 style="margin:0 0 8px;">&#128273; .env / integrations</h4>
+                        <p style="color:#9aa;font-size:13px;margin:0 0 8px;">Business-automation variables (NetBox URL/token, SMTP, billing, MAC-sync&hellip;). Secret fields show blank &mdash; leave blank to keep the current value. <b>Applies after a service restart.</b></p>
+                        <input type="text" id="envFilter" placeholder="filter&hellip; (e.g. netbox, smtp)" style="width:100%;padding:6px;margin-bottom:8px;background:#252540;border:1px solid #3a3a5a;border-radius:6px;color:#fff;">
+                        <div id="envEditor" style="max-height:340px;overflow-y:auto;border:1px solid #2a2a44;border-radius:6px;padding:8px;">Loading&hellip;</div>
+                        <button class="btn btn-primary" id="saveEnvBtn" style="margin-top:8px;">Save .env</button>
+                    </div>
+
+                    <div style="background:#1e1e2e;padding:16px;border-radius:8px;margin:12px 0;">
                         <h4 style="margin:0 0 8px;">&#127760; DNS test zone</h4>
                         <p style="color:#9aa;font-size:13px;margin:0 0 8px;">Zone used by the DNS health check (SOA lookup against the server's own listening IP). Must be a zone your DNS servers are authoritative for, or healthy servers will show a failed check.</p>
                         <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;">

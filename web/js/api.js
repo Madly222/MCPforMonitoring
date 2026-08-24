@@ -217,6 +217,12 @@ const API = {
         },
         async listServers() { return API.request('/admin/config/servers'); },
         async serviceTypes() { return API.request('/admin/config/service-types'); },
+        async getEnv() { return API.request('/admin/config/env'); },
+        async saveEnv(values) {
+            return API.request('/admin/config/env', {
+                method: 'PUT', body: JSON.stringify({ values }),
+            });
+        },
         async getDnsZone() { return API.request('/admin/config/dns-zone'); },
         async saveDnsZone(zone) {
             return API.request('/admin/config/dns-zone', {
