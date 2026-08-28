@@ -13,7 +13,6 @@ sessions/
 # Logs & runtime
 *.log
 logs/
-invoices_logs/
 
 # Backup / temp
 *.bak

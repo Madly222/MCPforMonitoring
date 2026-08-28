@@ -124,20 +124,6 @@ Read directly by the automation modules. Full annotated template:
 `ACC_SMTP_USER`, `ACC_SMTP_PASSWORD`, `ACC_SMTP_TLS`, `ACC_EMAIL_FROM`,
 `ACC_EMAIL_TO`.
 
-**Billing SSH** (Paynet/Posta) ⚠️ *temporary feature*: `INVOICE_SSH_HOST`, `INVOICE_SSH_USER`,
-`INVOICE_SSH_PASSWORD`, `INVOICE_SSH_PORT`, `INVOICE_SSH_SCRIPT_DIR`,
-`INVOICE_SSH_SCRIPT_CMD`.
-
-**Invoice email**: `INVOICE_EMAIL_FROM`, `INVOICE_EMAIL_TO`, `INVOICE_EMAIL_CC`,
-`INVOICE_TEST_MODE`, `INVOICE_TEST_EMAIL`; `email_invoice_sender` overrides:
-`EMAIL_INVOICE_TEST_MODE`, `EMAIL_INVOICE_TEST_EMAIL`, `EMAIL_INVOICE_CC`,
-`EMAIL_INVOICE_MERGE`. Recipients per client: `config/invoice_clienti_email.txt`.
-
-**Posta FTP**: `INVOICE_FTP_HOST`, `INVOICE_FTP_USER`, `INVOICE_FTP_PASSWORD`,
-`INVOICE_FTP_PATH`. Client list: `config/postamoldovei_clienti.txt`.
-
-**Billing DB**: `BILLING_DB_USER`, `BILLING_DB_PASSWORD`, `BILLING_DB_NAME`.
-
 **DHCP→NetBox MAC sync** (`dhcp_mac_sync`): `NETBOX_URL`, `NETBOX_TOKEN`,
 `DHCP_SSH_HOST`, `DHCP_SSH_USER`, `DHCP_SSH_PASS`, `DHCP_SSH_PORT`,
 `DHCP_MYSQL_USER`, `DHCP_MYSQL_PASS`, `DHCP_MYSQL_DB`.
@@ -218,8 +204,6 @@ SysVinit.
 | File | Used by | Contents |
 |------|---------|----------|
 | `electric_addresses.txt` | `electric_monitor` | Addresses to match against Premier Energy outage notices |
-| `invoice_clienti_email.txt` | `email_invoice_sender` | Client names whose unpaid invoices are emailed |
-| `postamoldovei_clienti.txt` | `posta_generator` | Clients included in the Posta XLSX export |
 
 These contain no credentials and are safe to commit.
 

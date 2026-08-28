@@ -40,7 +40,7 @@ MCP Server Monitor connects to remote servers over SSH and provides:
 - **Live observability** — real-time log tailing, error pattern detection, periodic health checks, and update tracking across multiple hosts.
 - **AI-assisted operations** — operators type plain-language commands (e.g. *"restart dhcp on dhcp-primary"*, *"show errors from the last hour"*); Claude interprets intent and the system executes the corresponding action, with a keyword-based fallback if the API is unavailable.
 - **Service management** — first-class handlers for DHCP, DNS, and RADIUS (status, restart/reload, health diagnostics, log inspection). Postfix, Dovecot, Apache, and SpamAssassin are supported at a generic level (status/restart via SSH) without dedicated diagnostic handlers.
-- **Operations automation** — a set of scheduled jobs handling utility-outage alerts, invoice generation/delivery, and inventory sync (see [Monitoring & Automation Modules](#monitoring--automation-modules)).
+- **Operations automation** — a set of scheduled jobs handling utility-outage alerts and inventory sync (see [Monitoring & Automation Modules](#monitoring--automation-modules)).
 - **GPON visibility** — SNMP-based ONU monitoring for ZTE C320 OLTs (signal levels, status, MAC retrieval).
 - **Administration** — a superadmin console for user/role management, live server & OLT CRUD, editable runtime settings (notifications, outage patterns/addresses), an append-only audit log, an SSH command console, and a Claude API health probe.
 
@@ -89,7 +89,6 @@ flowchart TB
         SCHED[In-app Scheduler<br/>daily, time set in panel]
         ELEC[Electric Outage]
         ACC[Water Outage]
-        INV[Invoice / Posta]
         MACSYNC[DHCP→NetBox MAC Sync]
         MACPORT[MAC→Port→NetBox<br/>Interface Assignment]
     end
@@ -153,7 +152,6 @@ flowchart TB
 
 ### Operations automation
 - Utility-outage alerting (electricity / water) with email notifications.
-- Invoice generation and delivery (email + FTP), billing-DB driven.
 - phpDHCPAdmin → NetBox MAC synchronization.
 - Cisco switch → NetBox interface/VLAN/cable auto-fill.
 
@@ -180,7 +178,6 @@ flowchart TB
 - **AI:** Anthropic Claude API
 - **Config:** Pydantic models over YAML + dotenv
 - **Auth:** bcrypt, itsdangerous sessions
-- **Docs/Reports:** openpyxl (XLSX), fpdf2 (PDF)
 - **Logging:** loguru
 - **Frontend:** vanilla HTML/CSS/JS (no build step)
 
@@ -217,9 +214,6 @@ ServersMonitoringMCP/
 │   │   ├── electric_monitor.py
 │   │   ├── acc_monitor.py
 │   │   ├── outage_scheduler.py # In-app daily scheduler (electric + water)
-│   │   ├── invoice_generator.py
-│   │   ├── posta_generator.py
-│   │   ├── email_invoice_sender.py
 │   │   ├── dhcp_mac_sync.py
 │   │   └── mac_port_sync.py    # MAC→leaf port→NetBox interface assignment
 │   └── web/
@@ -242,8 +236,6 @@ ServersMonitoringMCP/
 │   ├── services/               # Per-service detection/config (dhcp/dns/radius)
 │   ├── electric_addresses.txt  # Addresses watched for power outages
 │   ├── scan_devices.example.txt # Template: devices for MAC→port scan
-│   ├── invoice_clienti_email.txt
-│   └── postamoldovei_clienti.txt
 ├── knowledge_base/
 │   ├── known_errors.yaml       # Regex error patterns + diagnoses
 │   ├── ignore_patterns.yaml    # Log noise filters
@@ -258,7 +250,6 @@ ServersMonitoringMCP/
 │                               #   incl. manage_users.py, check_claude.py, check_electric.py,
 │                               #   test_resolver.py, test_schedule.py, test_outage_filters.py
 ├── tests/                      # Pytest suite (e.g. test_mac_port_sync.py)
-├── fonts/                      # DejaVu fonts (PDF generation)
 ├── secrets.example.yaml        # Template -> copy to secrets.yaml
 ├── .env.example                # Template -> copy to .env
 ├── requirements.txt
@@ -266,7 +257,7 @@ ServersMonitoringMCP/
 └── README.md
 ```
 
-> Runtime-only / gitignored directories (`venv/`, `keys/`, `sessions/`, `logs/`, `invoices_logs/`, `secrets.yaml`, `.env`) are not part of the repository.
+> Runtime-only / gitignored directories (`venv/`, `keys/`, `sessions/`, `logs/`, `secrets.yaml`, `.env`) are not part of the repository.
 
 ---
 
@@ -282,7 +273,7 @@ ServersMonitoringMCP/
 |---------|-----------|
 | `openssh-client` | all SSH operations (usually preinstalled) |
 | `snmp` (`snmpwalk`) | ONU / GPON monitoring |
-| `mysql-client` | billing/invoice DB queries (CLI-based) |
+| `mysql-client` | DHCP→NetBox MAC sync DB queries (CLI-based) |
 
 ```bash
 sudo apt update && sudo apt install -y openssh-client snmp mysql-client
@@ -347,7 +338,7 @@ Defines monitored servers, SSH/sudo credentials, Claude API key, web users, emai
 > **Runtime store — read this.** On first run, `web_users`, `servers`, and `onu_monitoring` seed a JSON-backed runtime store (`sessions/users.json`, `sessions/runtime_settings.json`; server capability profiles are auto-detected into `sessions/server_profiles.json`). **After seeding, that store — not `secrets.yaml` — is the source of truth** for users, servers, and OLTs, so later edits are done through the superadmin console (or `scripts/manage_users.py`). Editing `secrets.yaml` after the first run has no effect unless you clear the corresponding store file. Claude/email/session secrets are still read from `secrets.yaml`.
 
 ### 2. `.env` — automation secrets
-Read by the business-automation modules (electric/water outage, invoicing, MAC sync). Copy from `.env.example`. Covers SMTP, FTP (posta.md), billing DB, NetBox token, and per-job email recipients. **This layer is separate from `secrets.yaml`** — both are gitignored.
+Read by the business-automation modules (electric/water outage, MAC sync). Copy from `.env.example`. Covers SMTP, NetBox token, and per-job email recipients. **This layer is separate from `secrets.yaml`** — both are gitignored.
 
 ### 3. `config/settings.yaml` — runtime behavior
 Non-sensitive tuning: monitoring intervals, error processing, Claude cache/rate-limit, logging, incidents retention.
@@ -356,7 +347,6 @@ Non-sensitive tuning: monitoring intervals, error processing, Claude cache/rate-
 - `config/safe_actions.yaml` — risk policy for auto-remediation (which actions may auto-run).
 - `config/services/*.yaml` — per-service detection commands and parameters.
 - `config/electric_addresses.txt` — addresses to watch for power outages.
-- `config/invoice_clienti_email.txt`, `config/postamoldovei_clienti.txt` — invoice recipient lists.
 
 ---
 
@@ -466,8 +456,6 @@ All endpoints are under `/api`. Authentication is session-based; most require a 
 |--------|------|-------------|
 | GET | `/api/electric/status` · POST `/api/electric/check` | Power-outage status / check now |
 | GET | `/api/acc/status` · POST `/api/acc/check` | Water-outage status / check now |
-| POST | `/api/invoice/generate` ⚠️ | Generate invoices (temporary) |
-| POST | `/api/invoice/send-emails` ⚠️ | Send invoice emails (temporary) |
 
 ### Auth
 | Method | Path | Description |
@@ -521,16 +509,8 @@ All endpoints are under `/api/admin` and require the `superadmin` role.
 | `electric_monitor` | Premier Energy outage alerts | `.env`, `config/electric_addresses.txt` |
 | `acc_monitor` | acc.md water outage alerts | `.env`, panel (pattern) |
 | `outage_scheduler` | In-app daily runner for electric + water checks | run time set in superadmin panel |
-| `invoice_generator` ⚠️ | Billing → XLS → email (Paynet) | `.env`, `config/invoice_clienti_email.txt` |
-| `posta_generator` ⚠️ | Billing → XLSX → FTP (posta.md) | `.env`, `config/postamoldovei_clienti.txt` |
-| `email_invoice_sender` ⚠️ | Billing → PDF → email (WHMCS) | `.env` |
 | `dhcp_mac_sync` | phpDHCPAdmin MySQL → NetBox | `.env` |
 | `mac_port_sync` | MAC→leaf port→NetBox interface assignment | `.env`, `config/scan_devices.example.txt` |
-
-> ⚠️ **Temporary feature — scheduled for removal.** The invoicing modules and
-> their UI buttons / endpoints (`POST /api/invoice/generate`,
-> `POST /api/invoice/send-emails`) are provisional and will be removed from the
-> project in a future cleanup. Do not build new functionality on top of them.
 
 ---
 

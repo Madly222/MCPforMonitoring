@@ -5,7 +5,7 @@
 # Install:  pip install -r requirements.txt
 #
 # NOTE: Some features also require SYSTEM packages (not pip):
-#   - mysql client  -> billing/invoice DB queries (apt install mysql-client)
+#   - mysql client  -> DHCP->NetBox MAC sync DB queries (apt install mysql-client)
 #   - snmp / snmpwalk -> ONU monitoring          (apt install snmp)
 #   - openssh-client -> SSH operations           (usually preinstalled)
 # See README.md > Requirements for the full list.
@@ -21,9 +21,8 @@ uvicorn[standard]==0.27.1
 # SSH clients
 # ------------------------------------------------------------------------------
 asyncssh==2.14.2          # primary async SSH (core ssh_manager)
-paramiko==3.4.0           # sync SSH (invoice sender, netbox services)
+paramiko==3.4.0           # sync SSH (dhcp_mac_sync, netbox services)
 netmiko==4.3.0            # Cisco IOS automation (netbox-autofill)
-scp==0.14.5               # file copy over SSH (invoice/report transfer)
 
 # ------------------------------------------------------------------------------
 # Configuration
@@ -62,12 +61,6 @@ aiosmtplib==3.0.1
 # NetBox integration
 # ------------------------------------------------------------------------------
 pynetbox==7.3.3
-
-# ------------------------------------------------------------------------------
-# Document generation (invoices / reports)
-# ------------------------------------------------------------------------------
-openpyxl==3.1.2           # XLSX generation (Posta Moldovei, billing)
-fpdf2==2.7.8              # PDF invoices (imported as `fpdf`)
 
 # ------------------------------------------------------------------------------
 # Logging / async utils

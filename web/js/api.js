@@ -114,13 +114,6 @@ const API = {
         },
     },
 
-    // Invoice Generator API
-    invoice: {
-        async generate() {
-            return API.request('/invoice/generate', { method: 'POST' });
-        },
-    },
-
     // Commands API
     commands: {
         async execute(command) {
