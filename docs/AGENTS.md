@@ -13,7 +13,7 @@ A FastAPI service that monitors a fleet of Linux servers over SSH, detects log
 errors against a YAML knowledge base, runs operator commands (a raw SSH console
 plus a natural-language interpreter backed by Claude with a keyword fallback),
 manages DHCP/DNS/RADIUS services, monitors GPON ONUs over SNMP, and runs
-scheduled automation jobs (utility-outage alerts, invoice delivery, NetBox MAC
+scheduled automation jobs (utility-outage alerts, NetBox MAC
 sync). It has a **superadmin web console** with three roles, an **audit log**,
 and **runtime editing** of users, servers, OLTs, and outage/notification
 settings. Single ASGI process on **port 4455** + optional systemd timers.
@@ -61,7 +61,7 @@ Host/port come from `secrets.yaml > mcp_server`.
 
 4. **`requirements.txt`** must include all real imports: `aiohttp`,
    `python-dotenv`, `paramiko`, `netmiko`, `pynetbox`, `requests`, `scp`,
-   `openpyxl`, `fpdf2`, `bcrypt`. Add new deps there.
+   `bcrypt`. Add new deps there.
 
 5. **Only DHCP / DNS / RADIUS have real handler classes.** Postfix/Dovecot/
    Apache/SpamAssassin fall back to generic `ssh.restart_service(...)`.
@@ -75,11 +75,7 @@ Host/port come from `secrets.yaml > mcp_server`.
 
 8. **CORS is wide open (`*`).** LAN-only assumption; tighten before exposing.
 
-9. **Invoicing is a temporary feature** (`invoice_generator`, `posta_generator`,
-   `email_invoice_sender`, `/api/invoice/*`). Scheduled for removal. The invoice
-   buttons are **operator-only** by current policy.
-
-10. **Default Claude model `claude-sonnet-4-20250514` is deprecated** (404
+9. **Default Claude model `claude-sonnet-4-20250514` is deprecated** (404
     not_found). Set a current model in `secrets.yaml > claude.model` (e.g.
     `claude-sonnet-4-6`); run `scripts/check_claude.py` to verify.
 
@@ -114,7 +110,6 @@ Host/port come from `secrets.yaml > mcp_server`.
 ### Monitoring & automation (`src/monitoring/`)
 `log_watcher`, `error_detector`, `health_checker`, `updates_checker`, `onu_monitor`
 (in-process monitors); `electric_monitor`, `acc_monitor` (read settings live from
-`runtime_config`); `invoice_generator`/`posta_generator`/`email_invoice_sender` ⚠️
 (temporary), `dhcp_mac_sync`.
 
 ### Scripts (`scripts/`)
@@ -135,12 +130,11 @@ Settings, Servers, OLTs, Users, Audit), `login.js`.
 |------------|:--------:|:-----:|:----------:|
 | View dashboard / status | ✅ | ✅ | ✅ |
 | Run commands (`/execute`), service actions, SSH console | | ✅ | ✅ |
-| Invoice buttons (`/api/invoice/*`) | ✅ **only** | | |
 | App restart (`/api/service/restart`) | | | ✅ **only** |
 | Admin panel: users, audit, settings, servers, OLTs (`/api/admin/*`) | | | ✅ |
 
-Dependencies: `require_admin` (admin+superadmin), `require_superadmin`. Invoice and
-app-restart use inline exclusive checks in `api.py`. Frontend hides buttons by role
+Dependencies: `require_admin` (admin+superadmin), `require_superadmin`. App restart
+uses an inline exclusive check in `api.py`. Frontend hides buttons by role
 (see the script block in `index.html` and role checks in `app.js`).
 
 ---
@@ -213,7 +207,7 @@ Offline test: `python scripts/test_resolver.py` (no live server / key needed).
 
 ## 9. Runtime / gitignored paths (not in repo)
 `venv/`, `keys/`, `sessions/` (users.json, runtime_settings.json), `logs/`
-(audit.jsonl), `invoices_logs/`, `secrets.yaml`, `.env`, `__pycache__/`.
+(audit.jsonl), `secrets.yaml`, `.env`, `__pycache__/`.
 
 ---
 

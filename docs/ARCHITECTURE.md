@@ -77,8 +77,7 @@ Two kinds of components live here:
 - **In-process monitors** (started by lifespan): `log_watcher`,
   `error_detector`, `health_checker`, `updates_checker`, `onu_monitor`.
 - **Job modules** (invoked on demand by API or by timers): `electric_monitor`,
-  `acc_monitor`, `invoice_generator`, `posta_generator`,
-  `email_invoice_sender`, `dhcp_mac_sync`.
+  `acc_monitor`, `dhcp_mac_sync`.
 
 ### 2.5 Web layer (`src/web/`)
 FastAPI app factory, three routers (`auth`, main `api`, `api_netbox`),
@@ -134,24 +133,7 @@ stop on shutdown.
 using CLI `snmpwalk` for ONU name/type/status/signal, and SSH for MAC
 retrieval. Thresholds (`good`, `warning`) classify optical signal levels.
 
-### 3.5 Invoicing — three independent channels
-> ⚠️ **Temporary.** The invoicing feature (both the *generate* and *send-emails*
-> buttons and the three modules below) is provisional and scheduled for removal
-> from the project. It is documented here only to describe current behavior.
-
-These are **not** a generate-then-send pipeline; each module is self-contained
-and targets a different downstream system:
-
-| Channel | Module | Source → Artifact → Delivery | Trigger |
-|---------|--------|------------------------------|---------|
-| Paynet | `invoice_generator` | SSH runs PHP on billing server → **XLS/XLSX** → **email** (and FTP helper) | `POST /api/invoice/generate` |
-| Posta Moldovei | `posta_generator` | billing DB → **XLSX** → **FTP** (posta.md) | `POST /api/invoice/generate` |
-| WHMCS | `email_invoice_sender` | billing DB (unpaid invoices for named clients) → **PDF** via WHMCS → **email** | `POST /api/invoice/send-emails` |
-
-Each channel has its own SMTP helper; nothing is shared between them. The
-`/api/invoice/generate` endpoint runs the Paynet and Posta channels together.
-
-### 3.6 Utility-outage alerts
+### 3.5 Utility-outage alerts
 `electric_monitor` (Premier Energy) and `acc_monitor` (acc.md) scrape public
 outage pages over HTTP (`aiohttp`), match configured addresses/patterns, and
 send email alerts. They run both on demand (`/api/electric/check`,
@@ -186,7 +168,6 @@ There is no database for application state. Persistence is file-based:
 | Error patterns / filters | `knowledge_base/*.yaml` |
 | Learned patterns | `knowledge_base/learned/` |
 | Application logs | `logs/` (rotated, zipped) |
-| Invoice artifacts/logs | `invoices_logs/` |
 | Sessions | in-memory session store |
 
 ---

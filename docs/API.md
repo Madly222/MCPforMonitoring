@@ -157,25 +157,6 @@ Run a water-outage check now.
 
 ---
 
-## Invoicing
-
-> ⚠️ **Temporary feature — scheduled for removal.** Both endpoints below and
-> their underlying modules are provisional and will be removed from the project
-> in a future cleanup. Documented here only to reflect current behavior.
-
-Three independent channels (see
-[ARCHITECTURE.md §3.5](ARCHITECTURE.md#35-invoicing--three-independent-channels)).
-
-### POST `/api/invoice/generate`
-Runs the **Paynet** channel (`invoice_generator`: SSH → PHP → XLS → email) and
-the **Posta Moldovei** channel (`posta_generator`: DB → XLSX → FTP).
-
-### POST `/api/invoice/send-emails`
-Runs the **WHMCS** channel (`email_invoice_sender`: queries unpaid invoices for
-named clients, generates PDFs via WHMCS, emails them).
-
----
-
 ## NetBox auto-fill
 
 Under `/api/netbox`. All require an authenticated user.
@@ -258,7 +239,6 @@ All under `/api/admin`, **superadmin only** (`require_superadmin`). See AGENTS.m
 
 ## Permission changes (added)
 - `/api/service/restart` → **superadmin only**.
-- `/api/invoice/generate`, `/api/invoice/send-emails` → **operator only**.
 
 ## Audited actions
 `login`, `login_failed`, `logout`, `command`, `service_action`, `app_restart`,

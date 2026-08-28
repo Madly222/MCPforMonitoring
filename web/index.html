@@ -353,12 +353,6 @@
                 <button class="utility-status" id="restartBtn" title="Перезапустить сервис" style="display:none;">
                     <span class="utility-icon">🔄</span>
                 </button>
-                <button class="utility-status" id="emailInvoiceBtn" title="Отправить счета по email" style="display:none;">
-                    <span class="utility-icon">✉️</span>
-                </button>
-                <button class="utility-status" id="invoiceBtn" title="Сгенерировать счёт" style="display:none;">
-                    <span class="utility-icon">📄</span>
-                </button>
                 <span class="utility-status" id="electricStatus" title="Электричество">
                     <span class="utility-icon">⚡</span>
                     <span class="status-dot status-ok" id="electricDot"></span>
@@ -483,7 +477,7 @@
 
                     <div style="background:#1e1e2e;padding:16px;border-radius:8px;margin:12px 0;">
                         <h4 style="margin:0 0 8px;">&#128273; .env / integrations</h4>
-                        <p style="color:#9aa;font-size:13px;margin:0 0 8px;">Business-automation variables (NetBox URL/token, SMTP, billing, MAC-sync&hellip;). Secret fields show blank &mdash; leave blank to keep the current value. <b>Applies after a service restart.</b></p>
+                        <p style="color:#9aa;font-size:13px;margin:0 0 8px;">Business-automation variables (NetBox URL/token, SMTP, MAC-sync&hellip;). Secret fields show blank &mdash; leave blank to keep the current value. <b>Applies after a service restart.</b></p>
                         <input type="text" id="envFilter" placeholder="filter&hellip; (e.g. netbox, smtp)" style="width:100%;padding:6px;margin-bottom:8px;background:#252540;border:1px solid #3a3a5a;border-radius:6px;color:#fff;">
                         <div id="envEditor" style="max-height:340px;overflow-y:auto;border:1px solid #2a2a44;border-radius:6px;padding:8px;">Loading&hellip;</div>
                         <button class="btn btn-primary" id="saveEnvBtn" style="margin-top:8px;">Save .env</button>
@@ -585,7 +579,6 @@
     <script>
         // Role-based visibility for header action buttons:
         //   restart  -> superadmin only
-        //   invoices -> operator only
         (async function() {
             try {
                 const me = await API.auth.me();
@@ -594,46 +587,10 @@
                     const b = document.getElementById('restartBtn');
                     if (b) b.style.display = '';
                 }
-                if (role === 'operator') {
-                    const e = document.getElementById('emailInvoiceBtn');
-                    const i = document.getElementById('invoiceBtn');
-                    if (e) e.style.display = '';
-                    if (i) i.style.display = '';
-                }
             } catch (err) { /* not authenticated */ }
         })();
     </script>
     <script>
-        // Invoice Generator Button
-        (function() {
-            const invoiceBtn = document.getElementById("invoiceBtn");
-            if (!invoiceBtn) return;
-            
-            invoiceBtn.addEventListener("click", async () => {
-                if (!confirm("Сгенерировать и отправить счёт?")) return;
-                
-                invoiceBtn.style.opacity = "0.5";
-                invoiceBtn.style.pointerEvents = "none";
-                invoiceBtn.title = "Генерация...";
-                
-                try {
-                    const result = await API.invoice.generate();
-                    if (result.success) {
-                        alert("✅ " + result.message);
-                    } else {
-                        alert("❌ Ошибка: " + result.message);
-                    }
-                } catch (e) {
-                    alert("❌ Ошибка: " + e.message);
-                } finally {
-                    invoiceBtn.style.opacity = "1";
-                    invoiceBtn.style.pointerEvents = "auto";
-                    invoiceBtn.title = "Сгенерировать счёт";
-                }
-            });
-        })();
-        // Email Invoice Sender
-        (function() {
         // Service Restart (admin only)
         (function() {
             const restartBtn = document.getElementById("restartBtn");
@@ -659,40 +616,6 @@
                 } finally {
                     restartBtn.style.opacity = "1";
                     restartBtn.style.pointerEvents = "auto";
-                }
-            });
-        })();
-            const emailInvoiceBtn = document.getElementById("emailInvoiceBtn");
-            if (!emailInvoiceBtn) return;
-            emailInvoiceBtn.addEventListener("click", async () => {
-                if (!confirm("Отправить счета по email?")) return;
-                emailInvoiceBtn.style.opacity = "0.5";
-                emailInvoiceBtn.style.pointerEvents = "none";
-                emailInvoiceBtn.title = "Отправка...";
-                try {
-                    const response = await fetch("/api/invoice/send-emails", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" }
-                    });
-                    const result = await response.json();
-                    let msg = result.message;
-                    if (result.no_email && result.no_email.length > 0) {
-                        msg += "\n\nБез email: " + result.no_email.join(", ");
-                    }
-                    if (result.not_found && result.not_found.length > 0) {
-                        msg += "\n\nНе найдены: " + result.not_found.join(", ");
-                    }
-                    if (result.success) {
-                        alert("✅ " + msg);
-                    } else {
-                        alert("❌ Ошибка: " + msg);
-                    }
-                } catch (e) {
-                    alert("❌ Ошибка: " + e.message);
-                } finally {
-                    emailInvoiceBtn.style.opacity = "1";
-                    emailInvoiceBtn.style.pointerEvents = "auto";
-                    emailInvoiceBtn.title = "Отправить счета по email";
                 }
             });
         })();

@@ -27,7 +27,7 @@ pip install -r requirements.txt
 |---------|--------------|
 | `openssh-client` | all SSH operations |
 | `snmp` (`snmpwalk`) | ONU/GPON monitoring |
-| `mysql-client` | billing/invoice DB queries |
+| `mysql-client` | DHCP→NetBox MAC sync DB queries |
 
 ---
 
@@ -127,17 +127,6 @@ journalctl -u electric-monitor.service -n 50 --no-pager
 > The one-shot units are `Type=oneshot`: they run, log, and exit. The timer with
 > `Persistent=true` will catch up a missed run after downtime.
 
-### Invoicing jobs
-> ⚠️ **Temporary feature — scheduled for removal.** The invoicing channels are
-> provisional; the guidance below is for current operation only.
-
-The Paynet/Posta/WHMCS invoice channels are triggered through the API
-(`POST /api/invoice/generate`, `POST /api/invoice/send-emails`). To schedule
-them, create analogous one-shot service + timer units that either call the
-endpoint (e.g. via `curl` with an authenticated session) or import the module
-function — following the same pattern as the outage monitors.
-
----
 
 ## 5. Logs & operations
 
