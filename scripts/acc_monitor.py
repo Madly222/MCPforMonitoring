@@ -8,7 +8,8 @@ on-disk caches/notified file as the web app. Run by acc-monitor.service.
 import sys
 import asyncio
 
-sys.path.insert(0, '/home/user/ServersMonitoringMCP')
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.monitoring.acc_monitor import check_acc_status
 
