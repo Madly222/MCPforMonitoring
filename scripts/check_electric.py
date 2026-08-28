@@ -2,7 +2,8 @@
 """Cron script to check electricity disconnections."""
 import sys
 import asyncio
-sys.path.insert(0, '/home/user/ServersMonitoringMCP')
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.monitoring.electric_monitor import check_electric_status
 
