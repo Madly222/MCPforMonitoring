@@ -290,6 +290,7 @@ set timeout {timeout}
 spawn ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o KexAlgorithms=+diffie-hellman-group1-sha1 -o HostKeyAlgorithms=+ssh-dss -o Ciphers=+aes128-cbc -p {port} {username}@{host}
 
 expect {{
+    -re "-+ *[Mm]ore *-+" {{ send " "; exp_continue }}
     "password:" {{
         send "{password}\\r"
         exp_continue
@@ -314,6 +315,7 @@ expect {{
         expect_script += f'''
 send "show mac gpon olt gpon-olt_1/1/{gpon_port}\\r"
 expect {{
+    -re "-+ *[Mm]ore *-+" {{ send " "; exp_continue }}
     "#" {{ }}
     ">" {{ }}
     timeout {{ }}
@@ -328,12 +330,14 @@ expect {{
             expect_script += f'''
 send "show pon power onu-rx gpon-olt_1/1/{gpon_port}\\r"
 expect {{
+    -re "-+ *[Mm]ore *-+" {{ send " "; exp_continue }}
     "#" {{ }}
     ">" {{ }}
     timeout {{ }}
 }}
 send "show pon power onu-tx gpon-olt_1/1/{gpon_port}\\r"
 expect {{
+    -re "-+ *[Mm]ore *-+" {{ send " "; exp_continue }}
     "#" {{ }}
     ">" {{ }}
     timeout {{ }}
