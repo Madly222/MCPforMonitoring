@@ -20,9 +20,23 @@ from src.core.config import get_config, OLTConfig
 
 
 class ONUStatus(Enum):
+    """Состояние САМОЙ ONU — есть ли оптический сигнал."""
     ONLINE = "online"
     OFFLINE = "offline"
     LOW_SIGNAL = "low_signal"
+    UNKNOWN = "unknown"
+
+
+class ONURegistration(Enum):
+    """
+    Состояние регистрации ONU на OLT (SNMP 3.28.2.1.1).
+
+    Это НЕ то же самое, что наличие сигнала: OLT может считать ONU
+    зарегистрированной, когда оптически на ней "no signal". Разнесено
+    в отдельное поле, чтобы Online/Offline означало именно живость ONU.
+    """
+    REGISTERED = "registered"
+    NOT_REGISTERED = "not_registered"
     UNKNOWN = "unknown"
 
 
@@ -32,6 +46,7 @@ class ONUInfo:
     onu_id: str
     port: str
     status: ONUStatus
+    registration: ONURegistration = ONURegistration.UNKNOWN
     rx_power: Optional[float] = None
     tx_power: Optional[float] = None
     rx_power_avg: Optional[float] = None  # Average over last 5 minutes
@@ -290,7 +305,7 @@ set timeout {timeout}
 spawn ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o KexAlgorithms=+diffie-hellman-group1-sha1 -o HostKeyAlgorithms=+ssh-dss -o Ciphers=+aes128-cbc -p {port} {username}@{host}
 
 expect {{
-    -re "-+ *[Mm]ore *-+" {{ send " "; exp_continue }}
+    -re {{-+ *[Mm]ore *-+}} {{ send " "; exp_continue }}
     "password:" {{
         send "{password}\\r"
         exp_continue
@@ -315,7 +330,7 @@ expect {{
         expect_script += f'''
 send "show mac gpon olt gpon-olt_1/1/{gpon_port}\\r"
 expect {{
-    -re "-+ *[Mm]ore *-+" {{ send " "; exp_continue }}
+    -re {{-+ *[Mm]ore *-+}} {{ send " "; exp_continue }}
     "#" {{ }}
     ">" {{ }}
     timeout {{ }}
@@ -330,14 +345,14 @@ expect {{
             expect_script += f'''
 send "show pon power onu-rx gpon-olt_1/1/{gpon_port}\\r"
 expect {{
-    -re "-+ *[Mm]ore *-+" {{ send " "; exp_continue }}
+    -re {{-+ *[Mm]ore *-+}} {{ send " "; exp_continue }}
     "#" {{ }}
     ">" {{ }}
     timeout {{ }}
 }}
 send "show pon power onu-tx gpon-olt_1/1/{gpon_port}\\r"
 expect {{
-    -re "-+ *[Mm]ore *-+" {{ send " "; exp_continue }}
+    -re {{-+ *[Mm]ore *-+}} {{ send " "; exp_continue }}
     "#" {{ }}
     ">" {{ }}
     timeout {{ }}
@@ -554,6 +569,15 @@ class ONUMonitor:
                     )
                 except Exception as e:
                     logger.warning(f"SSH data retrieval failed for {olt.id}: {e}")
+
+            # Удалась ли сессия. Если нет — статус берём из SNMP как раньше,
+            # чтобы таймаут SSH не превратился в ложный массовый Offline.
+            power_available = bool(rx_table)
+            if not power_available:
+                logger.warning(
+                    f"OLT {olt.id}: оптика не получена, статус ONU определяется "
+                    f"по SNMP-регистрации (может расходиться с реальным сигналом)"
+                )
             else:
                 logger.warning(
                     f"OLT {olt.id}: не заданы ssh_username/ssh_password — "
@@ -616,15 +640,33 @@ class ONUMonitor:
                         except:
                             pass
                     
-                    # Determine status (SNMP status is primary)
-                    if snmp_status == 2:
-                        status = ONUStatus.OFFLINE
-                    elif rx_power is not None and rx_power < warning_threshold:
-                        status = ONUStatus.LOW_SIGNAL
-                    elif snmp_status == 1:
-                        status = ONUStatus.ONLINE
+                    # Регистрация на OLT — отдельно от живости ONU.
+                    if snmp_status == 1:
+                        registration = ONURegistration.REGISTERED
+                    elif snmp_status == 2:
+                        registration = ONURegistration.NOT_REGISTERED
                     else:
-                        status = ONUStatus.UNKNOWN
+                        registration = ONURegistration.UNKNOWN
+
+                    # Статус самой ONU определяется наличием сигнала.
+                    # Источник истины — Rx из CLI OLT: если OLT показывает N/A,
+                    # ONU физически не отвечает, даже если числится Registered.
+                    if not power_available:
+                        # Сессия к OLT не удалась — судить о сигнале не по чему.
+                        # Падаем обратно на SNMP, иначе весь OLT разом уйдёт
+                        # в Offline из-за одного таймаута SSH.
+                        if snmp_status == 2:
+                            status = ONUStatus.OFFLINE
+                        elif snmp_status == 1:
+                            status = ONUStatus.ONLINE
+                        else:
+                            status = ONUStatus.UNKNOWN
+                    elif rx_power is None:
+                        status = ONUStatus.OFFLINE
+                    elif rx_power < warning_threshold:
+                        status = ONUStatus.LOW_SIGNAL
+                    else:
+                        status = ONUStatus.ONLINE
                     
                     # Decode port to readable format: 1/1/3:5
                     port_str = decode_port_index(port_index, onu_id)
@@ -639,6 +681,7 @@ class ONUMonitor:
                         onu_id=onu_id,
                         port=port_str,
                         status=status,
+                        registration=registration,
                         rx_power=rx_power,
                         tx_power=tx_power,
                         rx_power_avg=rx_power_avg,
