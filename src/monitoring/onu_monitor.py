@@ -258,8 +258,9 @@ async def ssh_get_olt_data(
     username: str,
     password: str,
     port: int = 22,
-    timeout: int = 60,
+    timeout: int = 30,
     with_power: bool = True,
+    ports: Optional[list[int]] = None,
 ) -> tuple[dict[str, str], dict[str, float], dict[str, float]]:
     """
     Собрать данные с ZTE C320 за ОДНУ интерактивную SSH-сессию.
@@ -269,6 +270,15 @@ async def ssh_get_olt_data(
 
     Одна сессия на цикл опроса: команды добавляются в тот же expect-скрипт,
     что и раньше собирал MAC, поэтому число подключений к OLT не растёт.
+
+    ports — какие GPON-порты опрашивать. Вызывающий передаёт только те, где
+    реально есть ONU (это видно из SNMP до захода по SSH). На OLT с ONU на
+    половине портов это вдвое сокращает число команд и время сессии.
+    По умолчанию все восемь.
+
+    timeout — на ОДНУ команду expect. Общий лимит на сессию считается от
+    количества команд, иначе большой OLT не успевает ответить и вся сессия
+    падает по таймауту, теряя и MAC, и оптику.
     """
     mac_table: dict[str, str] = {}
     rx_table: dict[str, float] = {}
@@ -298,7 +308,9 @@ expect {{
 # Get MAC for ports 1-8
 '''
     
-    for gpon_port in range(1, 9):
+    scan_ports = sorted(ports) if ports else list(range(1, 9))
+
+    for gpon_port in scan_ports:
         expect_script += f'''
 send "show mac gpon olt gpon-olt_1/1/{gpon_port}\\r"
 expect {{
@@ -309,7 +321,7 @@ expect {{
 '''
 
     if with_power:
-        for gpon_port in range(1, 9):
+        for gpon_port in scan_ports:
             # onu-rx поддерживается всеми прошивками C320.
             # onu-tx есть не везде; если команды нет, OLT ответит ошибкой,
             # разбор просто ничего не найдёт и tx останется пустым.
@@ -340,7 +352,15 @@ expect eof
             stderr=asyncio.subprocess.PIPE
         )
         
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout + 30)
+        # Команд в сессии: по одной на порт для MAC + по две на порт для оптики.
+        num_commands = len(scan_ports) * (3 if with_power else 1)
+        total_timeout = timeout + 10 * num_commands
+        logger.debug(
+            f"{host}: {num_commands} команд по портам {scan_ports}, "
+            f"лимит сессии {total_timeout}s"
+        )
+
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=total_timeout)
         
         if proc.returncode != 0:
             logger.debug(f"SSH expect failed: {stderr.decode()}")
@@ -405,7 +425,10 @@ expect eof
         return mac_table, rx_table, tx_table
         
     except asyncio.TimeoutError:
-        logger.warning(f"SSH timeout for {host}")
+        logger.warning(
+            f"SSH timeout for {host} — сессия не уложилась в лимит. "
+            f"Проверь, не выросло ли число портов с ONU"
+        )
         return {}, {}, {}
     except Exception as e:
         logger.warning(f"SSH error for {host}: {e}")
@@ -509,13 +532,21 @@ class ONUMonitor:
             mac_table = {}
             rx_table = {}
             tx_table = {}
+            # Порты, на которых SNMP уже показал ONU — только их и опрашиваем.
+            active_ports = sorted({
+                (int(idx.split(".")[0]) >> 8) & 0xFF
+                for idx in name_results
+                if "." in idx and idx.split(".")[0].isdigit()
+            })
+
             if olt.ssh_username and olt.ssh_password:
                 try:
                     mac_table, rx_table, tx_table = await ssh_get_olt_data(
                         olt.host,
                         olt.ssh_username,
                         olt.ssh_password,
-                        olt.ssh_port if hasattr(olt, 'ssh_port') else 22
+                        olt.ssh_port if hasattr(olt, 'ssh_port') else 22,
+                        ports=active_ports or None,
                     )
                 except Exception as e:
                     logger.warning(f"SSH data retrieval failed for {olt.id}: {e}")
