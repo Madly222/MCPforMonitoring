@@ -54,9 +54,17 @@ ZTE_C320_OIDS = {
     "onu_status": "1.3.6.1.4.1.3902.1012.3.28.2.1.1",         # INTEGER: 1=online, 2=offline
     "onu_phase_state": "1.3.6.1.4.1.3902.1012.3.28.2.1.4",    # INTEGER: 1=LOS, 3=DyingGasp, 6=Working
     "onu_last_offline": "1.3.6.1.4.1.3902.1012.3.28.2.1.5",   # STRING: datetime
-    "onu_rx_power": "1.3.6.1.4.1.3902.1012.3.11.4.1.1",       # INTEGER
-    "onu_tx_power": "1.3.6.1.4.1.3902.1012.3.11.4.1.2",       # INTEGER
 }
+
+# ВНИМАНИЕ: OID 3.11.4.1.1 и 3.11.4.1.2 РАНЬШЕ использовались как Rx/Tx power.
+# Проверка на живом ZTE-C320-SW30-N показала, что это неверно:
+#   - 3.11.4.1.2 содержит ДИСТАНЦИЮ до ONU в метрах (10317 = "ONU Distance: 10317m"),
+#     а не мощность передатчика;
+#   - 3.11.4.1.1 не коррелирует с реальной мощностью вообще (корреляция Пирсона 0.19
+#     на 22 замерах): почти одинаковые сырые значения 119454 и 119830 соответствуют
+#     -19.13 и -24.43 dBm. Формулы для него не существует.
+# Реальных значений мощности в приватной ветке 3902.1012 нет ни в одном OID.
+# Поэтому оптика теперь читается из CLI командой "show pon power onu-rx".
 
 
 # ZTE C320 offline reason codes (from phase_state OID ...2.1.4)
@@ -90,60 +98,6 @@ def decode_port_index(port_index: int, onu_id: str) -> str:
         
     except:
         return f"?:{onu_id}"
-
-
-def convert_rx_power(raw_value: int) -> Optional[float]:
-    """
-    Convert ZTE C320 raw Rx power value to dBm.
-    
-    Two formats:
-    - value >= 150000: value / -10000 (e.g. 177123 → -17.71 dBm)
-    - value < 150000: (100000 - value) / 1000 (e.g. 119843 → -19.84 dBm)
-    
-    0 = offline/no signal
-    """
-    if raw_value is None or raw_value <= 0:
-        return None
-    
-    try:
-        value = int(raw_value)
-        
-        if value >= 150000:
-            dbm = value / -10000.0
-        else:
-            dbm = (100000 - value) / 1000.0
-        
-        return round(dbm, 2)
-        
-    except (ValueError, TypeError):
-        return None
-
-
-def convert_tx_power(raw_value: int) -> Optional[float]:
-    """
-    Convert ZTE C320 raw Tx power value to dBm.
-    
-    Two formats:
-    - value >= 10000: value / 5000 (e.g. 11712 → 2.34 dBm)
-    - value < 10000: value / 500 (e.g. 1729 → 3.46 dBm)
-    
-    0 = offline/no signal
-    """
-    if raw_value is None or raw_value <= 0:
-        return None
-    
-    try:
-        value = int(raw_value)
-        
-        if value >= 10000:
-            dbm = value / 5000.0
-        else:
-            dbm = value / 500.0
-        
-        return round(dbm, 2)
-        
-    except (ValueError, TypeError):
-        return None
 
 
 def clean_description(desc: str) -> str:
@@ -299,14 +253,26 @@ async def snmpwalk_cli(host: str, community: str, oid: str, timeout: int = 30) -
         return {}
 
 
-async def ssh_get_mac_table(host: str, username: str, password: str, port: int = 22, timeout: int = 30) -> dict[str, str]:
+async def ssh_get_olt_data(
+    host: str,
+    username: str,
+    password: str,
+    port: int = 22,
+    timeout: int = 60,
+    with_power: bool = True,
+) -> tuple[dict[str, str], dict[str, float], dict[str, float]]:
     """
-    Get MAC address table from ZTE C320 via SSH interactive shell.
-    
-    Returns dict mapping "port:onu_id" -> "MAC address" for vport 1 only.
-    Example: {"3:2": "EC:23:7B:1D:D2:A8", "3:4": "EC:23:7B:E6:1A:5E"}
+    Собрать данные с ZTE C320 за ОДНУ интерактивную SSH-сессию.
+
+    Возвращает (mac_table, rx_table, tx_table). Ключ везде "port:onu_id",
+    например "6:1". Мощность в dBm, как её отдаёт сама железка.
+
+    Одна сессия на цикл опроса: команды добавляются в тот же expect-скрипт,
+    что и раньше собирал MAC, поэтому число подключений к OLT не растёт.
     """
-    mac_table = {}
+    mac_table: dict[str, str] = {}
+    rx_table: dict[str, float] = {}
+    tx_table: dict[str, float] = {}
     
     # Build expect script for interactive SSH
     expect_script = f'''
@@ -341,6 +307,26 @@ expect {{
     timeout {{ }}
 }}
 '''
+
+    if with_power:
+        for gpon_port in range(1, 9):
+            # onu-rx поддерживается всеми прошивками C320.
+            # onu-tx есть не везде; если команды нет, OLT ответит ошибкой,
+            # разбор просто ничего не найдёт и tx останется пустым.
+            expect_script += f'''
+send "show pon power onu-rx gpon-olt_1/1/{gpon_port}\\r"
+expect {{
+    "#" {{ }}
+    ">" {{ }}
+    timeout {{ }}
+}}
+send "show pon power onu-tx gpon-olt_1/1/{gpon_port}\\r"
+expect {{
+    "#" {{ }}
+    ">" {{ }}
+    timeout {{ }}
+}}
+'''
     
     expect_script += '''
 send "exit\\r"
@@ -358,7 +344,7 @@ expect eof
         
         if proc.returncode != 0:
             logger.debug(f"SSH expect failed: {stderr.decode()}")
-            return {}
+            return {}, {}, {}
         
         output = stdout.decode()
         
@@ -383,15 +369,62 @@ expect eof
                 mac_table[key] = mac_formatted
                 logger.debug(f"Found MAC {mac_formatted} for ONU {key}")
         
-        logger.info(f"SSH got {len(mac_table)} MAC addresses from {host}")
-        return mac_table
+        # Разбор мощности.
+        # Формат строк ZTE C320:
+        #   gpon-onu_1/1/4:1    -24.432(dbm)
+        #   gpon-onu_1/1/4:10 N/A
+        # N/A означает "нет сигнала" и пропускается — значение останется None.
+        if with_power:
+            power_re = re.compile(
+                r'gpon-onu_1/1/(\d+):(\d+)\s+(-?\d+(?:\.\d+)?)\s*\(dbm\)',
+                re.IGNORECASE,
+            )
+            current = None
+            for line in output.split("\n"):
+                low = line.lower()
+                if "onu-rx" in low:
+                    current = rx_table
+                    continue
+                if "onu-tx" in low:
+                    current = tx_table
+                    continue
+                if current is None:
+                    continue
+                m = power_re.search(line)
+                if m:
+                    key = f"{m.group(1)}:{m.group(2)}"
+                    try:
+                        current[key] = round(float(m.group(3)), 2)
+                    except ValueError:
+                        pass
+
+        logger.info(
+            f"SSH from {host}: {len(mac_table)} MAC, "
+            f"{len(rx_table)} Rx, {len(tx_table)} Tx"
+        )
+        return mac_table, rx_table, tx_table
         
     except asyncio.TimeoutError:
         logger.warning(f"SSH timeout for {host}")
-        return {}
+        return {}, {}, {}
     except Exception as e:
         logger.warning(f"SSH error for {host}: {e}")
-        return {}
+        return {}, {}, {}
+
+
+async def ssh_get_mac_table(
+    host: str, username: str, password: str, port: int = 22, timeout: int = 30
+) -> dict[str, str]:
+    """
+    Только MAC-таблица, без команд мощности.
+
+    Оставлено для mac_port_sync, который вызывает это отдельно от цикла ONU
+    и в оптике не нуждается — лишние команды к OLT ему не нужны.
+    """
+    mac_table, _, _ = await ssh_get_olt_data(
+        host, username, password, port, timeout, with_power=False
+    )
+    return mac_table
 
 
 class ONUMonitor:
@@ -468,23 +501,29 @@ class ONUMonitor:
             sn_results = await snmpwalk_cli(olt.host, community, oids["onu_sn"])
             status_results = await snmpwalk_cli(olt.host, community, oids["onu_status"])
             phase_state_results = await snmpwalk_cli(olt.host, community, oids["onu_phase_state"])
-            rx_power_results = await snmpwalk_cli(olt.host, community, oids["onu_rx_power"])
-            tx_power_results = await snmpwalk_cli(olt.host, community, oids["onu_tx_power"])
             last_offline_results = await snmpwalk_cli(olt.host, community, oids["onu_last_offline"])
             
             # Get MAC addresses via SSH if credentials are configured
+            # MAC и оптика забираются одной SSH-сессией.
+            # Мощность больше не берётся из SNMP: см. комментарий у ZTE_C320_OIDS.
             mac_table = {}
+            rx_table = {}
+            tx_table = {}
             if olt.ssh_username and olt.ssh_password:
                 try:
-                    mac_table = await ssh_get_mac_table(
+                    mac_table, rx_table, tx_table = await ssh_get_olt_data(
                         olt.host,
                         olt.ssh_username,
                         olt.ssh_password,
                         olt.ssh_port if hasattr(olt, 'ssh_port') else 22
                     )
-                    logger.debug(f"Got {len(mac_table)} MAC addresses via SSH")
                 except Exception as e:
-                    logger.warning(f"SSH MAC retrieval failed for {olt.id}: {e}")
+                    logger.warning(f"SSH data retrieval failed for {olt.id}: {e}")
+            else:
+                logger.warning(
+                    f"OLT {olt.id}: не заданы ssh_username/ssh_password — "
+                    f"MAC и мощность будут пустыми"
+                )
             
             # Get thresholds
             onu_config = self.config.get_onu_monitoring_config()
@@ -520,23 +559,10 @@ class ONUMonitor:
                     except:
                         snmp_status = 1
                     
-                    # Convert power values
-                    rx_power = None
-                    tx_power = None
-                    
-                    rx_raw = rx_power_results.get(index)
-                    if rx_raw:
-                        try:
-                            rx_power = convert_rx_power(int(rx_raw))
-                        except:
-                            pass
-                    
-                    tx_raw = tx_power_results.get(index)
-                    if tx_raw:
-                        try:
-                            tx_power = convert_tx_power(int(tx_raw))
-                        except:
-                            pass
+                    # Мощность из CLI OLT (ключ тот же "port:onu_id", что у MAC).
+                    # Отсутствие ключа = OLT ответил N/A либо сессия не удалась.
+                    rx_power = rx_table.get(mac_key)
+                    tx_power = tx_table.get(mac_key)
                     
                     # Check last offline time
                     last_offline = last_offline_results.get(index, "")
