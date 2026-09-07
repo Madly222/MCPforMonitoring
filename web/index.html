@@ -4,727 +4,477 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MCP Server Monitor</title>
-    <link rel="stylesheet" href="/css/style.css">
-    <style>
-        /* Utility Status Indicators */
-        .utility-status {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            padding: 6px 12px;
-            background: #1a1a2e;
-            border-radius: 4px;
-            margin-right: 8px;
-            cursor: pointer;
-        }
-        .utility-status:hover { background: #252540; }
-        .utility-icon { font-size: 16px; }
-        .utility-status .status-dot { width: 8px; height: 8px; border-radius: 50%; }
-        .utility-status .status-dot.status-ok { background: #4CAF50; }
-        .utility-status .status-dot.status-error { background: #f44336; animation: pulse 1.5s infinite; }
-        .utility-status .status-dot.status-loading { background: #888; }
-        
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-        
-        /* Tab Navigation */
-        .tab-nav {
-            display: flex;
-            gap: 0;
-            margin-bottom: 20px;
-            border-bottom: 2px solid #333;
-        }
-        
-        .tab-btn {
-            padding: 12px 24px;
-            background: #1a1a2e;
-            border: none;
-            color: #888;
-            font-size: 16px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            transition: all 0.2s;
-            border-bottom: 2px solid transparent;
-            margin-bottom: -2px;
-        }
-        
-        .tab-btn:hover { color: #fff; background: #252540; }
-        .tab-btn.active { color: #4CAF50; border-bottom-color: #4CAF50; background: #252540; }
-        
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-        
-        /* ONU Monitoring Styles */
-        .onu-total-stats {
-            display: flex;
-            gap: 24px;
-            padding: 16px 20px;
-            background: #1a1a2e;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            font-size: 14px;
-        }
-        .onu-total-stats span { color: #aaa; }
-        .onu-total-stats strong { color: #fff; }
-        .onu-total-stats .stat-online { color: #4CAF50; }
-        .onu-total-stats .stat-offline { color: #f44336; }
-        .onu-total-stats .stat-warning { color: #ff9800; }
-        
-        .olt-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-            gap: 16px;
-        }
-        
-        .olt-card {
-            background: #1a1a2e;
-            border-radius: 8px;
-            padding: 20px;
-            cursor: pointer;
-            transition: all 0.2s;
-            border: 2px solid transparent;
-        }
-        
-        .olt-card:hover { 
-            background: #252540; 
-            border-color: #4CAF50;
-            transform: translateY(-2px);
-        }
-        
-        .olt-card.has-offline { border-left: 4px solid #f44336; }
-        .olt-card.has-warning { border-left: 4px solid #ff9800; }
-        .olt-card.all-ok { border-left: 4px solid #4CAF50; }
-        
-        .olt-header {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            margin-bottom: 16px;
-        }
-        
-        .olt-icon { font-size: 24px; }
-        .olt-name { font-size: 18px; font-weight: bold; color: #fff; }
-        
-        .olt-stats {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 8px;
-            margin-bottom: 16px;
-        }
-        
-        .olt-stat { text-align: center; }
-        .olt-stat-value { display: block; font-size: 20px; font-weight: bold; color: #fff; }
-        .olt-stat-label { font-size: 11px; color: #888; text-transform: uppercase; }
-        .olt-stat.online .olt-stat-value { color: #4CAF50; }
-        .olt-stat.offline .olt-stat-value { color: #f44336; }
-        .olt-stat.warning .olt-stat-value { color: #ff9800; }
-        
-        .olt-action {
-            text-align: center;
-            color: #4CAF50;
-            font-size: 13px;
-            padding-top: 12px;
-            border-top: 1px solid #333;
-        }
-        
-        .onu-toolbar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 16px;
-        }
-        
-        .onu-toolbar h3 { margin: 0; color: #fff; font-size: 18px; }
-        
-        .onu-toolbar-left {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-        
-        .onu-count { color: #888; font-size: 14px; }
-        
-        .onu-toolbar-row {
-            display: flex;
-            gap: 16px;
-            margin-bottom: 16px;
-            flex-wrap: wrap;
-        }
-        
-        .back-btn {
-            padding: 8px 16px;
-            background: #333;
-            border: none;
-            color: #fff;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-        }
-        .back-btn:hover { background: #444; }
-        
-        .refresh-btn {
-            padding: 8px 16px;
-            background: #4CAF50;
-            border: none;
-            color: #fff;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        .refresh-btn:hover { background: #43a047; }
-        .refresh-btn:disabled { background: #333; cursor: not-allowed; }
-        
-        .onu-search {
-            flex: 1;
-            min-width: 200px;
-        }
-        
-        .onu-search input {
-            width: 100%;
-            padding: 10px 16px;
-            background: #1a1a2e;
-            border: 1px solid #333;
-            color: #fff;
-            border-radius: 4px;
-            font-size: 14px;
-        }
-        .onu-search input:focus { outline: none; border-color: #4CAF50; }
-        .onu-search input::placeholder { color: #666; }
-        
-        .onu-filters { display: flex; gap: 8px; }
-        
-        .filter-btn {
-            padding: 8px 16px;
-            background: #252540;
-            border: 1px solid #333;
-            color: #888;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 13px;
-            transition: all 0.2s;
-        }
-        .filter-btn:hover { border-color: #4CAF50; color: #fff; }
-        .filter-btn.active { background: #4CAF50; border-color: #4CAF50; color: #fff; }
-        
-        .onu-list {
-            background: #1a1a2e;
-            border-radius: 8px;
-            overflow: hidden;
-        }
-        
-        .onu-list-header {
-            display: grid;
-            grid-template-columns: 80px 1fr 130px 130px 80px 110px 120px;
-            gap: 10px;
-            padding: 12px 16px;
-            background: #252540;
-            font-size: 11px;
-            color: #888;
-            text-transform: uppercase;
-            font-weight: 600;
-        }
-        
-        .onu-row-item {
-            display: grid;
-            grid-template-columns: 80px 1fr 130px 130px 80px 110px 120px;
-            gap: 10px;
-            padding: 12px 16px;
-            border-bottom: 1px solid #252540;
-            align-items: center;
-            font-size: 13px;
-        }
-        
-        .onu-row-item:hover { background: #252540; }
-        .onu-row-item.offline { background: rgba(244, 67, 54, 0.05); }
-        .onu-row-item.low_signal { background: rgba(255, 152, 0, 0.05); }
-        
-        .col-id {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        
-        .onu-status-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: #888;
-        }
-        .onu-status-dot.online { background: #4CAF50; }
-        .onu-status-dot.offline { background: #f44336; }
-        .onu-status-dot.low_signal { background: #ff9800; }
-        
-        .port-badge {
-            padding: 2px 6px;
-            background: #333;
-            border-radius: 3px;
-            font-size: 11px;
-            color: #aaa;
-        }
-        
-        .col-client {
-            color: #fff;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        
-        .col-client .no-desc { color: #555; }
-        .col-client .last-offline { margin-left: 8px; cursor: help; }
-        
-        .col-model { color: #888; font-size: 13px; }
-        
-        .col-sn { 
-            color: #aaa; 
-            font-family: monospace; 
-            font-size: 11px;
-            word-break: break-all;
-        }
-        
-        .col-mac {
-            color: #aaa;
-            font-family: monospace;
-            font-size: 11px;
-        }
-        
-        .col-signal { color: #aaa; font-family: monospace; }
-        .col-signal .signal-current { font-size: 14px; }
-        .col-signal .signal-avg { font-size: 11px; color: #666; margin-top: 2px; }
-        .col-signal .signal-good { color: #4CAF50; }
-        .col-signal .signal-warning { color: #ff9800; }
-        .col-signal .signal-critical { color: #f44336; }
-        
-        .status-badge {
-            padding: 4px 10px;
-            border-radius: 12px;
-            font-size: 12px;
-            font-weight: 500;
-        }
-        .status-badge.online { background: rgba(76, 175, 80, 0.2); color: #4CAF50; }
-        .status-badge.offline { background: rgba(244, 67, 54, 0.2); color: #f44336; }
-        .status-badge.low_signal { background: rgba(255, 152, 0, 0.2); color: #ff9800; }
-        
-        .reason-badge {
-            display: block;
-            margin-top: 4px;
-            padding: 2px 6px;
-            background: rgba(244, 67, 54, 0.1);
-            border-radius: 3px;
-            font-size: 11px;
-            color: #f44336;
-        }
-        
-        .onu-empty {
-            text-align: center;
-            padding: 60px 20px;
-            color: #888;
-            font-size: 16px;
-        }
-        
-        @media (max-width: 900px) {
-            .onu-list-header { display: none; }
-            
-            .onu-row-item {
-                display: flex;
-                flex-wrap: wrap;
-                gap: 8px;
-            }
-            
-            .col-id { width: 100%; }
-            .col-client { width: 100%; }
-            .col-model, .col-signal, .col-status { width: auto; }
-        }
-    </style>
+    <link rel="stylesheet" href="./css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div class="app-container">
-        <header class="header">
-            <div class="header-left">
-                <h1>🖥️ MCP Server Monitor</h1>
-            </div>
-            <div class="header-right">
-                <span class="utility-status" id="claudeStatus" title="Claude API status">
-                    <span class="utility-icon">🤖</span>
-                    <span class="status-dot" id="claudeDot" style="background:#888;"></span>
-                </span>
-                <button class="utility-status" id="restartBtn" title="Перезапустить сервис" style="display:none;">
-                    <span class="utility-icon">🔄</span>
-                </button>
-                <span class="utility-status" id="electricStatus" title="Электричество">
-                    <span class="utility-icon">⚡</span>
-                    <span class="status-dot status-ok" id="electricDot"></span>
-                </span>
-                <span class="utility-status" id="waterStatus" title="Вода">
-                    <span class="utility-icon">💧</span>
-                    <span class="status-dot status-ok" id="waterDot"></span>
-                </span>
-                <span class="connection-status" id="connectionStatus">
-                    <span class="status-dot status-ok"></span>
-                    <span id="statusText">Connected</span>
-                </span>
-                <span class="user-info" id="userInfo">
-                    <span id="username"></span>
-                    <span id="userRole" class="user-role"></span>
-                </span>
-                <button class="btn btn-logout" id="logoutBtn">Logout</button>
-            </div>
-        </header>
 
-        <main class="main-content">
-            <div class="tab-nav">
-                <button class="tab-btn active" data-tab="servers">🖥️ Servers</button>
-                <button class="tab-btn" data-tab="onu">📡 ONU Monitoring</button>
-                <a href="/netbox.html" class="tab-btn" style="text-decoration:none;" title="NetBox Auto-Fill">📦 NetBox Auto-Fill</a>
-                <button class="tab-btn" data-tab="admin" id="adminTabBtn" style="display:none;">🛡️ Admin</button>
-            </div>
-
-            <div class="tab-content active" id="tab-servers">
-                <section class="command-section">
-                    <div class="command-input-wrapper">
-                        <select id="consoleServer" title="Run as SSH on a server, or leave blank to interpret"
-                                style="padding:10px;background:#252540;border:1px solid #3a3a5a;border-radius:6px;color:#fff;min-width:160px;">
-                            <option value="">🧠 Interpret</option>
-                        </select>
-                        <input type="text" class="command-input" id="commandInput"
-                               placeholder="Enter command (e.g., 'status', or pick a server and type 'journalctl -u isc-dhcp-server -n 50')">
-                        <label style="color:#9aa;font-size:13px;white-space:nowrap;"><input type="checkbox" id="consoleSudo"> sudo</label>
-                        <button class="btn btn-primary" id="executeBtn">Execute</button>
-                    </div>
-                </section>
-
-                <section class="servers-section">
-                    <h2>Servers</h2>
-                    <div class="servers-grid" id="serversGrid">
-                        <div class="loading">Loading servers...</div>
-                    </div>
-                </section>
-
-                <section class="output-section">
-                    <h2>Output</h2>
-                    <div class="output-area" id="outputArea">
-                        Ready. Enter a command above or click on a server for details.
-                    </div>
-                </section>
-
-                <section class="history-section">
-                    <h2>Command History</h2>
-                    <div class="history-list" id="historyList">
-                        <p class="empty-history">No commands executed yet</p>
-                    </div>
-                </section>
-            </div>
-
-            <div class="tab-content" id="tab-onu">
-                <div id="onuHeader"></div>
-                <div id="onuContainer">
-                    <div class="onu-empty">Loading ONU data...</div>
+    <!-- ==========================================
+         AUTHORIZATION SCREEN (LOGIN)
+    =========================================== -->
+    <div id="login-view" class="view-container active">
+        <div class="login-wrapper">
+            <div class="login-card">
+                <div class="login-header">
+                    <div class="logo-icon">SR</div>
+                    <h1>MCP Server Monitor</h1>
+                    <p class="text-muted">Server Monitoring System</p>
                 </div>
-            </div>
-
-            <div class="tab-content" id="tab-admin">
-                <section class="servers-section" style="margin-bottom:24px;">
-                    <h2>&#9881;&#65039; Settings</h2>
-
-                    <div style="background:#1e1e2e;padding:16px;border-radius:8px;margin:12px 0;">
-                        <h4 style="margin:0 0 8px;">&#9889; Electric outage addresses</h4>
-                        <p style="color:#9aa;font-size:13px;margin:0 0 8px;">One address per line (e.g. <code>Kaczynski 3</code>). Applied live.</p>
-                        <textarea id="electricAddresses" rows="6" style="width:100%;padding:8px;background:#252540;border:1px solid #3a3a5a;border-radius:6px;color:#fff;font-family:monospace;"></textarea>
-                        <button class="btn btn-primary" id="saveAddressesBtn" style="margin-top:8px;">Save Addresses</button>
+                <form id="loginForm">
+                    <div class="form-group">
+                        <label>Username</label>
+                        <input type="text" id="login-username" class="form-control" placeholder="Enter username" required autocomplete="username">
                     </div>
-
-                    <div style="background:#1e1e2e;padding:16px;border-radius:8px;margin:12px 0;">
-                        <h4 style="margin:0 0 8px;">&#128167; Water outage pattern (acc.md)</h4>
-                        <p style="color:#9aa;font-size:13px;margin:0 0 8px;">Regex matched against acc.md (e.g. <code>Asachi\s*,?\s*71</code>). Applied live.</p>
-                        <input type="text" id="accPattern" style="width:100%;padding:8px;background:#252540;border:1px solid #3a3a5a;border-radius:6px;color:#fff;font-family:monospace;">
-                        <button class="btn btn-primary" id="saveAccPatternBtn" style="margin-top:8px;">Save Pattern</button>
+                    <div class="form-group">
+                        <label>Password</label>
+                        <input type="password" id="login-password" class="form-control" placeholder="Enter password" required autocomplete="current-password">
                     </div>
-
-                    <div style="background:#1e1e2e;padding:16px;border-radius:8px;margin:12px 0;">
-                        <h4 style="margin:0 0 8px;">&#9201;&#65039; Daily check time</h4>
-                        <p style="color:#9aa;font-size:13px;margin:0 0 8px;">Time of day the outage checks run (server local time). Applied within a minute &mdash; no restart needed.</p>
-                        <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;">
-                            <label style="color:#9aa;">&#9889; Electric</label>
-                            <input type="time" id="scheduleElectric" style="padding:6px;background:#252540;border:1px solid #3a3a5a;border-radius:6px;color:#fff;">
-                            <label style="color:#9aa;">&#128167; Water</label>
-                            <input type="time" id="scheduleAcc" style="padding:6px;background:#252540;border:1px solid #3a3a5a;border-radius:6px;color:#fff;">
-                            <button class="btn btn-primary" id="saveScheduleBtn">Save Schedule</button>
-                        </div>
-                    </div>
-
-                    <div style="background:#1e1e2e;padding:16px;border-radius:8px;margin:12px 0;">
-                        <h4 style="margin:0 0 8px;">&#128260; Auto connection-check</h4>
-                        <p style="color:#9aa;font-size:13px;margin:0 0 8px;">How often the dashboard automatically re-probes server connections. Applied on next dashboard load.</p>
-                        <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;">
-                            <label style="color:#9aa;"><input type="checkbox" id="autoCheckEnabled"> Enabled</label>
-                            <label style="color:#9aa;">Interval (sec)</label>
-                            <input type="number" id="autoCheckInterval" min="5" step="5" style="width:90px;padding:6px;background:#252540;border:1px solid #3a3a5a;border-radius:6px;color:#fff;">
-                            <button class="btn btn-primary" id="saveAutoCheckBtn">Save</button>
-                        </div>
-                    </div>
-
-                    <div style="background:#2a1e1e;padding:16px;border-radius:8px;margin:12px 0;border:1px solid #5a3a3a;">
-                        <h4 style="margin:0 0 8px;">&#8635; Reload from secrets.yaml</h4>
-                        <p style="color:#caa;font-size:13px;margin:0 0 10px;">Normally you edit servers, OLTs and users here in the panel (that\'s the source of truth). Use these only if you hand-edited <code>secrets.yaml</code> and want it to win again for that section. <b>This discards panel edits for that section</b> &mdash; users reset immediately; servers/OLTs apply after a restart.</p>
-                        <div style="display:flex;gap:10px;flex-wrap:wrap;">
-                            <button class="btn" id="reseedServersBtn" style="background:#3a2a2a;border:1px solid #5a3a3a;color:#eab;">Reload servers</button>
-                            <button class="btn" id="reseedOltsBtn" style="background:#3a2a2a;border:1px solid #5a3a3a;color:#eab;">Reload OLTs</button>
-                            <button class="btn" id="reseedUsersBtn" style="background:#3a2a2a;border:1px solid #5a3a3a;color:#eab;">Reload users</button>
-                        </div>
-                    </div>
-
-                    <div style="background:#1e1e2e;padding:16px;border-radius:8px;margin:12px 0;">
-                        <h4 style="margin:0 0 8px;">&#128273; .env / integrations</h4>
-                        <p style="color:#9aa;font-size:13px;margin:0 0 8px;">Business-automation variables (NetBox URL/token, SMTP, MAC-sync&hellip;). Secret fields show blank &mdash; leave blank to keep the current value. <b>Applies after a service restart.</b></p>
-                        <input type="text" id="envFilter" placeholder="filter&hellip; (e.g. netbox, smtp)" style="width:100%;padding:6px;margin-bottom:8px;background:#252540;border:1px solid #3a3a5a;border-radius:6px;color:#fff;">
-                        <div id="envEditor" style="max-height:340px;overflow-y:auto;border:1px solid #2a2a44;border-radius:6px;padding:8px;">Loading&hellip;</div>
-                        <button class="btn btn-primary" id="saveEnvBtn" style="margin-top:8px;">Save .env</button>
-                    </div>
-
-                    <div style="background:#1e1e2e;padding:16px;border-radius:8px;margin:12px 0;">
-                        <h4 style="margin:0 0 8px;">&#127760; DNS test zone</h4>
-                        <p style="color:#9aa;font-size:13px;margin:0 0 8px;">Zone used by the DNS health check (SOA lookup against the server's own listening IP). Must be a zone your DNS servers are authoritative for, or healthy servers will show a failed check.</p>
-                        <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;">
-                            <input type="text" id="dnsTestZone" placeholder="example.com" style="width:220px;padding:6px;background:#252540;border:1px solid #3a3a5a;border-radius:6px;color:#fff;">
-                            <button class="btn btn-primary" id="saveDnsZoneBtn">Save</button>
-                        </div>
-                    </div>
-
-                    <div style="background:#1e1e2e;padding:16px;border-radius:8px;margin:12px 0;">
-                        <h4 style="margin:0 0 8px;">&#9203; SSH connect timeout</h4>
-                        <p style="color:#9aa;font-size:13px;margin:0 0 8px;">How long to wait for an SSH connection before marking a server unreachable (3&ndash;120 sec). Applied live &mdash; no restart. Raise it only for hosts with a slow sshd handshake; a high value makes dead servers slower to detect.</p>
-                        <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;">
-                            <label style="color:#9aa;">Timeout (sec)</label>
-                            <input type="number" id="sshTimeout" min="3" max="120" step="1" style="width:90px;padding:6px;background:#252540;border:1px solid #3a3a5a;border-radius:6px;color:#fff;">
-                            <button class="btn btn-primary" id="saveSshTimeoutBtn">Save</button>
-                        </div>
-                    </div>
-
-                    <div style="background:#1e1e2e;padding:16px;border-radius:8px;margin:12px 0;">
-                        <h4 style="margin:0 0 8px;">&#128231; Notification email</h4>
-                        <p style="color:#9aa;font-size:13px;margin:0 0 8px;">SMTP server and recipients for outage alerts. Applied live.</p>
-                        <div id="notifElectric"></div>
-                        <div id="notifAcc"></div>
-                    </div>
-                </section>
-
-                <section class="servers-section" style="margin-bottom:24px;">
-                    <h2>&#128421;&#65039; Monitored Servers</h2>
-                    <p style="color:#e0a030;font-size:13px;margin:4px 0;">&#9888;&#65039; Changes apply after a service restart.</p>
-                    <div id="serversAdmin"><div class="loading">Loading servers...</div></div>
-                </section>
-
-                <section class="servers-section" style="margin-bottom:24px;">
-                    <h2>&#128225; OLT / ONU Devices</h2>
-                    <p style="color:#e0a030;font-size:13px;margin:4px 0;">&#9888;&#65039; Changes apply after a service restart.</p>
-                    <div id="oltsAdmin"><div class="loading">Loading OLTs...</div></div>
-                </section>
-
-                <section class="servers-section" style="margin-bottom:24px;">
-                    <h2>&#128100; Users</h2>
-                    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:12px 0;background:#1e1e2e;padding:12px;border-radius:8px;">
-                        <input type="text" id="newUserName" placeholder="username"
-                               style="padding:8px;background:#252540;border:1px solid #3a3a5a;border-radius:6px;color:#fff;">
-                        <input type="password" id="newUserPass" placeholder="password"
-                               style="padding:8px;background:#252540;border:1px solid #3a3a5a;border-radius:6px;color:#fff;">
-                        <select id="newUserRole"
-                                style="padding:8px;background:#252540;border:1px solid #3a3a5a;border-radius:6px;color:#fff;">
-                            <option value="operator">operator</option>
-                            <option value="admin">admin</option>
-                            <option value="superadmin">superadmin</option>
-                        </select>
-                        <button class="btn btn-primary" id="addUserBtn">Add User</button>
-                    </div>
-                    <div id="usersTable"><div class="loading">Loading users...</div></div>
-                </section>
-
-                <section class="history-section">
-                    <h2>&#128220; Audit Log</h2>
-                    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:12px 0;background:#1e1e2e;padding:12px;border-radius:8px;">
-                        <input type="text" id="auditUser" placeholder="filter by user"
-                               style="padding:8px;background:#252540;border:1px solid #3a3a5a;border-radius:6px;color:#fff;">
-                        <input type="text" id="auditAction" placeholder="filter by action"
-                               style="padding:8px;background:#252540;border:1px solid #3a3a5a;border-radius:6px;color:#fff;">
-                        <button class="btn btn-secondary" id="auditRefreshBtn">Refresh</button>
-                    </div>
-                    <div id="auditTable"><div class="loading">Loading audit log...</div></div>
-                </section>
-            </div>
-        </main>
-
-        <footer class="footer">
-            <p>MCP Server Monitor v1.0.0</p>
-        </footer>
-    </div>
-
-    <div class="modal" id="serverModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3 id="modalTitle">Server Details</h3>
-                <button class="modal-close" id="modalClose">&times;</button>
-            </div>
-            <div class="modal-body" id="modalBody">Loading...</div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" id="modalCloseBtn">Close</button>
+                    <button type="submit" id="loginBtn" class="btn btn-primary btn-block">Sign in</button>
+                </form>
+                <p id="error" class="error-message"></p>
             </div>
         </div>
     </div>
 
-    <script src="/js/api.js"></script>
-    <script src="/js/app.js"></script>
-    <script src="/js/onu.js"></script>
-    <script src="/js/admin.js"></script>
-    <script>
-        // Role-based visibility for header action buttons:
-        //   restart  -> superadmin only
-        (async function() {
-            try {
-                const me = await API.auth.me();
-                const role = me && me.role;
-                if (role === 'superadmin') {
-                    const b = document.getElementById('restartBtn');
-                    if (b) b.style.display = '';
-                }
-            } catch (err) { /* not authenticated */ }
-        })();
-    </script>
-    <script>
-        // Service Restart (admin only)
-        (function() {
-            const restartBtn = document.getElementById("restartBtn");
-            if (!restartBtn) return;
-            restartBtn.addEventListener("click", async () => {
-                if (!confirm("Перезапустить сервис? Соединение будет временно потеряно.")) return;
-                restartBtn.style.opacity = "0.5";
-                restartBtn.style.pointerEvents = "none";
-                try {
-                    const response = await fetch("/api/service/restart", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" }
-                    });
-                    const result = await response.json();
-                    if (result.success) {
-                        alert("✅ " + result.message + "\n\nСтраница перезагрузится через 5 секунд...");
-                        setTimeout(() => location.reload(), 5000);
-                    } else {
-                        alert("❌ Ошибка: " + result.message);
-                    }
-                } catch (e) {
-                    alert("❌ Ошибка: " + e.message);
-                } finally {
-                    restartBtn.style.opacity = "1";
-                    restartBtn.style.pointerEvents = "auto";
-                }
-            });
-        })();
+    <!-- ==========================================
+         Main App (Working Directory)
+    =========================================== -->
+    <div id="app-view" class="view-container">
 
-        // Electric Status Indicator
-        (function() {
-            const electricStatus = document.getElementById('electricStatus');
-            const electricDot = document.getElementById('electricDot');
-            
-            if (!electricStatus || !electricDot) return;
-            
-            let lastStatus = null;
-            
-            async function updateElectricStatus() {
-                try {
-                    const data = await API.electric.status();
-                    lastStatus = data;
-                    
-                    if (data.ok) {
-                        electricDot.className = 'status-dot status-ok';
-                        electricStatus.title = 'Электричество: OK' + (data.last_check ? '\nПроверено: ' + new Date(data.last_check).toLocaleString() : '');
-                    } else {
-                        electricDot.className = 'status-dot status-error';
-                        electricStatus.title = '⚠️ Возможно отключение электричества!\nНайдено: ' + data.matches_count + '\nПроверено: ' + new Date(data.last_check).toLocaleString();
-                    }
-                } catch (e) {
-                    electricDot.className = 'status-dot status-loading';
-                    electricStatus.title = 'Не удалось проверить статус электричества';
-                }
-            }
-            
-            electricStatus.addEventListener('click', async () => {
-                if (lastStatus && !lastStatus.ok && lastStatus.matches.length > 0) {
-                    alert('⚠️ Возможно отключение электричества!\n\n' + lastStatus.matches.join('\n\n'));
-                } else {
-                    electricDot.className = 'status-dot status-loading';
-                    try {
-                        const data = await API.electric.check();
-                        lastStatus = data;
-                        if (data.ok) {
-                            electricDot.className = 'status-dot status-ok';
-                            alert('✅ Отключений электричества не найдено');
-                        } else {
-                            electricDot.className = 'status-dot status-error';
-                            alert('⚠️ Возможно отключение электричества!\n\n' + data.matches.join('\n\n'));
-                        }
-                    } catch (e) {
-                        electricDot.className = 'status-dot status-ok';
-                        alert('Ошибка проверки: ' + e.message);
-                    }
-                }
-            });
-            
-            updateElectricStatus();
-            setInterval(updateElectricStatus, 30 * 60 * 1000);
-        })();
+        <!-- SIDEBAR -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="company-badge">
+                    <span class="avatar">SR</span>
+                    <div class="company-info">
+                        <span class="name">SC Rapid Link SRL</span>
+                        <span class="sub">MCP Servers Monitoring</span>
+                    </div>
+                </div>
+            </div>
 
-        // Water Status Indicator
-        (function() {
-            const waterStatus = document.getElementById('waterStatus');
-            const waterDot = document.getElementById('waterDot');
-            
-            if (!waterStatus || !waterDot) return;
-            
-            let lastStatus = null;
-            
-            async function updateWaterStatus() {
-                try {
-                    const data = await API.acc.status();
-                    lastStatus = data;
+            <nav class="sidebar-nav">
+                <button class="nav-item active" data-target="tab-servers">
+                    <span class="icon">🖥️</span> Server Monitoring
+                </button>
+                <button class="nav-item" data-target="tab-onu">
+                    <span class="icon">📡</span> ONU Monitoring
+                </button>
+                <button class="nav-item" data-target="tab-netbox">
+                    <span class="icon">📦</span> netbox Auto-Fill
+                </button>
+                <button class="nav-item hidden" data-target="tab-admin" id="adminTabBtn">
+                    <span class="icon">⚙️</span> Settings
+                </button>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="user-profile">
+                    <div class="user-info" id="userInfo">
+                        <span id="display-username" class="name">User</span>
+                        <span id="userRole" class="role-badge">operator</span>
+                    </div>
+                    <button class="btn btn-outline btn-sm" id="logoutBtn">Sign out</button>
+                </div>
+            </div>
+        </aside>
+
+        <!-- MAIN CONTENT -->
+        <main class="main-content">
+
+            <!-- TOP PANEL -->
+            <header class="topbar">
+                <div class="page-title">
+                    <h2 id="current-page-title">Server Monitoring</h2>
+                </div>
+
+                <div class="system-status">
+                    <button class="status-badge hidden" id="restartBtn" title="Restart service">🔄</button>
+                    <div class="status-badge" id="claudeStatus" title="Claude API">
+                        🤖 <span class="dot" id="claudeDot"></span>
+                    </div>
+                    <div class="status-badge" id="electricStatus" title="Electricity">
+                        ⚡ <span class="dot ok" id="electricDot"></span>
+                    </div>
+                    <div class="status-badge" id="waterStatus" title="Water">
+                        💧 <span class="dot ok" id="waterDot"></span>
+                    </div>
                     
-                    if (data.ok) {
-                        waterDot.className = 'status-dot status-ok';
-                        waterStatus.title = 'Вода: OK' + (data.last_check ? '\nПроверено: ' + new Date(data.last_check).toLocaleString() : '');
-                    } else {
-                        waterDot.className = 'status-dot status-error';
-                        waterStatus.title = '⚠️ Возможно отключение воды!\nНайдено: ' + data.matches_count + '\nПроверено: ' + new Date(data.last_check).toLocaleString();
-                    }
-                } catch (e) {
-                    waterDot.className = 'status-dot status-loading';
-                    waterStatus.title = 'Не удалось проверить статус воды';
-                }
-            }
-            
-            waterStatus.addEventListener('click', async () => {
-                if (lastStatus && !lastStatus.ok && lastStatus.matches.length > 0) {
-                    alert('⚠️ Возможно отключение воды!\n\n' + lastStatus.matches.join('\n\n'));
-                } else {
-                    waterDot.className = 'status-dot status-loading';
-                    try {
-                        const data = await API.acc.check();
-                        lastStatus = data;
-                        if (data.ok) {
-                            waterDot.className = 'status-dot status-ok';
-                            alert('✅ Отключений воды не найдено');
-                        } else {
-                            waterDot.className = 'status-dot status-error';
-                            alert('⚠️ Возможно отключение воды!\n\n' + data.matches.join('\n\n'));
-                        }
-                    } catch (e) {
-                        waterDot.className = 'status-dot status-ok';
-                        alert('Ошибка проверки: ' + e.message);
-                    }
-                }
-            });
-            
-            updateWaterStatus();
-            setInterval(updateWaterStatus, 30 * 60 * 1000);
-        })();
-    </script>
+                    <!--NETBOX INDICATOR -->
+                    <div class="status-badge" id="netboxStatus" title="NetBox API">
+                        <img src="img/netbox-logo.png" alt="NetBox API" style="width: 17px; height: 17px; object-fit: cover; border-radius: 30%; margin-right: 4px; vertical-align: middle;">
+                        <span class="dot" id="netboxDot"></span>
+                    </div>
+                </div>
+            </header>
+
+            <div class="content-wrapper">
+
+                <!-- TAB: SERVERS -->
+                <div class="tab-pane active" id="tab-servers">
+
+                    <div class="card mb-4">
+                        <div class="card-header">Servers Overview</div>
+                        <div class="servers-grid" id="serversGrid">
+                            <div class="empty-state">Loading servers...</div>
+                        </div>
+                    </div>
+
+                    <div class="card command-card mb-4">
+                        <div class="card-header">Terminal Interpretation</div>
+                        <div class="command-input-wrapper">
+                            <select id="consoleServer" class="form-control select-narrow">
+                                <option value="">🧠 Interpret</option>
+                            </select>
+                            <input type="text" class="form-control flex-1" id="commandInput" placeholder="Enter command or natural language...">
+                            <label class="checkbox-label"><input type="checkbox" id="consoleSudo"> sudo</label>
+                            <button class="btn btn-primary" id="executeBtn">Execute</button>
+                        </div>
+                    </div>
+
+                    <div class="grid-2-col">
+                        <div class="card">
+                            <div class="card-header">Output</div>
+                            <div class="output-area" id="outputArea">Ready. Enter a command above.</div>
+                        </div>
+                        <div class="card">
+                            <div class="card-header">Command History</div>
+                            <div class="history-list" id="historyList">
+                                <p class="empty-state">No commands executed yet</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB: ONU -->
+                <div class="tab-pane" id="tab-onu">
+                    <div class="card">
+                        <div id="onuHeader"></div>
+                        <div id="onuContainer">
+                            <div class="empty-state">Loading ONU data...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB: NETBOX -->
+                <div class="tab-pane" id="tab-netbox">
+
+                    <div class="nb-toolbar-card">
+                        <div class="nb-toolbar-actions">
+                            <button class="btn btn-primary" id="nbSyncMac" onclick="nbSyncMac()">🔄 Sync MAC</button>
+                            <button class="btn btn-primary" id="nbSyncPorts" onclick="nbSyncPorts()">🔗 Sync Ports</button>
+                        </div>
+
+                        <div class="nb-toolbar-credentials">
+                            <div class="nb-credential-group">
+                                <label>RADIUS Login</label>
+                                <input id="nbRadUser" class="form-control" placeholder="radius user">
+                            </div>
+                            <div class="nb-credential-group">
+                                <label>RADIUS Pass</label>
+                                <input id="nbRadPass" type="password" class="form-control" placeholder="">
+                            </div>
+                            <div class="nb-credential-group">
+                                <label>SSH Login</label>
+                                <input id="nbSshUser" class="form-control" placeholder="ssh user">
+                            </div>
+                            <div class="nb-credential-group">
+                                <label>SSH Pass</label>
+                                <input id="nbSshPass" type="password" class="form-control" placeholder="">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Mode switching (Single / Batch) -->
+                    <div class="tabs-nav mb-4" id="nbModeTabs">
+                        <button class="nb-tab active" onclick="nbSwitchTab('single')">Single Device</button>
+                        <button class="nb-tab" onclick="nbSwitchTab('batch')">Batch Mode</button>
+                    </div>
+
+                    <!-- Single Device Tab -->
+                    <div id="nb-tab-single">
+                        <div class="card mb-4">
+                            <div class="card-header">⚡ Device Scanner</div>
+
+                            <div class="grid-4-col gap-3 mb-3">
+                                <div class="form-group">
+                                    <label class="form-label">Type</label>
+                                    <select class="form-control" id="nbDeviceType" onchange="nbUpdateDeviceType()">
+                                        <option value="switch">Switch</option>
+                                        <option value="router">Router</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Connection</label>
+                                    <select class="form-control" id="nbConnType" onchange="nbUpdateConnFields()">
+                                        <option value="ssh">SSH</option>
+                                        <option value="radius">RADIUS</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label" id="nbUserLabel">SSH Username</label>
+                                    <input class="form-control" id="nbUser" placeholder="Enter username">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label" id="nbPassLabel">SSH Password</label>
+                                    <input type="password" class="form-control" id="nbPass" placeholder="Enter password">
+                                </div>
+                            </div>
+
+                            <div class="mb-2">
+                                <label class="form-label" id="nbHostLabel">Switch IP Address</label>
+                                <input class="form-control mb-3" id="nbHost" placeholder="Enter IP address">
+                                <button class="btn btn-success btn-block" id="nbBtnScan" onclick="nbScan()">🔍 Scan</button>
+                            </div>
+
+                            <div id="nbError" class="error-message hidden nb-hidden mt-3"></div>
+                        </div>
+
+                        <div id="nbScanLog" class="card mb-4 hidden nb-hidden"></div>
+                        <div id="nbDeviceInfo" class="card mb-4 hidden nb-hidden"></div>
+                        <div id="nbPortTable" class="card mb-4 hidden nb-hidden p-0"></div>
+                        <div id="nbRouterInfo" class="card mb-4 hidden nb-hidden"></div>
+                        <div id="nbApplyLog" class="card mb-4 hidden nb-hidden"></div>
+                    </div>
+
+                    <!-- Batch Mode Tab -->
+                    <div id="nb-tab-batch" class="hidden nb-hidden">
+                        <div class="card mb-4">
+                            <div class="card-header">🚀 Batch Auto-Fill</div>
+
+                            <label class="form-label">IP Addresses (one per line)</label>
+                            <textarea class="form-control mb-3" id="nbBatchIps" rows="4" placeholder="10.10.10.13&#10;10.10.10.14"></textarea>
+
+                            <div class="grid-2-col gap-3 mb-3">
+                                <div class="form-group">
+                                    <label class="form-label">SSH User</label>
+                                    <input class="form-control" id="nbBatchUser" placeholder="Enter username">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">SSH Pass</label>
+                                    <input type="password" class="form-control" id="nbBatchPass" placeholder="Enter password">
+                                </div>
+                            </div>
+
+                            <button class="btn btn-success btn-block" id="nbBtnBatch" onclick="nbBatch()">Run All</button>
+                        </div>
+                        <div id="nbBatchResults" class="flex-col gap-3"></div>
+                    </div>
+
+                </div>
+
+                <!-- TAB: ADMIN -->
+                <div class="tab-pane" id="tab-admin">
+                    <div class="admin-layout">
+
+                        <nav class="admin-subnav" id="adminSubnav">
+                            <button class="subtab-btn active" data-admin-tab="users">👤 Users</button>
+                            <button class="subtab-btn" data-admin-tab="servers">🖥️ Servers</button>
+                            <button class="subtab-btn" data-admin-tab="olts">📡 OLT Devices</button>
+                            <button class="subtab-btn" data-admin-tab="settings">⚙️ Settings</button>
+                            <button class="subtab-btn" data-admin-tab="audit">📋 Log</button>
+                        </nav>
+
+                        <div class="admin-panels">
+
+                            <!-- USERS -->
+                            <section class="admin-panel active" id="admin-panel-users">
+                                <div class="card mb-4">
+                                    <div class="card-header">Add User</div>
+                                    <div class="grid-4-col gap-3 align-end">
+                                        <div class="form-group">
+                                            <label class="form-label">Username</label>
+                                            <input class="form-control" id="newUserName" placeholder="e.g. jsmith">
+                                        </div>
+                                        <div class="form-group">
+                                            <label class="form-label">Password</label>
+                                            <input class="form-control" type="password" id="newUserPass" placeholder="Enter password">
+                                        </div>
+                                        <div class="form-group">
+                                            <label class="form-label">Role</label>
+                                            <select class="form-control" id="newUserRole">
+                                                <option value="operator">operator</option>
+                                                <option value="admin">admin</option>
+                                                <option value="superadmin">superadmin</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group">
+                                            <button class="btn btn-primary btn-block" id="addUserBtn">Add User</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="card">
+                                    <div class="card-header">All Users</div>
+                                    <div id="usersTable"><div class="empty-state">Loading users...</div></div>
+                                </div>
+                            </section>
+
+                            <!-- SERVERS -->
+                            <section class="admin-panel" id="admin-panel-servers">
+                                <div class="card">
+                                    <div class="card-header">Servers Configuration</div>
+                                    <div id="serversAdmin"><div class="empty-state">Loading configuration...</div></div>
+                                </div>
+                            </section>
+
+                            <!-- OLTS -->
+                            <section class="admin-panel" id="admin-panel-olts">
+                                <div class="card">
+                                    <div class="card-header">OLT Devices</div>
+                                    <div id="oltsAdmin"><div class="empty-state">Loading OLT devices...</div></div>
+                                </div>
+                            </section>
+
+                            <!-- AUDIT -->
+                            <section class="admin-panel" id="admin-panel-audit">
+                                <div class="card">
+                                    <div class="card-header">Audit Log</div>
+                                    <div class="table-toolbar">
+                                        <div class="form-group">
+                                            <label class="form-label">Username</label>
+                                            <input class="form-control input-sm" id="auditUser" placeholder="Filter by user">
+                                        </div>
+                                        <div class="form-group">
+                                            <label class="form-label">Action</label>
+                                            <input class="form-control input-sm" id="auditAction" placeholder="Filter by action">
+                                        </div>
+                                        <button class="btn btn-secondary btn-sm" id="auditRefreshBtn">Refresh</button>
+                                    </div>
+                                    <div id="auditTable"><div class="empty-state">Loading audit log...</div></div>
+                                </div>
+                            </section>
+
+                            <!-- SETTINGS -->
+                            <section class="admin-panel" id="admin-panel-settings">
+                                <div class="grid-2-col">
+                                    <div class="card settings-card">
+                                        <div class="card-header">Electric Monitoring Addresses</div>
+                                        <label class="form-label">Addresses (one per line)</label>
+                                        <textarea class="form-control mb-3" id="electricAddresses" rows="5" placeholder="Example St. 12&#10;Sample St. 34"></textarea>
+                                        <button class="btn btn-primary" id="saveAddressesBtn">Save Addresses</button>
+                                    </div>
+
+                                    <div class="card settings-card">
+                                        <div class="card-header">Water Monitoring Pattern (acc.md)</div>
+                                        <label class="form-label">Match pattern</label>
+                                        <input class="form-control mb-3" id="accPattern" placeholder="e.g. block 3, entrance *">
+                                        <button class="btn btn-primary" id="saveAccPatternBtn">Save Pattern</button>
+                                    </div>
+
+                                    <div class="card settings-card">
+                                        <div class="card-header">Check Schedule</div>
+                                        <div class="grid-2-col mb-3">
+                                            <div class="form-group">
+                                                <label class="form-label">⚡ Electric check time</label>
+                                                <input class="form-control" type="time" id="scheduleElectric">
+                                            </div>
+                                            <div class="form-group">
+                                                <label class="form-label">💧 Water check time</label>
+                                                <input class="form-control" type="time" id="scheduleAcc">
+                                            </div>
+                                        </div>
+                                        <button class="btn btn-primary" id="saveScheduleBtn">Save Schedule</button>
+                                    </div>
+
+                                    <div class="card settings-card">
+                                        <div class="card-header">Auto Status-Check</div>
+                                        <div class="flex align-center gap-3 mb-3">
+                                            <label class="checkbox-label"><input type="checkbox" id="autoCheckEnabled"> Enabled</label>
+                                            <div class="form-group flex-1" style="margin-bottom:0;">
+                                                <label class="form-label">Interval (seconds)</label>
+                                                <input class="form-control" type="number" id="autoCheckInterval" min="5" value="30">
+                                            </div>
+                                        </div>
+                                        <button class="btn btn-primary" id="saveAutoCheckBtn">Save</button>
+                                    </div>
+
+                                    <div class="card settings-card">
+                                        <div class="card-header">SSH Connection Timeout</div>
+                                        <label class="form-label">Timeout (seconds)</label>
+                                        <input class="form-control mb-3" type="number" id="sshTimeout" min="3" max="120" value="8">
+                                        <button class="btn btn-primary" id="saveSshTimeoutBtn">Save Timeout</button>
+                                    </div>
+
+                                    <div class="card settings-card">
+                                        <div class="card-header">DNS Test Zone</div>
+                                        <label class="form-label">Zone</label>
+                                        <input class="form-control mb-3" id="dnsTestZone" placeholder="example.com">
+                                        <button class="btn btn-primary" id="saveDnsZoneBtn">Save Zone</button>
+                                    </div>
+
+                                    <div class="card settings-card col-span-2">
+                                        <div class="card-header">Notification Channels</div>
+                                        <div id="notifElectric" class="notif-channel"><div class="empty-state">Loading…</div></div>
+                                        <div id="notifAcc" class="notif-channel"><div class="empty-state">Loading…</div></div>
+                                    </div>
+
+                                    <div class="card settings-card col-span-2">
+                                        <div class="card-header">Environment Variables (.env)</div>
+                                        <div class="env-toolbar">
+                                            <input class="form-control input-sm" id="envFilter" placeholder="🔍 Filter keys...">
+                                        </div>
+                                        <div id="envEditor" class="env-list"><span class="env-message">Loading…</span></div>
+                                        <button class="btn btn-primary mt-3" id="saveEnvBtn">Save .env</button>
+                                    </div>
+
+                                    <div class="card settings-card col-span-2">
+                                        <div class="card-header">Reload From File</div>
+                                        <p class="card-subtitle">Discards panel edits for the selected section and re-reads it from secrets.yaml.</p>
+                                        <div class="reseed-actions">
+                                            <button class="btn btn-outline btn-sm" id="reseedServersBtn">Reload Servers</button>
+                                            <button class="btn btn-outline btn-sm" id="reseedOltsBtn">Reload OLTs</button>
+                                            <button class="btn btn-outline btn-sm" id="reseedUsersBtn">Reload Users</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </section>
+
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal Window -->
+    <div class="modal" id="serverModal">
+        <div class="modal-dialog">
+            <div class="modal-header">
+                <h3 id="modalTitle">Details</h3>
+                <button class="btn-icon" id="modalClose">✕</button>
+            </div>
+            <div class="modal-body" id="modalBody">
+                <div class="empty-state">Loading...</div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" id="modalCloseBtn">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Dialog Modal (Replaces alert, confirm, prompt) -->
+    <div class="modal" id="customDialogOverlay">
+        <div class="modal-dialog dialog-sm">
+            <div class="modal-header">
+                <h3 id="customDialogTitle">Notification</h3>
+                <button class="btn-icon" id="customDialogCloseBtn">✕</button>
+            </div>
+            <div class="modal-body">
+                <p id="customDialogMessage"></p>
+                <input type="text" id="customDialogInput" class="form-control hidden" />
+            </div>
+            <div class="modal-footer" id="customDialogFooter">
+                <!-- Buttons are injected here dynamically by JS -->
+            </div>
+        </div>
+    </div>
+
+    <script src="./js/api.js"></script>
+    <script src="./js/app.js"></script>
+    <script src="./js/onu.js"></script>
+    <script src="./js/admin.js"></script>
+    <script src="./js/netbox.js"></script>
+    <script src="./js/router.js"></script>
 </body>
 </html>

@@ -5,12 +5,14 @@
 let adminInitialized = false;
 
 document.addEventListener('DOMContentLoaded', async () => {
+    setupAdminSubTabs();
+
     try {
         const me = await API.auth.me();
         if (me && me.role === 'superadmin') {
             const btn = document.getElementById('adminTabBtn');
             if (btn) {
-                btn.style.display = '';
+                btn.classList.remove('hidden');
                 btn.addEventListener('click', loadAdminData);
             }
             document.getElementById('addUserBtn').addEventListener('click', addUser);
@@ -32,6 +34,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 });
 
+// Left-hand sub-navigation inside the "Company settings" tab
+// (Users / Servers / OLT Devices / Audit Log / Settings).
+function setupAdminSubTabs() {
+    const nav = document.getElementById('adminSubnav');
+    if (!nav) return;
+    nav.querySelectorAll('.subtab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            nav.querySelectorAll('.subtab-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            document.querySelectorAll('.admin-panel').forEach(p => p.classList.remove('active'));
+            const panel = document.getElementById('admin-panel-' + btn.dataset.adminTab);
+            if (panel) panel.classList.add('active');
+        });
+    });
+}
+
 function loadAdminData() {
     loadUsers();
     loadAudit();
@@ -43,26 +61,22 @@ async function loadUsers() {
     try {
         const data = await API.admin.listUsers();
         const roles = data.valid_roles || ['operator', 'admin', 'superadmin'];
-        let html = '<table style="width:100%;border-collapse:collapse;font-size:14px;">';
-        html += '<thead><tr style="text-align:left;border-bottom:1px solid #3a3a5a;color:#9aa;">'
-              + '<th style="padding:8px;">User</th><th style="padding:8px;">Role</th>'
-              + '<th style="padding:8px;">Updated</th><th style="padding:8px;">Actions</th></tr></thead><tbody>';
+        let html = '<div class="table-wrap"><table><thead><tr>'
+              + '<th>User</th><th>Role</th><th>Updated</th><th>Actions</th></tr></thead><tbody>';
         data.users.forEach(u => {
             const opts = roles.map(r =>
                 `<option value="${r}" ${r === u.role ? 'selected' : ''}>${r}</option>`).join('');
             const safe = escapeHtml(u.username);
-            html += '<tr style="border-bottom:1px solid #2a2a40;">'
-                  + `<td style="padding:8px;"><strong>${safe}</strong></td>`
-                  + `<td style="padding:8px;"><select onchange="changeUserRole('${safe}', this.value)" `
-                  + 'style="padding:6px;background:#252540;border:1px solid #3a3a5a;border-radius:6px;color:#fff;">'
-                  + opts + '</select></td>'
-                  + `<td style="padding:8px;color:#9aa;">${(u.updated_at || '').replace('T', ' ').slice(0, 19)}</td>`
-                  + '<td style="padding:8px;">'
-                  + `<button class="btn btn-sm btn-secondary" onclick="changeUserPassword('${safe}')">Password</button> `
+            html += '<tr>'
+                  + `<td class="cell-strong">${safe}</td>`
+                  + `<td><select class="form-control input-sm" onchange="changeUserRole('${safe}', this.value)">${opts}</select></td>`
+                  + `<td class="text-tertiary">${(u.updated_at || '').replace('T', ' ').slice(0, 19)}</td>`
+                  + '<td><div class="table-actions">'
+                  + `<button class="btn btn-sm btn-secondary" onclick="changeUserPassword('${safe}')">Password</button>`
                   + `<button class="btn btn-sm btn-danger" onclick="removeUser('${safe}')">Delete</button>`
-                  + '</td></tr>';
+                  + '</div></td></tr>';
         });
-        html += '</tbody></table>';
+        html += '</tbody></table></div>';
         container.innerHTML = html;
     } catch (e) {
         container.innerHTML = `<p class="error-message">Error: ${escapeHtml(e.message)}</p>`;
@@ -74,7 +88,7 @@ async function addUser() {
     const password = document.getElementById('newUserPass').value;
     const role = document.getElementById('newUserRole').value;
     if (!username || !password) {
-        alert('Username and password are required');
+        await Dialog.alert('Username and password are required');
         return;
     }
     try {
@@ -84,7 +98,7 @@ async function addUser() {
         loadUsers();
         loadAudit();
     } catch (e) {
-        alert('Error: ' + e.message);
+        await Dialog.alert('Error: ' + e.message);
     }
 }
 
@@ -93,31 +107,33 @@ async function changeUserRole(username, role) {
         await API.admin.setRole(username, role);
         loadAudit();
     } catch (e) {
-        alert('Error: ' + e.message);
+        await Dialog.alert('Error: ' + e.message);
         loadUsers();
     }
 }
 
 async function changeUserPassword(username) {
-    const password = prompt(`New password for ${username}:`);
+    const password = await Dialog.prompt(`New password for ${username}:`);
     if (!password) return;
     try {
         await API.admin.setPassword(username, password);
         loadAudit();
-        alert('Password updated');
+        await Dialog.alert('Password updated');
     } catch (e) {
-        alert('Error: ' + e.message);
+        await Dialog.alert('Error: ' + e.message);
     }
 }
 
 async function removeUser(username) {
-    if (!confirm(`Delete user "${username}"? This cannot be undone.`)) return;
+    const isConfirmed = await Dialog.confirm(`Delete user "${username}"? This cannot be undone.`);
+    if (!isConfirmed) return;
+
     try {
         await API.admin.deleteUser(username);
         loadUsers();
         loadAudit();
     } catch (e) {
-        alert('Error: ' + e.message);
+        await Dialog.alert('Error: ' + e.message);
     }
 }
 
@@ -131,39 +147,31 @@ async function loadAudit() {
         };
         const data = await API.admin.audit(params);
         if (!data.entries.length) {
-            container.innerHTML = '<p class="empty-history">No audit entries</p>';
+            container.innerHTML = '<div class="empty-state">No audit entries</div>';
             return;
         }
-        let html = '<table style="width:100%;border-collapse:collapse;font-size:13px;">';
-        html += '<thead><tr style="text-align:left;border-bottom:1px solid #3a3a5a;color:#9aa;">'
-              + '<th style="padding:6px;">Time</th><th style="padding:6px;">User</th>'
-              + '<th style="padding:6px;">Action</th><th style="padding:6px;">Target</th>'
-              + '<th style="padding:6px;">Detail</th><th style="padding:6px;">OK</th>'
-              + '<th style="padding:6px;">IP</th></tr></thead><tbody>';
+        let html = '<div class="table-wrap"><table><thead><tr>'
+              + '<th>Time</th><th>User</th><th>Action</th><th>Target</th>'
+              + '<th>Detail</th><th>OK</th><th>IP</th></tr></thead><tbody>';
         data.entries.forEach(e => {
-            const ok = e.success === null || e.success === undefined ? '' : (e.success ? '✅' : '❌');
-            html += '<tr style="border-bottom:1px solid #2a2a40;">'
-                  + `<td style="padding:6px;color:#9aa;white-space:nowrap;">${(e.timestamp || '').replace('T', ' ').slice(0, 19)}</td>`
-                  + `<td style="padding:6px;">${escapeHtml(e.username || '')}<br><span style="color:#778;">${escapeHtml(e.role || '')}</span></td>`
-                  + `<td style="padding:6px;"><code>${escapeHtml(e.action || '')}</code></td>`
-                  + `<td style="padding:6px;">${escapeHtml(e.target || '')}</td>`
-                  + `<td style="padding:6px;">${escapeHtml(e.detail || '')}</td>`
-                  + `<td style="padding:6px;text-align:center;">${ok}</td>`
-                  + `<td style="padding:6px;color:#9aa;">${escapeHtml(e.ip || '')}</td>`
+            const ok = e.success === null || e.success === undefined ? '' : (e.success ? '<span class="text-success">✔</span>' : '<span class="text-danger">✘</span>');
+            html += '<tr>'
+                  + `<td class="text-tertiary nowrap">${(e.timestamp || '').replace('T', ' ').slice(0, 19)}</td>`
+                  + `<td>${escapeHtml(e.username || '')}<br><span class="text-tertiary text-xs">${escapeHtml(e.role || '')}</span></td>`
+                  + `<td><code class="cell-code">${escapeHtml(e.action || '')}</code></td>`
+                  + `<td>${escapeHtml(e.target || '')}</td>`
+                  + `<td>${escapeHtml(e.detail || '')}</td>`
+                  + `<td style="text-align:center;">${ok}</td>`
+                  + `<td class="text-tertiary">${escapeHtml(e.ip || '')}</td>`
                   + '</tr>';
         });
-        html += '</tbody></table>';
+        html += '</tbody></table></div>';
         container.innerHTML = html;
     } catch (e) {
         container.innerHTML = `<p class="error-message">Error: ${escapeHtml(e.message)}</p>`;
     }
 }
 
-function escapeHtml(str) {
-    return String(str)
-        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
 
 // ===== Settings =====
 
@@ -190,7 +198,7 @@ async function loadSettings() {
         const env = await API.admin.getEnv();
         renderEnvEditor(env.entries || []);
     } catch (e) {
-        document.getElementById('envEditor').innerHTML = '<span style="color:#c66;">Error loading .env</span>';
+        document.getElementById('envEditor').innerHTML = '<span class="env-message text-danger">Error loading .env</span>';
     }
     try {
         const st = await API.admin.getSshTimeout();
@@ -212,26 +220,24 @@ async function renderNotifChannel(channel, containerId, label) {
     try {
         const c = await API.admin.getNotifications(channel);
         const inp = (id, val, type) =>
-            `<input id="${id}" type="${type || 'text'}" value="${escapeHtml(val)}" `
-            + 'style="padding:6px;background:#252540;border:1px solid #3a3a5a;border-radius:6px;color:#fff;">';
+            `<input id="${id}" class="form-control input-sm" type="${type || 'text'}" value="${escapeHtml(val)}">`;
         const pwPlaceholder = c.smtp_password_set ? 'set — leave blank to keep' : 'not set';
         container.innerHTML =
-            `<div style="border-top:1px solid #2a2a40;margin-top:12px;padding-top:12px;">`
-            + `<strong>${label}</strong>`
-            + '<div style="display:grid;grid-template-columns:auto 1fr auto 1fr;gap:8px;align-items:center;margin:8px 0;">'
-            + `<label style="color:#9aa;">SMTP server</label>${inp(channel + '_server', c.smtp_server)}`
-            + `<label style="color:#9aa;">Port</label>${inp(channel + '_port', c.smtp_port, 'number')}`
-            + `<label style="color:#9aa;">SMTP user</label>${inp(channel + '_user', c.smtp_user || '')}`
-            + `<label style="color:#9aa;">SMTP password</label>`
-            + `<input id="${channel}_password" type="password" placeholder="${pwPlaceholder}" `
-            + 'style="padding:6px;background:#252540;border:1px solid #3a3a5a;border-radius:6px;color:#fff;">'
-            + `<label style="color:#9aa;">From</label>${inp(channel + '_from', c['from'])}`
-            + `<label style="color:#9aa;">To (comma)</label>${inp(channel + '_to', c.to)}`
+            `<div class="notif-channel-title">${label}</div>`
+            + '<div class="notif-grid">'
+            + `<div class="form-group"><label class="form-label">SMTP server</label>${inp(channel + '_server', c.smtp_server)}</div>`
+            + `<div class="form-group"><label class="form-label">Port</label>${inp(channel + '_port', c.smtp_port, 'number')}</div>`
+            + `<div class="form-group"><label class="form-label">SMTP user</label>${inp(channel + '_user', c.smtp_user || '')}</div>`
+            + `<div class="form-group"><label class="form-label">SMTP password</label>`
+            + `<input id="${channel}_password" class="form-control input-sm" type="password" placeholder="${pwPlaceholder}"></div>`
+            + `<div class="form-group"><label class="form-label">From</label>${inp(channel + '_from', c['from'])}</div>`
+            + `<div class="form-group"><label class="form-label">To (comma separated)</label>${inp(channel + '_to', c.to)}</div>`
             + '</div>'
-            + `<label style="color:#9aa;margin-right:16px;"><input type="checkbox" id="${channel}_tls" ${c.smtp_tls ? 'checked' : ''}> TLS</label>`
-            + `<label style="color:#9aa;"><input type="checkbox" id="${channel}_enabled" ${c.enabled ? 'checked' : ''}> Notifications enabled</label> `
-            + `<button class="btn btn-primary btn-sm" onclick="saveNotif('${channel}')" style="margin-left:12px;">Save ${label}</button>`
-            + '</div>';
+            + '<div class="notif-checks">'
+            + `<label class="checkbox-label"><input type="checkbox" id="${channel}_tls" ${c.smtp_tls ? 'checked' : ''}> TLS</label>`
+            + `<label class="checkbox-label"><input type="checkbox" id="${channel}_enabled" ${c.enabled ? 'checked' : ''}> Notifications enabled</label>`
+            + '</div>'
+            + `<button class="btn btn-primary btn-sm" onclick="saveNotif('${channel}')">Save ${label}</button>`;
     } catch (e) {
         container.innerHTML = `<p class="error-message">Error: ${escapeHtml(e.message)}</p>`;
     }
@@ -251,9 +257,9 @@ async function saveNotif(channel) {
     try {
         await API.admin.saveNotifications(channel, cfg);
         loadAudit();
-        alert('Saved');
+        await Dialog.alert('Saved');
     } catch (e) {
-        alert('Error: ' + e.message);
+        await Dialog.alert('Error: ' + e.message);
     }
 }
 
@@ -264,90 +270,92 @@ async function saveElectricAddresses() {
         const r = await API.admin.saveElectricAddresses(lines);
         document.getElementById('electricAddresses').value = (r.addresses || []).join('\n');
         loadAudit();
-        alert(`Saved ${r.addresses.length} addresses`);
+        await Dialog.alert(`Saved ${r.addresses.length} addresses`);
     } catch (e) {
-        alert('Error: ' + e.message);
+        await Dialog.alert('Error: ' + e.message);
     }
 }
 
 async function saveAccPattern() {
     const pattern = document.getElementById('accPattern').value.trim();
-    if (!pattern) { alert('Pattern is required'); return; }
+    if (!pattern) { await Dialog.alert('Pattern is required'); return; }
     try {
         await API.admin.saveAccPattern(pattern);
         loadAudit();
-        alert('Saved');
+        await Dialog.alert('Saved');
     } catch (e) {
-        alert('Error: ' + e.message);
+        await Dialog.alert('Error: ' + e.message);
     }
 }
 
 async function saveSchedule() {
     const et = document.getElementById('scheduleElectric').value;
     const at = document.getElementById('scheduleAcc').value;
-    if (!et || !at) { alert('Set both times (HH:MM)'); return; }
+    if (!et || !at) { await Dialog.alert('Set both times (HH:MM)'); return; }
     try {
         await API.admin.saveSchedule('electric', et);
         await API.admin.saveSchedule('acc', at);
         loadAudit();
-        alert(`Schedule saved — electric ${et}, water ${at}`);
+        await Dialog.alert(`Schedule saved — electric ${et}, water ${at}`);
     } catch (e) {
-        alert('Error: ' + e.message);
+        await Dialog.alert('Error: ' + e.message);
     }
 }
 
 async function saveAutoCheck() {
     const enabled = document.getElementById('autoCheckEnabled').checked;
     const interval = parseInt(document.getElementById('autoCheckInterval').value, 10);
-    if (!interval || interval < 5) { alert('Interval must be at least 5 seconds'); return; }
+    if (!interval || interval < 5) { await Dialog.alert('Interval must be at least 5 seconds'); return; }
     try {
         const r = await API.admin.saveAutoCheck(enabled, interval);
         loadAudit();
-        alert(`Auto-check saved — ${r.enabled ? 'on' : 'off'}, every ${r.interval_seconds}s (applies on next dashboard load)`);
+        await Dialog.alert(`Auto-check saved — ${r.enabled ? 'on' : 'off'}, every ${r.interval_seconds}s (applies on next dashboard load)`);
     } catch (e) {
-        alert('Error: ' + e.message);
+        await Dialog.alert('Error: ' + e.message);
     }
 }
 
 async function saveDnsZone() {
     const zone = document.getElementById('dnsTestZone').value.trim();
-    if (!zone) { alert('Enter a zone, e.g. example.com'); return; }
+    if (!zone) { await Dialog.alert('Enter a zone, e.g. example.com'); return; }
     try {
         const r = await API.admin.saveDnsZone(zone);
         loadAudit();
-        alert(`DNS test zone saved — ${r.zone}`);
+        await Dialog.alert(`DNS test zone saved — ${r.zone}`);
     } catch (e) {
-        alert('Error: ' + e.message);
+        await Dialog.alert('Error: ' + e.message);
     }
 }
 
 async function reseedFromFile(section) {
-    if (!confirm(`Reload ${section} from secrets.yaml?\n\nThis DISCARDS panel edits for ${section} and re-reads the file.`)) return;
+    const isConfirmed = await Dialog.confirm(`Reload ${section} from secrets.yaml?\n\nThis DISCARDS panel edits for ${section} and re-reads the file.`);
+    if (!isConfirmed) return;
+
     try {
         const r = await API.admin.reseedFromFile(section);
         loadAudit();
         if ((section === 'servers' || section === 'olts') && typeof loadServersAdmin === 'function') loadServersAdmin();
+        if (section === 'olts' && typeof loadOltsAdmin === 'function') loadOltsAdmin();
         if (section === 'users' && typeof loadUsers === 'function') loadUsers();
-        alert(r.detail + (r.restart_recommended
+        await Dialog.alert(r.detail + (r.restart_recommended
             ? '\n\nRestart to fully apply:\n  sudo systemctl restart mcp-monitor'
             : ''));
     } catch (e) {
-        alert('Error: ' + e.message);
+        await Dialog.alert('Error: ' + e.message);
     }
 }
 
 function renderEnvEditor(entries) {
     const box = document.getElementById('envEditor');
-    if (!entries.length) { box.innerHTML = '<span style="color:#9aa;">No .env file found</span>'; return; }
+    if (!entries.length) { box.innerHTML = '<span class="env-message">No .env file found</span>'; return; }
     box.innerHTML = entries.map(e => {
         const ph = e.secret ? (e.has_value ? '•••• (set — blank keeps it)' : '(not set)') : '';
         const type = e.secret ? 'password' : 'text';
         const val = e.secret ? '' : (e.value || '');
-        return `<div class="env-row" data-key="${e.key.toLowerCase()}" style="display:flex;gap:8px;align-items:center;margin:4px 0;">
-            <label style="flex:0 0 240px;color:#cdd;font-family:monospace;font-size:12px;word-break:break-all;">${e.key}</label>
-            <input type="${type}" class="env-input" data-key="${e.key}" data-secret="${e.secret ? 1 : 0}"
-                   value="${String(val).replace(/"/g,'&quot;')}" placeholder="${ph}"
-                   style="flex:1;padding:5px;background:#252540;border:1px solid #3a3a5a;border-radius:5px;color:#fff;font-family:monospace;font-size:12px;">
+        return `<div class="env-row" data-key="${e.key.toLowerCase()}">
+            <span class="env-key">${e.key}</span>
+            <input type="${type}" class="form-control env-input" data-key="${e.key}" data-secret="${e.secret ? 1 : 0}"
+                   value="${String(val).replace(/"/g,'&quot;')}" placeholder="${ph}">
         </div>`;
     }).join('');
 }
@@ -355,7 +363,7 @@ function renderEnvEditor(entries) {
 function filterEnv() {
     const q = document.getElementById('envFilter').value.toLowerCase();
     document.querySelectorAll('#envEditor .env-row').forEach(row => {
-        row.style.display = row.dataset.key.includes(q) ? '' : 'none';
+        row.classList.toggle('hidden', !row.dataset.key.includes(q));
     });
 }
 
@@ -367,25 +375,25 @@ async function saveEnv() {
         if (secret && v === '') return;      // blank secret = keep current
         values[inp.dataset.key] = v;
     });
-    if (!Object.keys(values).length) { alert('Nothing to save'); return; }
+    if (!Object.keys(values).length) { await Dialog.alert('Nothing to save'); return; }
     try {
         const r = await API.admin.saveEnv(values);
         loadAudit();
-        alert(`.env saved — ${r.written} key(s) updated.\nRestart the service to apply:\n  sudo systemctl restart mcp-monitor`);
+        await Dialog.alert(`.env saved — ${r.written} key(s) updated.\nRestart the service to apply:\n  sudo systemctl restart mcp-monitor`);
     } catch (e) {
-        alert('Error: ' + e.message);
+        await Dialog.alert('Error: ' + e.message);
     }
 }
 
 async function saveSshTimeout() {
     const seconds = parseInt(document.getElementById('sshTimeout').value, 10);
-    if (!seconds || seconds < 3 || seconds > 120) { alert('Timeout must be between 3 and 120 seconds'); return; }
+    if (!seconds || seconds < 3 || seconds > 120) { await Dialog.alert('Timeout must be between 3 and 120 seconds'); return; }
     try {
         const r = await API.admin.saveSshTimeout(seconds);
         loadAudit();
-        alert(`SSH connect timeout saved — ${r.seconds}s (applies immediately)`);
+        await Dialog.alert(`SSH connect timeout saved — ${r.seconds}s (applies immediately)`);
     } catch (e) {
-        alert('Error: ' + e.message);
+        await Dialog.alert('Error: ' + e.message);
     }
 }
 
@@ -418,68 +426,68 @@ async function loadServersAdmin() {
     }
 }
 
+function fieldHtml(idPrefix, id, val, type, ph) {
+    return `<input id="${idPrefix}_${id}" class="form-control" type="${type || 'text'}" value="${escapeHtml(val == null ? '' : val)}" placeholder="${ph || ''}">`;
+}
+function selectHtml(idPrefix, id, val, opts) {
+    return `<select id="${idPrefix}_${id}" class="form-control">`
+        + opts.map(o => `<option value="${o}" ${o === val ? 'selected' : ''}>${o}</option>`).join('') + '</select>';
+}
+
 function serverFormHtml(s) {
     s = s || {};
-    const dis = editingServerId ? 'disabled' : '';
-    const fld = (id, val, type, ph) =>
-        `<input id="srv_${id}" type="${type || 'text'}" value="${escapeHtml(val == null ? '' : val)}" placeholder="${ph || ''}" `
-        + 'style="padding:6px;background:#252540;border:1px solid #3a3a5a;border-radius:6px;color:#fff;width:100%;">';
-    const sel = (id, val, opts) =>
-        `<select id="srv_${id}" style="padding:6px;background:#252540;border:1px solid #3a3a5a;border-radius:6px;color:#fff;width:100%;">`
-        + opts.map(o => `<option value="${o}" ${o === val ? 'selected' : ''}>${o}</option>`).join('') + '</select>';
+    const dis = editingServerId ? true : false;
     const pwPh = (s.auth_value_set ? 'set — blank keeps' : '');
     const sudoPh = (s.sudo_password_set ? 'set — blank keeps' : '');
-    return '<div style="background:#1e1e2e;padding:14px;border-radius:8px;margin:8px 0;">'
-        + `<strong>${editingServerId ? 'Edit server: ' + escapeHtml(editingServerId) : 'Add server'}</strong>`
-        + '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0;">'
-        + `<div>id<br>${fld('id', s.id, 'text', '')}${dis ? '<small style="color:#778;">(immutable)</small>' : ''}</div>`
-        + `<div>host<br>${fld('host', s.host)}</div>`
-        + `<div>port<br>${fld('port', s.port || 22, 'number')}</div>`
-        + `<div>user<br>${fld('user', s.user)}</div>`
-        + `<div>auth_type<br>${sel('auth_type', s.auth_type || 'password', ['password', 'key'])}</div>`
-        + `<div>auth_value (password or key filename)<br><input id="srv_auth_value" type="password" placeholder="${pwPh}" style="padding:6px;background:#252540;border:1px solid #3a3a5a;border-radius:6px;color:#fff;width:100%;"></div>`
-        + `<div>sudo_password<br><input id="srv_sudo_password" type="password" placeholder="${sudoPh}" style="padding:6px;background:#252540;border:1px solid #3a3a5a;border-radius:6px;color:#fff;width:100%;"></div>`
-        + `<div>distro<br>${fld('distro', s.distro, 'text', 'debian / ubuntu...')}</div>`
-        + '</div>'
-        + (() => {
+    return `<div class="admin-form-card">
+        <div class="admin-form-title">${editingServerId ? 'Edit server: ' + escapeHtml(editingServerId) : 'Add server'}${dis ? '<span class="immutable-hint">(id is immutable)</span>' : ''}</div>
+        <div class="admin-form-grid">
+            <div class="form-group"><label class="form-label">ID</label>${fieldHtml('srv', 'id', s.id)}</div>
+            <div class="form-group"><label class="form-label">Host</label>${fieldHtml('srv', 'host', s.host)}</div>
+            <div class="form-group"><label class="form-label">Port</label>${fieldHtml('srv', 'port', s.port || 22, 'number')}</div>
+            <div class="form-group"><label class="form-label">User</label>${fieldHtml('srv', 'user', s.user)}</div>
+            <div class="form-group"><label class="form-label">Auth type</label>${selectHtml('srv', 'auth_type', s.auth_type || 'password', ['password', 'key'])}</div>
+            <div class="form-group"><label class="form-label">Auth value (password / key file)</label><input id="srv_auth_value" class="form-control" type="password" placeholder="${pwPh}"></div>
+            <div class="form-group"><label class="form-label">Sudo password</label><input id="srv_sudo_password" class="form-control" type="password" placeholder="${sudoPh}"></div>
+            <div class="form-group"><label class="form-label">Distro</label>${fieldHtml('srv', 'distro', s.distro, 'text', 'debian / ubuntu...')}</div>
+        </div>
+        ${(() => {
             const chosen = new Set(s.services || []);
             const types = serviceTypesCache || [];
             const boxes = types.length
                 ? types.map(t =>
-                    `<label style="display:inline-flex;align-items:center;gap:4px;margin-right:14px;color:#cdd;">`
-                    + `<input type="checkbox" class="srv-svc" value="${escapeHtml(t)}" ${chosen.has(t) ? 'checked' : ''}> ${escapeHtml(t)}</label>`
+                    `<label class="checkbox-label"><input type="checkbox" class="srv-svc" value="${escapeHtml(t)}" ${chosen.has(t) ? 'checked' : ''}> ${escapeHtml(t)}</label>`
                   ).join('')
-                : '<small style="color:#c66;">No service types available (add one in code)</small>';
-            return `<div style="margin:4px 0 10px;">services<br>${boxes}</div>`;
-        })()
-        + `<label style="color:#9aa;"><input type="checkbox" id="srv_enabled" ${s.enabled === false ? '' : 'checked'}> enabled</label> `
-        + '<button class="btn btn-primary btn-sm" id="serverSaveBtn" style="margin-left:12px;">Save</button> '
-        + '<button class="btn btn-secondary btn-sm" id="serverCancelBtn">Clear</button>'
-        + '</div>';
+                : '<span class="text-danger text-xs">No service types available (add one in code)</span>';
+            return `<div class="form-group"><label class="form-label">Services</label><div class="service-checkbox-row">${boxes}</div></div>`;
+        })()}
+        <div class="admin-form-footer">
+            <label class="checkbox-label"><input type="checkbox" id="srv_enabled" ${s.enabled === false ? '' : 'checked'}> Enabled</label>
+            <button class="btn btn-primary btn-sm" id="serverSaveBtn">Save</button>
+            <button class="btn btn-secondary btn-sm" id="serverCancelBtn">Clear</button>
+        </div>
+    </div>`;
 }
 
 function serversTableHtml(servers) {
     if (editingServerId) document.getElementById('srv_id') && (document.getElementById('srv_id').disabled = true);
-    let html = '<table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:8px;"><thead>'
-        + '<tr style="text-align:left;border-bottom:1px solid #3a3a5a;color:#9aa;">'
-        + '<th style="padding:6px;">ID</th><th style="padding:6px;">Host</th><th style="padding:6px;">User</th>'
-        + '<th style="padding:6px;">Auth</th><th style="padding:6px;">Services</th><th style="padding:6px;">On</th>'
-        + '<th style="padding:6px;">Actions</th></tr></thead><tbody>';
+    let html = '<div class="table-wrap"><table><thead><tr>'
+        + '<th>ID</th><th>Host</th><th>User</th><th>Auth</th><th>Services</th><th>On</th><th>Actions</th></tr></thead><tbody>';
     servers.forEach(s => {
         const id = escapeHtml(s.id);
-        html += '<tr style="border-bottom:1px solid #2a2a40;">'
-            + `<td style="padding:6px;"><strong>${id}</strong></td>`
-            + `<td style="padding:6px;">${escapeHtml(s.host || '')}:${s.port || 22}</td>`
-            + `<td style="padding:6px;">${escapeHtml(s.user || '')}</td>`
-            + `<td style="padding:6px;">${escapeHtml(s.auth_type || '')}</td>`
-            + `<td style="padding:6px;">${escapeHtml((s.services || []).join(', '))}</td>`
-            + `<td style="padding:6px;">${s.enabled ? '✅' : '⛔'}</td>`
-            + '<td style="padding:6px;">'
-            + `<button class="btn btn-sm btn-secondary" onclick='editServer(${JSON.stringify(id)})'>Edit</button> `
+        html += '<tr>'
+            + `<td class="cell-strong">${id}</td>`
+            + `<td class="font-mono">${escapeHtml(s.host || '')}:${s.port || 22}</td>`
+            + `<td>${escapeHtml(s.user || '')}</td>`
+            + `<td>${escapeHtml(s.auth_type || '')}</td>`
+            + `<td>${escapeHtml((s.services || []).join(', '))}</td>`
+            + `<td>${s.enabled ? '<span class="badge badge-success">On</span>' : '<span class="badge badge-neutral">Off</span>'}</td>`
+            + '<td><div class="table-actions">'
+            + `<button class="btn btn-sm btn-secondary" onclick='editServer(${JSON.stringify(id)})'>Edit</button>`
             + `<button class="btn btn-sm btn-danger" onclick='deleteServerRow(${JSON.stringify(id)})'>Delete</button>`
-            + '</td></tr>';
+            + '</div></td></tr>';
     });
-    return html + '</tbody></table>';
+    return html + '</tbody></table></div>';
 }
 
 async function editServer(id) {
@@ -514,7 +522,7 @@ function collectServer() {
 
 async function saveServer() {
     const body = collectServer();
-    if (!body.id || !body.host || !body.user) { alert('id, host and user are required'); return; }
+    if (!body.id || !body.host || !body.user) { await Dialog.alert('id, host and user are required'); return; }
     try {
         if (editingServerId) {
             await API.admin.editServer(editingServerId, body);
@@ -524,21 +532,23 @@ async function saveServer() {
         editingServerId = null;
         loadServersAdmin();
         loadAudit();
-        alert('Saved. Restart the service to apply.');
+        await Dialog.alert('Saved. Restart the service to apply.');
     } catch (e) {
-        alert('Error: ' + e.message);
+        await Dialog.alert('Error: ' + e.message);
     }
 }
 
 async function deleteServerRow(id) {
-    if (!confirm(`Delete server "${id}"?`)) return;
+    const isConfirmed = await Dialog.confirm(`Delete server "${id}"?`);
+    if (!isConfirmed) return;
+
     try {
         await API.admin.deleteServer(id);
         loadServersAdmin();
         loadAudit();
-        alert('Deleted. Restart the service to apply.');
+        await Dialog.alert('Deleted. Restart the service to apply.');
     } catch (e) {
-        alert('Error: ' + e.message);
+        await Dialog.alert('Error: ' + e.message);
     }
 }
 
@@ -560,50 +570,44 @@ async function loadOltsAdmin() {
 
 function oltFormHtml(o) {
     o = o || {};
-    const fld = (id, val, type, ph) =>
-        `<input id="olt_${id}" type="${type || 'text'}" value="${escapeHtml(val == null ? '' : val)}" placeholder="${ph || ''}" `
-        + 'style="padding:6px;background:#252540;border:1px solid #3a3a5a;border-radius:6px;color:#fff;width:100%;">';
-    const sel = (id, val, opts) =>
-        `<select id="olt_${id}" style="padding:6px;background:#252540;border:1px solid #3a3a5a;border-radius:6px;color:#fff;width:100%;">`
-        + opts.map(x => `<option value="${x}" ${x === val ? 'selected' : ''}>${x}</option>`).join('') + '</select>';
-    return '<div style="background:#1e1e2e;padding:14px;border-radius:8px;margin:8px 0;">'
-        + `<strong>${editingOltId ? 'Edit OLT: ' + escapeHtml(editingOltId) : 'Add OLT'}</strong>`
-        + '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:10px 0;">'
-        + `<div>id<br>${fld('id', o.id)}</div>`
-        + `<div>host<br>${fld('host', o.host)}</div>`
-        + `<div>SNMP port<br>${fld('port', o.port || 161, 'number')}</div>`
-        + `<div>community<br>${fld('community', o.community || 'public')}</div>`
-        + `<div>version<br>${sel('version', o.version || '2c', ['2c', '3'])}</div>`
-        + `<div>vendor<br>${sel('vendor', o.vendor || 'zte', ['zte', 'huawei'])}</div>`
-        + `<div>ssh_username<br>${fld('ssh_username', o.ssh_username)}</div>`
-        + `<div>ssh_password<br><input id="olt_ssh_password" type="password" placeholder="${o.ssh_password_set ? 'set — blank keeps' : ''}" style="padding:6px;background:#252540;border:1px solid #3a3a5a;border-radius:6px;color:#fff;width:100%;"></div>`
-        + `<div>ssh_port<br>${fld('ssh_port', o.ssh_port || 22, 'number')}</div>`
-        + '</div>'
-        + `<label style="color:#9aa;"><input type="checkbox" id="olt_enabled" ${o.enabled === false ? '' : 'checked'}> enabled</label> `
-        + '<button class="btn btn-primary btn-sm" id="oltSaveBtn" style="margin-left:12px;">Save</button> '
-        + '<button class="btn btn-secondary btn-sm" id="oltCancelBtn">Clear</button>'
-        + '</div>';
+    return `<div class="admin-form-card">
+        <div class="admin-form-title">${editingOltId ? 'Edit OLT: ' + escapeHtml(editingOltId) : 'Add OLT'}</div>
+        <div class="admin-form-grid">
+            <div class="form-group"><label class="form-label">ID</label>${fieldHtml('olt', 'id', o.id)}</div>
+            <div class="form-group"><label class="form-label">Host</label>${fieldHtml('olt', 'host', o.host)}</div>
+            <div class="form-group"><label class="form-label">SNMP port</label>${fieldHtml('olt', 'port', o.port || 161, 'number')}</div>
+            <div class="form-group"><label class="form-label">Community</label>${fieldHtml('olt', 'community', o.community || 'public')}</div>
+            <div class="form-group"><label class="form-label">Version</label>${selectHtml('olt', 'version', o.version || '2c', ['2c', '3'])}</div>
+            <div class="form-group"><label class="form-label">Vendor</label>${selectHtml('olt', 'vendor', o.vendor || 'zte', ['zte', 'huawei'])}</div>
+            <div class="form-group"><label class="form-label">SSH username</label>${fieldHtml('olt', 'ssh_username', o.ssh_username)}</div>
+            <div class="form-group"><label class="form-label">SSH password</label><input id="olt_ssh_password" class="form-control" type="password" placeholder="${o.ssh_password_set ? 'set — blank keeps' : ''}"></div>
+            <div class="form-group"><label class="form-label">SSH port</label>${fieldHtml('olt', 'ssh_port', o.ssh_port || 22, 'number')}</div>
+        </div>
+        <div class="admin-form-footer">
+            <label class="checkbox-label"><input type="checkbox" id="olt_enabled" ${o.enabled === false ? '' : 'checked'}> Enabled</label>
+            <button class="btn btn-primary btn-sm" id="oltSaveBtn">Save</button>
+            <button class="btn btn-secondary btn-sm" id="oltCancelBtn">Clear</button>
+        </div>
+    </div>`;
 }
 
 function oltsTableHtml(olts) {
-    let html = '<table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:8px;"><thead>'
-        + '<tr style="text-align:left;border-bottom:1px solid #3a3a5a;color:#9aa;">'
-        + '<th style="padding:6px;">ID</th><th style="padding:6px;">Host</th><th style="padding:6px;">Ver</th>'
-        + '<th style="padding:6px;">Vendor</th><th style="padding:6px;">On</th><th style="padding:6px;">Actions</th></tr></thead><tbody>';
+    let html = '<div class="table-wrap"><table><thead><tr>'
+        + '<th>ID</th><th>Host</th><th>Ver</th><th>Vendor</th><th>On</th><th>Actions</th></tr></thead><tbody>';
     olts.forEach(o => {
         const id = escapeHtml(o.id);
-        html += '<tr style="border-bottom:1px solid #2a2a40;">'
-            + `<td style="padding:6px;"><strong>${id}</strong></td>`
-            + `<td style="padding:6px;">${escapeHtml(o.host || '')}:${o.port || 161}</td>`
-            + `<td style="padding:6px;">${escapeHtml(o.version || '')}</td>`
-            + `<td style="padding:6px;">${escapeHtml(o.vendor || '')}</td>`
-            + `<td style="padding:6px;">${o.enabled ? '✅' : '⛔'}</td>`
-            + '<td style="padding:6px;">'
-            + `<button class="btn btn-sm btn-secondary" onclick='editOlt(${JSON.stringify(id)})'>Edit</button> `
+        html += '<tr>'
+            + `<td class="cell-strong">${id}</td>`
+            + `<td class="font-mono">${escapeHtml(o.host || '')}:${o.port || 161}</td>`
+            + `<td>${escapeHtml(o.version || '')}</td>`
+            + `<td>${escapeHtml(o.vendor || '')}</td>`
+            + `<td>${o.enabled ? '<span class="badge badge-success">On</span>' : '<span class="badge badge-neutral">Off</span>'}</td>`
+            + '<td><div class="table-actions">'
+            + `<button class="btn btn-sm btn-secondary" onclick='editOlt(${JSON.stringify(id)})'>Edit</button>`
             + `<button class="btn btn-sm btn-danger" onclick='deleteOltRow(${JSON.stringify(id)})'>Delete</button>`
-            + '</td></tr>';
+            + '</div></td></tr>';
     });
-    return html + '</tbody></table>';
+    return html + '</tbody></table></div>';
 }
 
 async function editOlt(id) {
@@ -636,7 +640,7 @@ function collectOlt() {
 
 async function saveOlt() {
     const body = collectOlt();
-    if (!body.id || !body.host) { alert('id and host are required'); return; }
+    if (!body.id || !body.host) { await Dialog.alert('id and host are required'); return; }
     try {
         if (editingOltId) {
             await API.admin.editOlt(editingOltId, body);
@@ -646,20 +650,22 @@ async function saveOlt() {
         editingOltId = null;
         loadOltsAdmin();
         loadAudit();
-        alert('Saved. Restart the service to apply.');
+        await Dialog.alert('Saved. Restart the service to apply.');
     } catch (e) {
-        alert('Error: ' + e.message);
+        await Dialog.alert('Error: ' + e.message);
     }
 }
 
 async function deleteOltRow(id) {
-    if (!confirm(`Delete OLT "${id}"?`)) return;
+    const isConfirmed = await Dialog.confirm(`Delete OLT "${id}"?`);
+    if (!isConfirmed) return;
+
     try {
         await API.admin.deleteOlt(id);
         loadOltsAdmin();
         loadAudit();
-        alert('Deleted. Restart the service to apply.');
+        await Dialog.alert('Deleted. Restart the service to apply.');
     } catch (e) {
-        alert('Error: ' + e.message);
+        await Dialog.alert('Error: ' + e.message);
     }
 }
