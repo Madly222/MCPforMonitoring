@@ -1,5 +1,10 @@
 /**
  * API Client for MCP Server Monitor
+ * Path: ~/ServersMonitoringMCP/web/js/api.js
+ *
+ * Real backend client (the UI example shipped a mock; this replaces it).
+ * Auth is cookie-based (session_id, httponly) -> every request uses
+ * credentials: 'include'.
  */
 const API = {
     baseUrl: '/api',
@@ -7,61 +12,72 @@ const API = {
     async request(endpoint, options = {}) {
         const url = `${this.baseUrl}${endpoint}`;
 
-        const defaultOptions = {
+        const response = await fetch(url, {
             credentials: 'include',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-        };
-        const response = await fetch(url, { ...defaultOptions, ...options });
+            headers: { 'Content-Type': 'application/json' },
+            ...options,
+        });
+
         if (response.status === 401) {
-            window.location.href = '/login.html';
+            // Session died (in-memory sessions are dropped on service restart).
+            // Fall back to the login view instead of throwing into the UI.
+            const loginView = document.getElementById('login-view');
+            const appView = document.getElementById('app-view');
+            if (loginView && appView) {
+                appView.classList.remove('active');
+                loginView.classList.add('active');
+            }
             throw new Error('Unauthorized');
         }
+
         if (!response.ok) {
             const error = await response.json().catch(() => ({}));
             throw new Error(error.detail || `HTTP ${response.status}`);
         }
+
         return response.json();
     },
 
-    // Auth API
+    // ---------------------------------------------------------------- Auth
     auth: {
-        async login(username, password) {
+        login(username, password) {
             return API.request('/auth/login', {
                 method: 'POST',
                 body: JSON.stringify({ username, password }),
             });
         },
-        async logout() {
+        logout() {
             return API.request('/auth/logout', { method: 'POST' });
         },
-        async check() {
+        check() {
             return API.request('/auth/check');
         },
-        async me() {
+        me() {
             return API.request('/auth/me');
         },
     },
 
-    // Servers API
+    // ------------------------------------------------------------- Servers
     servers: {
-        async list() {
+        list() {
             return API.request('/servers');
         },
-        async status() {
+        status() {
             return API.request('/status');
         },
-        async reconnect(serverId) {
-            return API.request(`/servers/${serverId}/reconnect`, { method: 'POST' });
-        },
-        async autoCheck() {
-            return API.request('/settings/auto-check');
-        },
-        async get(serverId) {
+        get(serverId) {
             return API.request(`/servers/${serverId}`);
         },
-        async action(serverId, serviceType, action) {
+        info(serverId) {
+            return API.request(`/servers/${serverId}/info`);
+        },
+        reconnect(serverId) {
+            return API.request(`/servers/${serverId}/reconnect`, { method: 'POST' });
+        },
+        autoCheck() {
+            return API.request('/settings/auto-check');
+        },
+        action(serverId, serviceType, action) {
             return API.request(`/servers/${serverId}/action`, {
                 method: 'POST',
                 body: JSON.stringify({
@@ -71,52 +87,80 @@ const API = {
                 }),
             });
         },
-        async diagnostic(serverId, serviceType, diagnosticName) {
+        diagnostic(serverId, serviceType, diagnosticName) {
             return API.request(
                 `/servers/${serverId}/services/${serviceType}/diagnostics/${diagnosticName}`
             );
         },
+        checkUpdates(serverId) {
+            return API.request(`/servers/${serverId}/updates/check`, { method: 'POST' });
+        },
     },
 
-    // ONU Monitoring API
+    // ----------------------------------------------------------------- ONU
     onu: {
-        async status() {
+        status() {
             return API.request('/onu/status');
         },
-        async olts() {
+        olts() {
             return API.request('/onu/olts');
         },
-        async olt(oltId) {
+        olt(oltId) {
             return API.request(`/onu/olt/${oltId}`);
         },
-        async poll(oltId) {
+        // admin + superadmin only
+        poll(oltId) {
             return API.request(`/onu/olt/${oltId}/poll`, { method: 'POST' });
         },
     },
 
-    // ACC Water Monitoring API
+    // ------------------------------------------------- ACC (water) monitoring
     acc: {
-        async status() {
+        status() {
             return API.request('/acc/status');
         },
-        async check() {
+        check() {
             return API.request('/acc/check', { method: 'POST' });
         },
     },
 
-    // Electric Monitoring API
+    // ---------------------------------------------------- Electric monitoring
     electric: {
-        async status() {
+        status() {
             return API.request('/electric/status');
         },
-        async check() {
+        check() {
             return API.request('/electric/check', { method: 'POST' });
         },
     },
 
-    // Commands API
+    // ------------------------------------------------------------ Monitoring
+    monitoring: {
+        status() {
+            return API.request('/monitoring/status');
+        },
+        errors(params = {}) {
+            const qs = new URLSearchParams(params).toString();
+            return API.request(`/monitoring/errors${qs ? '?' + qs : ''}`);
+        },
+        health() {
+            return API.request('/monitoring/health');
+        },
+    },
+
+    // --------------------------------------------------------------- Updates
+    updates: {
+        status() {
+            return API.request('/updates/status');
+        },
+        refresh() {
+            return API.request('/updates/refresh', { method: 'POST' });
+        },
+    },
+
+    // -------------------------------------------------------------- Commands
     commands: {
-        async execute(command) {
+        execute(command) {
             return API.request('/execute', {
                 method: 'POST',
                 body: JSON.stringify({ command }),
@@ -124,9 +168,9 @@ const API = {
         },
     },
 
-    // Raw SSH console
+    // ----------------------------------------------------------- Raw console
     console: {
-        async exec(server_id, command, sudo) {
+        exec(server_id, command, sudo) {
             return API.request('/console/exec', {
                 method: 'POST',
                 body: JSON.stringify({ server_id, command, sudo: !!sudo }),
@@ -134,135 +178,191 @@ const API = {
         },
     },
 
-    // Claude health
+    // ---------------------------------------------------------------- Claude
     claude: {
-        async health() {
+        health() {
             return API.request('/claude/health');
         },
     },
 
-    // Admin API (superadmin only)
+    // ---------------------------------------------------------------- NetBox
+    netbox: {
+        health() {
+            return API.request('/netbox/health');
+        },
+    },
+
+    // --------------------------------------------------------------- Service
+    service: {
+        // superadmin only
+        restart() {
+            return API.request('/service/restart', { method: 'POST' });
+        },
+    },
+
+    // ---------------------------------------------------- Admin (superadmin)
     admin: {
-        async listUsers() {
+        listUsers() {
             return API.request('/admin/users');
         },
-        async createUser(username, password, role) {
+        createUser(username, password, role) {
             return API.request('/admin/users', {
                 method: 'POST',
                 body: JSON.stringify({ username, password, role }),
             });
         },
-        async deleteUser(username) {
-            return API.request(`/admin/users/${encodeURIComponent(username)}`, { method: 'DELETE' });
+        deleteUser(username) {
+            return API.request(`/admin/users/${encodeURIComponent(username)}`, {
+                method: 'DELETE',
+            });
         },
-        async setPassword(username, password) {
+        setPassword(username, password) {
             return API.request(`/admin/users/${encodeURIComponent(username)}/password`, {
                 method: 'PUT',
                 body: JSON.stringify({ password }),
             });
         },
-        async setRole(username, role) {
+        setRole(username, role) {
             return API.request(`/admin/users/${encodeURIComponent(username)}/role`, {
                 method: 'PUT',
                 body: JSON.stringify({ role }),
             });
         },
-        async audit(params = {}) {
-            const q = new URLSearchParams();
-            if (params.limit) q.set('limit', params.limit);
-            if (params.username) q.set('username', params.username);
-            if (params.action) q.set('action', params.action);
-            if (params.since) q.set('since', params.since);
-            const qs = q.toString();
+        audit(params = {}) {
+            const qs = new URLSearchParams(params).toString();
             return API.request(`/admin/audit${qs ? '?' + qs : ''}`);
         },
-        async getNotifications(channel) {
+
+        getNotifications(channel) {
             return API.request(`/admin/config/notifications/${channel}`);
         },
-        async saveNotifications(channel, cfg) {
+        saveNotifications(channel, cfg) {
             return API.request(`/admin/config/notifications/${channel}`, {
-                method: 'PUT', body: JSON.stringify(cfg),
+                method: 'PUT',
+                body: JSON.stringify(cfg),
             });
         },
-        async getAccPattern() {
+
+        getAccPattern() {
             return API.request('/admin/config/acc-pattern');
         },
-        async saveAccPattern(pattern) {
+        saveAccPattern(pattern) {
             return API.request('/admin/config/acc-pattern', {
-                method: 'PUT', body: JSON.stringify({ pattern }),
+                method: 'PUT',
+                body: JSON.stringify({ pattern }),
             });
         },
-        async getSchedule(channel) {
+
+        getSchedule(channel) {
             return API.request(`/admin/config/schedule/${channel}`);
         },
-        async saveSchedule(channel, time) {
+        saveSchedule(channel, time) {
             return API.request(`/admin/config/schedule/${channel}`, {
-                method: 'PUT', body: JSON.stringify({ time }),
+                method: 'PUT',
+                body: JSON.stringify({ time }),
             });
         },
-        async getElectricAddresses() {
+
+        getElectricAddresses() {
             return API.request('/admin/config/electric-addresses');
         },
-        async saveElectricAddresses(addresses) {
+        saveElectricAddresses(addresses) {
             return API.request('/admin/config/electric-addresses', {
-                method: 'PUT', body: JSON.stringify({ addresses }),
+                method: 'PUT',
+                body: JSON.stringify({ addresses }),
             });
         },
-        async listServers() { return API.request('/admin/config/servers'); },
-        async serviceTypes() { return API.request('/admin/config/service-types'); },
-        async reseedFromFile(section) {
+
+        reseedFromFile(section) {
             return API.request('/admin/config/reseed', {
-                method: 'POST', body: JSON.stringify({ section }),
+                method: 'POST',
+                body: JSON.stringify({ section }),
             });
         },
-        async getEnv() { return API.request('/admin/config/env'); },
-        async saveEnv(values) {
+
+        getEnv() {
+            return API.request('/admin/config/env');
+        },
+        saveEnv(values) {
             return API.request('/admin/config/env', {
-                method: 'PUT', body: JSON.stringify({ values }),
+                method: 'PUT',
+                body: JSON.stringify({ values }),
             });
         },
-        async getDnsZone() { return API.request('/admin/config/dns-zone'); },
-        async saveDnsZone(zone) {
+
+        getDnsZone() {
+            return API.request('/admin/config/dns-zone');
+        },
+        saveDnsZone(zone) {
             return API.request('/admin/config/dns-zone', {
-                method: 'PUT', body: JSON.stringify({ zone }),
+                method: 'PUT',
+                body: JSON.stringify({ zone }),
             });
         },
-        async getSshTimeout() { return API.request('/admin/config/ssh-timeout'); },
-        async saveSshTimeout(seconds) {
+
+        getSshTimeout() {
+            return API.request('/admin/config/ssh-timeout');
+        },
+        saveSshTimeout(seconds) {
             return API.request('/admin/config/ssh-timeout', {
                 method: 'PUT',
                 body: JSON.stringify({ seconds }),
             });
         },
-        async getAutoCheck() { return API.request('/admin/config/auto-check'); },
-        async saveAutoCheck(enabled, interval_seconds) {
+
+        getAutoCheck() {
+            return API.request('/admin/config/auto-check');
+        },
+        saveAutoCheck(enabled, interval_seconds) {
             return API.request('/admin/config/auto-check', {
                 method: 'PUT',
                 body: JSON.stringify({ enabled, interval_seconds }),
             });
         },
-        async createServer(s) {
-            return API.request('/admin/config/servers', { method: 'POST', body: JSON.stringify(s) });
-        },
-        async editServer(id, s) {
-            return API.request(`/admin/config/servers/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(s) });
-        },
-        async deleteServer(id) {
-            return API.request(`/admin/config/servers/${encodeURIComponent(id)}`, { method: 'DELETE' });
-        },
-        async listOlts() { return API.request('/admin/config/olts'); },
-        async createOlt(o) {
-            return API.request('/admin/config/olts', { method: 'POST', body: JSON.stringify(o) });
-        },
-        async editOlt(id, o) {
-            return API.request(`/admin/config/olts/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(o) });
-        },
-        async deleteOlt(id) {
-            return API.request(`/admin/config/olts/${encodeURIComponent(id)}`, { method: 'DELETE' });
-        },
-    },
 
-    async health() {
-        return API.request('/health');
+        listServers() {
+            return API.request('/admin/config/servers');
+        },
+        serviceTypes() {
+            return API.request('/admin/config/service-types');
+        },
+        createServer(s) {
+            return API.request('/admin/config/servers', {
+                method: 'POST',
+                body: JSON.stringify(s),
+            });
+        },
+        editServer(id, s) {
+            return API.request(`/admin/config/servers/${id}`, {
+                method: 'PUT',
+                body: JSON.stringify(s),
+            });
+        },
+        deleteServer(id) {
+            return API.request(`/admin/config/servers/${id}`, { method: 'DELETE' });
+        },
+
+        listOlts() {
+            return API.request('/admin/config/olts');
+        },
+        createOlt(o) {
+            return API.request('/admin/config/olts', {
+                method: 'POST',
+                body: JSON.stringify(o),
+            });
+        },
+        editOlt(id, o) {
+            return API.request(`/admin/config/olts/${id}`, {
+                method: 'PUT',
+                body: JSON.stringify(o),
+            });
+        },
+        deleteOlt(id) {
+            return API.request(`/admin/config/olts/${id}`, { method: 'DELETE' });
+        },
+
+        reloadConfig() {
+            return API.request('/admin/config/reload', { method: 'POST' });
+        },
     },
 };

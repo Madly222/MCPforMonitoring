@@ -5,27 +5,128 @@
 let currentUser = null;
 let refreshInterval = null;
 
+/**
+ * Custom Dialog System to replace window.alert, window.confirm, and window.prompt.
+ * All methods return Promises. You MUST use 'await' when calling them.
+ */
+const Dialog = {
+    overlay: null,
+    title: null,
+    message: null,
+    input: null,
+    footer: null,
+    closeBtn: null,
+    resolvePromise: null,
+
+    init() {
+        this.overlay = document.getElementById('customDialogOverlay');
+        this.title = document.getElementById('customDialogTitle');
+        this.message = document.getElementById('customDialogMessage');
+        this.input = document.getElementById('customDialogInput');
+        this.footer = document.getElementById('customDialogFooter');
+        this.closeBtn = document.getElementById('customDialogCloseBtn');
+
+        // Clicking the X button closes the dialog and returns false/null
+        this.closeBtn.addEventListener('click', () => this.close(this.input.classList.contains('hidden') ? false : null));
+    },
+
+    show(options) {
+        if (!this.overlay) this.init();
+
+        this.title.textContent = options.title || 'Notification';
+        this.message.textContent = options.message || '';
+        this.footer.innerHTML = ''; 
+        this.input.value = options.defaultValue || '';
+
+        if (options.type === 'prompt') {
+            this.input.classList.remove('hidden');
+            setTimeout(() => this.input.focus(), 100);
+        } else {
+            this.input.classList.add('hidden');
+        }
+
+        const btnContainer = document.createElement('div');
+        btnContainer.className = 'dialog-buttons';
+
+        // Add Cancel button for confirm/prompt types
+        if (options.type === 'confirm' || options.type === 'prompt') {
+            const cancelBtn = document.createElement('button');
+            cancelBtn.className = 'btn btn-secondary';
+            cancelBtn.textContent = 'Cancel';
+            cancelBtn.onclick = () => this.close(options.type === 'prompt' ? null : false);
+            btnContainer.appendChild(cancelBtn);
+        }
+
+        const okBtn = document.createElement('button');
+        okBtn.className = options.type === 'confirm' && options.danger ? 'btn btn-danger' : 'btn btn-primary';
+        okBtn.textContent = 'OK';
+        okBtn.onclick = () => {
+            const result = options.type === 'prompt' ? this.input.value : true;
+            this.close(result);
+        };
+        btnContainer.appendChild(okBtn);
+
+        this.footer.appendChild(btnContainer);
+        this.overlay.classList.add('active');
+
+        if (options.type === 'prompt') {
+            this.input.onkeydown = (e) => {
+                if (e.key === 'Enter') okBtn.click();
+            };
+        }
+
+        return new Promise((resolve) => {
+            this.resolvePromise = resolve;
+        });
+    },
+
+    close(value) {
+        this.overlay.classList.remove('active');
+        if (this.resolvePromise) {
+            this.resolvePromise(value);
+            this.resolvePromise = null;
+        }
+    },
+
+    async alert(message, title = 'System Message') {
+        return this.show({ type: 'alert', message, title });
+    },
+
+    async confirm(message, title = 'Confirmation', danger = false) {
+        return this.show({ type: 'confirm', message, title, danger });
+    },
+
+    async prompt(message, defaultValue = '', title = 'Input Required') {
+        return this.show({ type: 'prompt', message, defaultValue, title });
+    }
+};
+
 document.addEventListener('DOMContentLoaded', async () => {
     try {
         const authData = await API.auth.check();
         if (!authData.authenticated) {
-            window.location.href = '/login.html';
+            document.getElementById('app-view').classList.remove('active');
+            document.getElementById('login-view').classList.add('active');
             return;
         }
         currentUser = { username: authData.username, role: authData.role };
+        // shared with onu.js / router.js for role-gated controls
+        window.currentUser = currentUser;
         initializeUI();
         await loadServerStatus();
         populateConsoleServers();
         checkClaudeHealth();
+        checkNetboxHealth();
+        setupUtilityIndicators();
+        setupRestartButton();
         await setupAutoRefresh();
     } catch (error) {
         console.error('Auth check failed:', error);
-        window.location.href = '/login.html';
+        document.getElementById('app-view').classList.remove('active');
+        document.getElementById('login-view').classList.add('active');
     }
 });
 
-// Configure the dashboard's automatic connection re-check from the saved setting
-// (superadmin panel → auto connection-check). Can be re-run to apply changes.
 async function setupAutoRefresh() {
     if (refreshInterval) { clearInterval(refreshInterval); refreshInterval = null; }
     let cfg = { enabled: true, interval_seconds: 30 };
@@ -40,27 +141,43 @@ async function setupAutoRefresh() {
 }
 
 function initializeUI() {
-    document.getElementById('username').textContent = currentUser.username;
-    document.getElementById('userRole').textContent = currentUser.role;
+    const userEl = document.getElementById('display-username');
+    if (userEl) userEl.textContent = currentUser.username;
+    
+    const roleEl = document.getElementById('userRole');
+    if (roleEl) roleEl.textContent = currentUser.role;
+    
     document.getElementById('logoutBtn').addEventListener('click', handleLogout);
-    document.getElementById('executeBtn').addEventListener('click', handleExecute);
-    document.getElementById('commandInput').addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') handleExecute();
-    });
-    document.getElementById('modalClose').addEventListener('click', closeModal);
-    document.getElementById('modalCloseBtn').addEventListener('click', closeModal);
-    document.getElementById('serverModal').addEventListener('click', (e) => {
-        if (e.target.id === 'serverModal') closeModal();
-    });
+    
+    const executeBtn = document.getElementById('executeBtn');
+    if (executeBtn) executeBtn.addEventListener('click', handleExecute);
+    
+    const cmdInput = document.getElementById('commandInput');
+    if (cmdInput) {
+        cmdInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') handleExecute();
+        });
+    }
+
+    const modalClose = document.getElementById('modalClose');
+    if (modalClose) modalClose.addEventListener('click', closeModal);
+    
+    const modalCloseBtn = document.getElementById('modalCloseBtn');
+    if (modalCloseBtn) modalCloseBtn.addEventListener('click', closeModal);
+    
+    const serverModal = document.getElementById('serverModal');
+    if (serverModal) {
+        serverModal.addEventListener('click', (e) => {
+            if (e.target.id === 'serverModal') closeModal();
+        });
+    }
 }
 
 async function handleLogout() {
     try { await API.auth.logout(); } catch (e) {}
-    window.location.href = '/login.html';
+    window.location.reload();
 }
 
-// Single delegated handler on the grid so dynamically re-rendered cards
-// (skeletons, retries) keep working without ever double-binding.
 let _serversGridBound = false;
 function bindServersGrid() {
     if (_serversGridBound) return;
@@ -73,7 +190,6 @@ function bindServersGrid() {
             return;
         }
         const card = e.target.closest('.server-card');
-        // Don't open details for a card that's still checking or unreachable.
         if (card && card.dataset.serverId && !card.classList.contains('checking')
             && !card.classList.contains('disconnected')) {
             showServerDetails(card.dataset.serverId);
@@ -92,17 +208,12 @@ async function loadServerStatus() {
     const grid = document.getElementById('serversGrid');
     bindServersGrid();
 
-    // 1) Fast skeleton from /servers (no SSH): every server immediately shows a
-    //    loading spinner, and a slow/dead host can no longer blank the grid.
     let configured = [];
     try {
         const list = await API.servers.list();
-        // Never probe/show servers marked enabled:false — they're excluded here
-        // and also on the backend (/status returns only enabled servers).
         configured = (list.servers || []).filter(s => s.enabled !== false);
     } catch (error) {
         console.error('Failed to load server list:', error);
-        updateConnectionStatus(false);
         grid.innerHTML = '<p class="loading">Failed to load servers</p>';
         return;
     }
@@ -113,7 +224,6 @@ async function loadServerStatus() {
     }
 
     grid.innerHTML = configured.map(s => createServerCard(s, 'checking')).join('');
-    updateConnectionStatus(true);
 
     // 2) Real status. Each server is independent: the endpoint returns one entry
     //    per server (dead ones as connected=false), so a single failure only
@@ -121,18 +231,15 @@ async function loadServerStatus() {
     try {
         const data = await API.servers.status();
         grid.innerHTML = data.servers.map(s => createServerCard(s)).join('');
-        updateConnectionStatus(true);
     } catch (error) {
         console.error('Failed to load status:', error);
-        updateConnectionStatus(false);
         grid.innerHTML = configured.map(s => createServerCard({
             id: s.id, host: s.host, enabled: s.enabled,
-            connected: false, services: [], error: 'Не удалось получить статус'
+            connected: false, services: [], error: 'Failed to retrieve status'
         })).join('');
     }
 }
 
-// Per-server retry: re-probe only this host and repaint only its card.
 async function retryServer(serverId) {
     const replaceCard = (html) => {
         const el = document.querySelector(`.server-card[data-server-id="${serverId}"]`);
@@ -142,15 +249,15 @@ async function retryServer(serverId) {
     const host = existing ? (existing.querySelector('.server-host')?.textContent || '') : '';
     const out = document.getElementById('outputArea');
 
-    if (out) out.textContent = `Переподключение к ${serverId}…`;
+    if (out) out.textContent = `Reconnecting to ${serverId}...`;
     replaceCard(createServerCard({ id: serverId, host }, 'checking'));
     try {
         const status = await API.servers.reconnect(serverId);
         replaceCard(createServerCard(status));
         if (out) {
             out.textContent = status.connected
-                ? `OK: ${serverId} — соединение восстановлено`
-                : `${serverId} — НЕ ОТВЕЧАЕТ\n\n${status.error || 'причина неизвестна'}`;
+                ? `OK: ${serverId} — connection restored`
+                : `${serverId} — NOT RESPONDING\n\n${status.error || 'unknown reason'}`;
         }
     } catch (error) {
         console.error('Retry failed for', serverId, error);
@@ -158,7 +265,7 @@ async function retryServer(serverId) {
         replaceCard(createServerCard({
             id: serverId, host, connected: false, services: [], error: msg
         }));
-        if (out) out.textContent = `${serverId} — ошибка запроса\n\n${msg}`;
+        if (out) out.textContent = `${serverId} — request error\n\n${msg}`;
     }
 }
 
@@ -168,69 +275,76 @@ function createServerCard(server, state) {
 
     if (state === 'checking') {
         return `
-        <div class="server-card checking" data-server-id="${server.id}">
-            <div class="server-card-header">
-                <div class="server-name"><span class="spinner spinner-sm"></span>${server.id}</div>
+        <div class="card server-card checking" data-server-id="${server.id}">
+            <div class="card-header">
+                <div class="flex align-center gap-2">
+                    <span class="dot" style="background:#888; animation: pulse 1.5s infinite;"></span>
+                    ${server.id}
+                </div>
             </div>
-            <div class="server-host">${server.host || ''}</div>
-            <div class="server-state-label">Проверка подключения…</div>
+            <div class="text-muted mb-3">${server.host || ''}</div>
+            <div class="text-muted" style="font-size: 12px;">Checking connection...</div>
         </div>`;
     }
 
     if (state === 'error') {
         const errMsg = server.error
-            ? `<div class="server-error-msg">${escapeHtml(server.error)}</div>` : '';
+            ? `<div class="error-message mt-3" style="font-size: 12px;">${escapeHtml(server.error)}</div>` : '';
         return `
-        <div class="server-card disconnected" data-server-id="${server.id}">
-            <div class="server-card-header">
-                <div class="server-name"><span class="status-dot status-error"></span>${server.id}</div>
-                <span class="server-state-label error">Не отвечает</span>
+        <div class="card server-card disconnected" data-server-id="${server.id}">
+            <div class="card-header" style="justify-content: space-between;">
+                <div class="flex align-center gap-2">
+                    <span class="dot error"></span>
+                    ${server.id}
+                </div>
+                <span class="role-badge" style="background: rgba(218,54,51,0.1); color: #ff7b72;">Unresponsive</span>
             </div>
-            <div class="server-host">${server.host || ''}</div>
+            <div class="text-muted">${server.host || ''}</div>
             ${errMsg}
-            <button class="server-retry" data-server-id="${server.id}" type="button">&#8635; Повторить попытку</button>
+            <button class="btn btn-outline btn-sm server-retry w-100 mt-4" data-server-id="${server.id}" type="button">🔄 Retry</button>
         </div>`;
     }
 
     // connected
-    const statusClass = 'status-ok';
-    const cardClass = '';
-
     const servicesHtml = server.services.map(service => {
-        const running = service.running ? 'running' : 'stopped';
-        const icon = service.health === 'healthy' ? '&#10004;' : service.health === 'unhealthy' ? '&#10008;' : '?';
+        const icon = service.health === 'healthy' ? '✓' : '✕';
+        const dotClass = service.running ? 'ok' : 'error';
         return `
-            <div class="service-item">
-                <span class="service-name">
-                    <span class="status-dot ${service.running ? 'status-ok' : 'status-error'}"></span>
+            <div class="flex align-center" style="justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--border-base);">
+                <span class="flex align-center gap-2" style="font-size: 13px;">
+                    <span class="dot ${dotClass}"></span>
                     ${service.name || service.type}
                 </span>
-                <span class="service-status ${running}">${icon} ${service.running ? 'Running' : 'Stopped'}</span>
+                <span class="text-muted" style="font-size: 12px;">${icon} ${service.running ? 'Running' : 'Stopped'}</span>
             </div>`;
     }).join('');
 
-    const systemInfo = server.system_info ? `<div class="server-info"><small>Load: ${server.system_info.load || 'N/A'}</small></div>` : '';
+    const systemInfo = server.system_info ? `<div class="text-muted mt-3 mb-3" style="font-size: 12px;">Load: ${server.system_info.load || 'N/A'}</div>` : '';
     
     // Updates indicator
     let updatesHtml = '';
     if (server.updates) {
-        const updatesClass = server.updates.available > 0 ? 'updates-available' : 'updates-ok';
-        const updatesIcon = server.updates.available > 0 ? '&#8593;' : '&#10004;';
         const updatesTitle = server.updates.available > 0 
             ? `${server.updates.available} updates available (${server.updates.security} security)`
             : 'System up to date';
-        updatesHtml = `<span class="updates-indicator ${updatesClass}" title="${updatesTitle}">${updatesIcon}</span>`;
+        const updateColor = server.updates.available > 0 ? 'color: var(--accent-yellow);' : 'color: var(--accent-green);';
+        updatesHtml = `<span class="role-badge" style="${updateColor}" title="${updatesTitle}">
+            ${server.updates.available > 0 ? '⚠️ Updates' : '✓ Up to date'}
+        </span>`;
     }
 
     return `
-        <div class="server-card ${cardClass}" data-server-id="${server.id}">
-            <div class="server-card-header">
-                <div class="server-name"><span class="status-dot ${statusClass}"></span>${server.id}</div>
+        <div class="card server-card" data-server-id="${server.id}" style="cursor: pointer; transition: border-color 0.2s;">
+            <div class="card-header" style="justify-content: space-between;">
+                <div class="flex align-center gap-2">
+                    <span class="dot ok"></span>
+                    ${server.id}
+                </div>
                 ${updatesHtml}
             </div>
-            <div class="server-host">${server.host}</div>
+            <div class="text-muted">${server.host}</div>
             ${systemInfo}
-            <div class="server-services">${servicesHtml || '<p>No services</p>'}</div>
+            <div class="mt-2">${servicesHtml || '<p class="text-muted">No services</p>'}</div>
         </div>`;
 }
 
@@ -244,7 +358,7 @@ async function showServerDetails(serverId) {
     modal.classList.add('active');
 
     try {
-        const data = await API.request('/servers/' + serverId + '/info');
+        const data = await API.servers.info(serverId);
         
         let html = '<div class="server-info-grid">';
         
@@ -298,7 +412,7 @@ async function showServerDetails(serverId) {
                 serverData.services.forEach(function(service) {
                     var icon = service.running ? '&#128994;' : '&#128308;';
                     html += '<div class="service-row"><div class="service-info"><strong>' + icon + ' ' + (service.name || service.type) + '</strong><span class="service-health">(' + (service.health || 'unknown') + ')</span></div>';
-                    if (currentUser.role === 'admin' || currentUser.role === 'superadmin') {
+                    if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'superadmin')) {
                         html += '<div class="service-actions">';
                         html += '<button class="btn btn-sm btn-success" onclick="performAction(\'' + serverId + '\', \'' + service.type + '\', \'restart\')">Restart</button>';
                         html += '<button class="btn btn-sm btn-secondary" onclick="performAction(\'' + serverId + '\', \'' + service.type + '\', \'stop\')">Stop</button>';
@@ -310,8 +424,8 @@ async function showServerDetails(serverId) {
             }
         } catch (e) { console.log('Services error:', e); }
         
-        // Admin actions (without Install Updates)
-        if (currentUser.role === 'admin' || currentUser.role === 'superadmin') {
+        // Admin actions
+        if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'superadmin')) {
             html += '<div class="admin-actions"><h4>&#9889; System Actions</h4><div class="action-buttons">';
             html += '<button class="btn btn-secondary" onclick="checkUpdates(\'' + serverId + '\')">Check Updates</button>';
             html += '<button class="btn btn-secondary" onclick="showServerDetails(\'' + serverId + '\')">Refresh</button>';
@@ -325,17 +439,16 @@ async function showServerDetails(serverId) {
 }
 
 async function checkUpdates(serverId) {
-    var output = document.getElementById('outputArea');
+    const output = document.getElementById('outputArea');
     output.textContent = 'Checking updates on ' + serverId + '...';
     try {
-        var result = await API.request('/servers/' + serverId + '/updates/check', { method: 'POST' });
+        const result = await API.servers.checkUpdates(serverId);
         if (result.success) {
             output.textContent = 'OK: ' + result.message + '\n\nPackages:\n' + (result.packages.join('\n') || 'None');
         } else {
             output.textContent = 'Error: ' + result.message + '\n\n' + (result.output || '');
         }
         addToHistory('check updates ' + serverId, result.success);
-        // Refresh server list to update indicator
         await loadServerStatus();
     } catch (error) {
         output.textContent = 'Error: ' + error.message;
@@ -344,7 +457,8 @@ async function checkUpdates(serverId) {
 }
 
 async function performAction(serverId, serviceType, action) {
-    if (!confirm(action + ' ' + serviceType + ' on ' + serverId + '?')) return;
+    const isConfirmed = await Dialog.confirm(action + ' ' + serviceType + ' on ' + serverId + '?');
+    if (!isConfirmed) return;
     var output = document.getElementById('outputArea');
     output.textContent = 'Performing ' + action + '...';
     try {
@@ -441,14 +555,23 @@ async function checkClaudeHealth() {
         var h = await API.claude.health();
         if (h.ok) {
             dot.style.background = '#3fb950';
-            if (wrap) wrap.title = 'Claude API: OK (' + (h.model || '') + ')';
+            if (wrap) {
+                wrap.title = 'Claude API: OK (' + (h.model || '') + ')';
+                wrap.classList.remove('error');
+            }
         } else {
             dot.style.background = '#f85149';
-            if (wrap) wrap.title = 'Claude API: ERROR — ' + (h.error || 'unknown');
+            if (wrap) {
+                wrap.title = 'Claude API: ERROR — ' + (h.error || 'unknown');
+                wrap.classList.add('error');
+            }
         }
     } catch (e) {
         dot.style.background = '#f85149';
-        if (wrap) wrap.title = 'Claude API: unreachable';
+        if (wrap) {
+            wrap.title = 'Claude API: unreachable';
+            wrap.classList.add('error');
+        }
     }
 }
 
@@ -465,19 +588,147 @@ function addToHistory(command, success) {
     while (list.children.length > 20) list.removeChild(list.lastChild);
 }
 
-function updateConnectionStatus(connected) {
-    var dot = document.querySelector('.connection-status .status-dot');
-    var text = document.getElementById('statusText');
-    dot.className = 'status-dot ' + (connected ? 'status-ok' : 'status-error');
-    text.textContent = connected ? 'Connected' : 'Disconnected';
-}
-
 function closeModal() {
     document.getElementById('serverModal').classList.remove('active');
 }
 
-function escapeHtml(text) {
-    var div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+async function checkNetboxHealth() {
+    var dot = document.getElementById('netboxDot');
+    var wrap = document.getElementById('netboxStatus');
+    if (!dot) return;
+    try {
+        var h = await API.netbox.health();
+        if (h.netbox && h.ok) {
+            dot.style.background = '#3fb950';
+            if (wrap) {
+                wrap.title = 'NetBox API: OK (v' + (h.netbox.version || '?') + ')';
+                wrap.classList.remove('error');
+            }
+        } else {
+            dot.style.background = '#f85149';
+            if (wrap) {
+                wrap.title = 'NetBox API: ERROR';
+                wrap.classList.add('error');
+            }
+        }
+    } catch (e) {
+        dot.style.background = '#f85149';
+        if (wrap) {
+            wrap.title = 'NetBox API: unreachable';
+            wrap.classList.add('error');
+        }
+    }
+}
+
+
+/* =========================================================================
+   HEADER UTILITY INDICATORS (electricity / water) + SERVICE RESTART
+
+   Ported out of the inline <script> blocks that used to sit at the bottom of
+   index.html. They are plain named functions here, called once from the
+   DOMContentLoaded handler above, so nothing ends up nested inside an
+   unrelated IIFE.
+========================================================================= */
+
+const UTILITY_REFRESH_MS = 30 * 60 * 1000;
+
+function setupUtilityIndicators() {
+    setupUtilityIndicator({
+        wrapId: 'electricStatus',
+        dotId: 'electricDot',
+        label: 'Electricity',
+        statusFn: () => API.electric.status(),
+        checkFn: () => API.electric.check(),
+    });
+    setupUtilityIndicator({
+        wrapId: 'waterStatus',
+        dotId: 'waterDot',
+        label: 'Water',
+        statusFn: () => API.acc.status(),
+        checkFn: () => API.acc.check(),
+    });
+}
+
+function setupUtilityIndicator({ wrapId, dotId, label, statusFn, checkFn }) {
+    const wrap = document.getElementById(wrapId);
+    const dot = document.getElementById(dotId);
+    if (!wrap || !dot) return;
+
+    let last = null;
+
+    function paint(state, title) {
+        dot.classList.remove('ok', 'warning', 'error', 'checking');
+        if (state) dot.classList.add(state);
+        wrap.title = title;
+    }
+
+    async function refresh() {
+        try {
+            const data = await statusFn();
+            last = data;
+            if (data.ok) {
+                paint('ok', label + ': OK' + (data.last_check
+                    ? '\nChecked: ' + new Date(data.last_check).toLocaleString()
+                    : ''));
+            } else {
+                paint('error', '⚠️ Possible ' + label.toLowerCase() + ' outage!'
+                    + '\nMatches: ' + (data.matches_count ?? 0)
+                    + (data.last_check ? '\nChecked: ' + new Date(data.last_check).toLocaleString() : ''));
+            }
+        } catch (e) {
+            paint('warning', label + ': status unavailable');
+        }
+    }
+
+    wrap.addEventListener('click', async () => {
+        if (last && !last.ok && Array.isArray(last.matches) && last.matches.length > 0) {
+            alert('⚠️ Possible ' + label.toLowerCase() + ' outage!\n\n' + last.matches.join('\n\n'));
+            return;
+        }
+        paint('checking', label + ': checking...');
+        try {
+            const data = await checkFn();
+            last = data;
+            if (data.ok) {
+                paint('ok', label + ': OK');
+                alert('✅ No ' + label.toLowerCase() + ' outages found');
+            } else {
+                paint('error', '⚠️ Possible ' + label.toLowerCase() + ' outage!');
+                alert('⚠️ Possible ' + label.toLowerCase() + ' outage!\n\n'
+                    + (data.matches || []).join('\n\n'));
+            }
+        } catch (e) {
+            paint('warning', label + ': check failed');
+            alert('Check failed: ' + e.message);
+        }
+    });
+
+    refresh();
+    setInterval(refresh, UTILITY_REFRESH_MS);
+}
+
+function setupRestartButton() {
+    const btn = document.getElementById('restartBtn');
+    if (!btn) return;
+
+    btn.addEventListener('click', async () => {
+        if (!confirm('Restart the mcp-monitor service? The connection will drop briefly.')) return;
+
+        btn.disabled = true;
+        btn.style.opacity = '0.5';
+        try {
+            const result = await API.service.restart();
+            if (result.success) {
+                alert('✅ ' + result.message + '\n\nReloading in 5 seconds...');
+                setTimeout(() => location.reload(), 5000);
+            } else {
+                alert('❌ Error: ' + result.message);
+            }
+        } catch (e) {
+            alert('❌ Error: ' + e.message);
+        } finally {
+            btn.disabled = false;
+            btn.style.opacity = '1';
+        }
+    });
 }
