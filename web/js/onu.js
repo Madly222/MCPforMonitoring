@@ -121,7 +121,7 @@ async function pollSelectedOlt() {
         await loadOnuData();
         if (res && res.message) console.info(res.message);
     } catch (e) {
-        alert('Poll failed: ' + e.message);
+        await Dialog.alert('Poll failed: ' + e.message, 'ONU polling');
     } finally {
         const b = document.getElementById('pollOltBtn');
         if (b) { b.disabled = false; b.textContent = '📡 Poll now'; }
