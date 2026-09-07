@@ -598,16 +598,19 @@ async function checkNetboxHealth() {
     if (!dot) return;
     try {
         var h = await API.netbox.health();
-        if (h.netbox && h.ok) {
+        // GET /api/netbox/health returns {status:'ok'|'degraded', netbox:{connected,version|error}}
+        // — there is no top-level `ok` field (that was the mock's shape).
+        var nb = h.netbox || {};
+        if (h.status === 'ok' && nb.connected) {
             dot.style.background = '#3fb950';
             if (wrap) {
-                wrap.title = 'NetBox API: OK (v' + (h.netbox.version || '?') + ')';
+                wrap.title = 'NetBox API: OK (v' + (nb.version || '?') + ')';
                 wrap.classList.remove('error');
             }
         } else {
             dot.style.background = '#f85149';
             if (wrap) {
-                wrap.title = 'NetBox API: ERROR';
+                wrap.title = 'NetBox API: ERROR' + (nb.error ? ' — ' + nb.error : '');
                 wrap.classList.add('error');
             }
         }
