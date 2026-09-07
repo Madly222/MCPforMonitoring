@@ -345,6 +345,20 @@ def get_servers() -> list[dict]:
     return list(_load().get("servers", []))
 
 
+def clear_servers() -> None:
+    """Drop the servers section so it re-seeds from secrets.yaml on next load.
+
+    Used by the 'Reload from secrets.yaml' action — discards runtime edits for
+    servers and lets the file become authoritative again for that section.
+    """
+    with _lock:
+        data = _load()
+        if "servers" in data:
+            del data["servers"]
+            _save(data)
+    logger.info("Server store cleared — will re-seed from secrets.yaml")
+
+
 def _save_servers(servers: list[dict]) -> None:
     with _lock:
         data = _load()
@@ -398,6 +412,16 @@ def seed_olts(defaults: list[dict]) -> None:
 
 def get_olts() -> list[dict]:
     return list(_load().get("olts", []))
+
+
+def clear_olts() -> None:
+    """Drop the OLTs section so it re-seeds from secrets.yaml on next load."""
+    with _lock:
+        data = _load()
+        if "olts" in data:
+            del data["olts"]
+            _save(data)
+    logger.info("OLT store cleared — will re-seed from secrets.yaml")
 
 
 def _save_olts(olts: list[dict]) -> None:

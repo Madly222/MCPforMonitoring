@@ -59,6 +59,22 @@ class UserStore:
 
         self._seed_from_secrets()
 
+    def reseed_from_secrets(self) -> int:
+        """Discard the user store and re-seed from secrets.yaml web_users.
+
+        Destructive: web-created users are removed and passwords reset to whatever
+        secrets.yaml holds. Used by the 'Reload from secrets.yaml' action.
+        """
+        with self._lock:
+            try:
+                if USERS_FILE.exists():
+                    USERS_FILE.unlink()
+            except Exception as e:
+                logger.error(f"Could not remove user store: {e}")
+            self._users = {}
+            self._seed_from_secrets()
+            return len(self._users)
+
     def _seed_from_secrets(self) -> None:
         """Populate the store from secrets.yaml web_users (first run only)."""
         try:
