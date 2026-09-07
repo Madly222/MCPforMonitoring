@@ -443,6 +443,32 @@ async def set_ssh_timeout_ep(
     return {"success": True, "seconds": value}
 
 
+@router.get("/config/command-timeout")
+async def get_command_timeout_ep(user: UserInfo = Depends(require_superadmin)):
+    """Get the per-command execution timeout (seconds)."""
+    return {"seconds": rc.get_command_timeout()}
+
+
+@router.put("/config/command-timeout")
+async def set_command_timeout_ep(
+    body: dict,
+    request: Request,
+    user: UserInfo = Depends(require_superadmin),
+):
+    """Set the per-command execution timeout. Applies live — no restart needed."""
+    try:
+        value = rc.set_command_timeout(body.get("seconds"))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    get_audit_logger().log(
+        action="settings_command_timeout",
+        username=user.username, role=user.role,
+        detail=f"seconds={value}",
+        success=True, ip=_client_ip(request),
+    )
+    return {"success": True, "seconds": value}
+
+
 @router.get("/config/auto-check")
 async def get_auto_check_ep(user: UserInfo = Depends(require_superadmin)):
     """Get the dashboard auto connection-check setting."""

@@ -22,6 +22,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.getElementById('saveScheduleBtn').addEventListener('click', saveSchedule);
             document.getElementById('saveAutoCheckBtn').addEventListener('click', saveAutoCheck);
             document.getElementById('saveSshTimeoutBtn').addEventListener('click', saveSshTimeout);
+            document.getElementById('saveCommandTimeoutBtn').addEventListener('click', saveCommandTimeout);
             document.getElementById('saveDnsZoneBtn').addEventListener('click', saveDnsZone);
             document.getElementById('saveEnvBtn').addEventListener('click', saveEnv);
             document.getElementById('reseedServersBtn').addEventListener('click', () => reseedFromFile('servers'));
@@ -203,6 +204,10 @@ async function loadSettings() {
     try {
         const st = await API.admin.getSshTimeout();
         document.getElementById('sshTimeout').value = st.seconds || 8;
+    } catch (e) { /* ignore */ }
+    try {
+        const ct = await API.admin.getCommandTimeout();
+        document.getElementById('commandTimeout').value = ct.seconds || 20;
     } catch (e) { /* ignore */ }
     try {
         const ac = await API.admin.getAutoCheck();
@@ -392,6 +397,18 @@ async function saveSshTimeout() {
         const r = await API.admin.saveSshTimeout(seconds);
         loadAudit();
         await Dialog.alert(`SSH connect timeout saved — ${r.seconds}s (applies immediately)`);
+    } catch (e) {
+        await Dialog.alert('Error: ' + e.message);
+    }
+}
+
+async function saveCommandTimeout() {
+    const seconds = parseInt(document.getElementById('commandTimeout').value, 10);
+    if (!seconds || seconds < 5 || seconds > 600) { await Dialog.alert('Timeout must be between 5 and 600 seconds'); return; }
+    try {
+        const r = await API.admin.saveCommandTimeout(seconds);
+        loadAudit();
+        await Dialog.alert(`Command execution timeout saved — ${r.seconds}s (applies immediately)`);
     } catch (e) {
         await Dialog.alert('Error: ' + e.message);
     }

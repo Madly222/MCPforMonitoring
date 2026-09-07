@@ -396,6 +396,14 @@
                                     </div>
 
                                     <div class="card settings-card">
+                                        <div class="card-header">Command Execution Timeout</div>
+                                        <label class="form-label">Timeout (seconds)</label>
+                                        <input class="form-control mb-3" type="number" id="commandTimeout" min="5" max="600" value="20">
+                                        <button class="btn btn-primary" id="saveCommandTimeoutBtn">Save Timeout</button>
+                                        <p class="form-hint">How long a single command may run in the terminal before it is aborted. Separate from the SSH connection timeout above, which only covers connect and auth.</p>
+                                    </div>
+
+                                    <div class="card settings-card">
                                         <div class="card-header">DNS Test Zone</div>
                                         <label class="form-label">Zone</label>
                                         <input class="form-control mb-3" id="dnsTestZone" placeholder="example.com">

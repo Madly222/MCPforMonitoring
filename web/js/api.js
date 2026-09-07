@@ -310,6 +310,16 @@ const API = {
             });
         },
 
+        getCommandTimeout() {
+            return API.request('/admin/config/command-timeout');
+        },
+        saveCommandTimeout(seconds) {
+            return API.request('/admin/config/command-timeout', {
+                method: 'PUT',
+                body: JSON.stringify({ seconds }),
+            });
+        },
+
         getAutoCheck() {
             return API.request('/admin/config/auto-check');
         },
