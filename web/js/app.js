@@ -685,7 +685,7 @@ function setupUtilityIndicator({ wrapId, dotId, label, statusFn, checkFn }) {
 
     wrap.addEventListener('click', async () => {
         if (last && !last.ok && Array.isArray(last.matches) && last.matches.length > 0) {
-            alert('⚠️ Possible ' + label.toLowerCase() + ' outage!\n\n' + last.matches.join('\n\n'));
+            await Dialog.alert('⚠️ Possible ' + label.toLowerCase() + ' outage!\n\n' + last.matches.join('\n\n'), label);
             return;
         }
         paint('checking', label + ': checking...');
@@ -694,15 +694,15 @@ function setupUtilityIndicator({ wrapId, dotId, label, statusFn, checkFn }) {
             last = data;
             if (data.ok) {
                 paint('ok', label + ': OK');
-                alert('✅ No ' + label.toLowerCase() + ' outages found');
+                await Dialog.alert('✅ No ' + label.toLowerCase() + ' outages found', label);
             } else {
                 paint('error', '⚠️ Possible ' + label.toLowerCase() + ' outage!');
-                alert('⚠️ Possible ' + label.toLowerCase() + ' outage!\n\n'
-                    + (data.matches || []).join('\n\n'));
+                await Dialog.alert('⚠️ Possible ' + label.toLowerCase() + ' outage!\n\n'
+                    + (data.matches || []).join('\n\n'), label);
             }
         } catch (e) {
             paint('warning', label + ': check failed');
-            alert('Check failed: ' + e.message);
+            await Dialog.alert('Check failed: ' + e.message, label);
         }
     });
 
@@ -715,20 +715,25 @@ function setupRestartButton() {
     if (!btn) return;
 
     btn.addEventListener('click', async () => {
-        if (!confirm('Restart the mcp-monitor service? The connection will drop briefly.')) return;
+        const ok = await Dialog.confirm(
+            'Restart the mcp-monitor service? The connection will drop briefly.',
+            'Restart service',
+            true
+        );
+        if (!ok) return;
 
         btn.disabled = true;
         btn.style.opacity = '0.5';
         try {
             const result = await API.service.restart();
             if (result.success) {
-                alert('✅ ' + result.message + '\n\nReloading in 5 seconds...');
+                Dialog.alert(result.message + '\n\nReloading in 5 seconds...', 'Restart service');
                 setTimeout(() => location.reload(), 5000);
             } else {
-                alert('❌ Error: ' + result.message);
+                await Dialog.alert('Error: ' + result.message, 'Restart service');
             }
         } catch (e) {
-            alert('❌ Error: ' + e.message);
+            await Dialog.alert('Error: ' + e.message, 'Restart service');
         } finally {
             btn.disabled = false;
             btn.style.opacity = '1';
