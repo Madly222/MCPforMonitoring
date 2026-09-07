@@ -1493,9 +1493,12 @@ async def console_exec(
         ip=client_ip,
     )
 
+    from src.web import runtime_config as rc
+    cmd_timeout = float(rc.get_command_timeout())
+
     try:
         if request.sudo:
-            result = await ssh.execute_sudo(server_id, command)
+            result = await ssh.execute_sudo(server_id, command, timeout=cmd_timeout)
         else:
             # Non-login SSH shells often have a minimal PATH, so binaries like
             # systemctl/ss/ip are "not found". Prepend a sane PATH.
@@ -1503,7 +1506,7 @@ async def console_exec(
                 "export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH; "
                 + command
             )
-            result = await ssh.execute(server_id, wrapped)
+            result = await ssh.execute(server_id, wrapped, timeout=cmd_timeout)
         return {
             "success": result.success,
             "exit_code": result.exit_code,

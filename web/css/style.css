@@ -1296,6 +1296,13 @@ td code, .cell-code {
 }
 .admin-form-title { font-size: var(--text-sm); font-weight: 700; color: var(--text-primary); margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
 .admin-form-title .immutable-hint { font-size: var(--text-2xs); font-weight: 500; color: var(--text-disabled); text-transform: none; }
+.form-hint {
+    margin: 8px 0 0;
+    font-size: var(--text-xs);
+    color: var(--text-tertiary);
+    line-height: 1.45;
+}
+
 .admin-form-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 14px; }
 .admin-form-grid .form-group { margin-bottom: 0; }
 @media (max-width: 900px) { .admin-form-grid { grid-template-columns: 1fr 1fr; } }

@@ -320,6 +320,44 @@ def set_ssh_timeout(seconds) -> int:
     return value
 
 
+_DEFAULT_COMMAND_TIMEOUT = 20
+_MIN_COMMAND_TIMEOUT = 5
+_MAX_COMMAND_TIMEOUT = 600
+
+
+def get_command_timeout() -> int:
+    """Return the per-command execution timeout in seconds.
+
+    Distinct from get_ssh_timeout(), which only covers connect + auth. This one
+    bounds how long an already-running command may take before it is aborted.
+    """
+    stored = _load().get("command_timeout", _DEFAULT_COMMAND_TIMEOUT)
+    try:
+        value = int(stored)
+    except (TypeError, ValueError):
+        return _DEFAULT_COMMAND_TIMEOUT
+    if value < _MIN_COMMAND_TIMEOUT or value > _MAX_COMMAND_TIMEOUT:
+        return _DEFAULT_COMMAND_TIMEOUT
+    return value
+
+
+def set_command_timeout(seconds) -> int:
+    """Persist the per-command execution timeout. Returns the normalized value."""
+    try:
+        value = int(seconds)
+    except (TypeError, ValueError):
+        raise ValueError("Timeout must be an integer number of seconds")
+    if value < _MIN_COMMAND_TIMEOUT or value > _MAX_COMMAND_TIMEOUT:
+        raise ValueError(
+            f"Timeout must be between {_MIN_COMMAND_TIMEOUT} and {_MAX_COMMAND_TIMEOUT} seconds"
+        )
+    with _lock:
+        data = _load()
+        data["command_timeout"] = value
+        _save(data)
+    return value
+
+
 # ==============================================================================
 # SERVERS STORE  (seed-and-own, like the user store)
 # ==============================================================================
