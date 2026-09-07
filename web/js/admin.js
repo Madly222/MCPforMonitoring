@@ -22,6 +22,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.getElementById('saveSshTimeoutBtn').addEventListener('click', saveSshTimeout);
             document.getElementById('saveDnsZoneBtn').addEventListener('click', saveDnsZone);
             document.getElementById('saveEnvBtn').addEventListener('click', saveEnv);
+            document.getElementById('reseedServersBtn').addEventListener('click', () => reseedFromFile('servers'));
+            document.getElementById('reseedOltsBtn').addEventListener('click', () => reseedFromFile('olts'));
+            document.getElementById('reseedUsersBtn').addEventListener('click', () => reseedFromFile('users'));
             document.getElementById('envFilter').addEventListener('input', filterEnv);
         }
     } catch (e) {
@@ -313,6 +316,21 @@ async function saveDnsZone() {
         const r = await API.admin.saveDnsZone(zone);
         loadAudit();
         alert(`DNS test zone saved — ${r.zone}`);
+    } catch (e) {
+        alert('Error: ' + e.message);
+    }
+}
+
+async function reseedFromFile(section) {
+    if (!confirm(`Reload ${section} from secrets.yaml?\n\nThis DISCARDS panel edits for ${section} and re-reads the file.`)) return;
+    try {
+        const r = await API.admin.reseedFromFile(section);
+        loadAudit();
+        if ((section === 'servers' || section === 'olts') && typeof loadServersAdmin === 'function') loadServersAdmin();
+        if (section === 'users' && typeof loadUsers === 'function') loadUsers();
+        alert(r.detail + (r.restart_recommended
+            ? '\n\nRestart to fully apply:\n  sudo systemctl restart mcp-monitor'
+            : ''));
     } catch (e) {
         alert('Error: ' + e.message);
     }

@@ -471,6 +471,16 @@
                         </div>
                     </div>
 
+                    <div style="background:#2a1e1e;padding:16px;border-radius:8px;margin:12px 0;border:1px solid #5a3a3a;">
+                        <h4 style="margin:0 0 8px;">&#8635; Reload from secrets.yaml</h4>
+                        <p style="color:#caa;font-size:13px;margin:0 0 10px;">Normally you edit servers, OLTs and users here in the panel (that\'s the source of truth). Use these only if you hand-edited <code>secrets.yaml</code> and want it to win again for that section. <b>This discards panel edits for that section</b> &mdash; users reset immediately; servers/OLTs apply after a restart.</p>
+                        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                            <button class="btn" id="reseedServersBtn" style="background:#3a2a2a;border:1px solid #5a3a3a;color:#eab;">Reload servers</button>
+                            <button class="btn" id="reseedOltsBtn" style="background:#3a2a2a;border:1px solid #5a3a3a;color:#eab;">Reload OLTs</button>
+                            <button class="btn" id="reseedUsersBtn" style="background:#3a2a2a;border:1px solid #5a3a3a;color:#eab;">Reload users</button>
+                        </div>
+                    </div>
+
                     <div style="background:#1e1e2e;padding:16px;border-radius:8px;margin:12px 0;">
                         <h4 style="margin:0 0 8px;">&#128273; .env / integrations</h4>
                         <p style="color:#9aa;font-size:13px;margin:0 0 8px;">Business-automation variables (NetBox URL/token, SMTP, billing, MAC-sync&hellip;). Secret fields show blank &mdash; leave blank to keep the current value. <b>Applies after a service restart.</b></p>

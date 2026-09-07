@@ -328,6 +328,39 @@ async def set_electric_addresses_ep(
     return {"success": True, "addresses": addresses}
 
 
+@router.post("/config/reseed")
+async def reseed_from_file(
+    body: dict,
+    request: Request,
+    user: UserInfo = Depends(require_superadmin),
+):
+    """Reload one section from secrets.yaml, discarding its runtime-store edits.
+
+    Escape hatch for the panel-first model: lets a hand-edited secrets.yaml become
+    authoritative again for the chosen section. servers/olts re-seed and take full
+    effect after a restart; users re-seed immediately (auth reads the store live).
+    """
+    section = (body.get("section") or "").lower()
+    if section == "servers":
+        rc.clear_servers()
+        get_config().reload(); get_config().load_secrets()  # force immediate re-seed
+        detail, restart = "servers re-seeded from secrets.yaml", True
+    elif section == "olts":
+        rc.clear_olts()
+        get_config().reload(); get_config().load_secrets()
+        detail, restart = "olts re-seeded from secrets.yaml", True
+    elif section == "users":
+        n = get_user_store().reseed_from_secrets()
+        detail, restart = f"users re-seeded from secrets.yaml ({n})", False
+    else:
+        raise HTTPException(status_code=400, detail="section must be servers, olts or users")
+    get_audit_logger().log(
+        action="config_reseed", username=user.username, role=user.role,
+        detail=detail, success=True, ip=_client_ip(request),
+    )
+    return {"success": True, "section": section, "restart_recommended": restart, "detail": detail}
+
+
 @router.get("/config/env")
 async def get_env_ep(user: UserInfo = Depends(require_superadmin)):
     """Return editable .env entries (secret values masked)."""
