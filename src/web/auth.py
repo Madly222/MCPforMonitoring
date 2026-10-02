@@ -42,6 +42,15 @@ class UserInfo(BaseModel):
     role: str
 
 
+class ChangePasswordRequest(BaseModel):
+    """Self-service password change request."""
+    current_password: str
+    new_password: str
+
+
+MIN_PASSWORD_LENGTH = 6
+
+
 # ==============================================================================
 # SESSION STORE
 # ==============================================================================
@@ -289,6 +298,61 @@ async def logout(request: Request, response: Response):
     response.delete_cookie("session_id")
     
     return {"success": True, "message": "Logged out"}
+
+
+@router.post("/change-password")
+async def change_own_password(
+    body: ChangePasswordRequest,
+    request: Request,
+    user: UserInfo = Depends(get_current_user),
+):
+    """Change the current user's own password (requires the current one)."""
+    from src.web.users import get_user_store
+    from src.web.audit import get_audit_logger
+
+    store = get_user_store()
+    client_ip = request.client.host if request.client else None
+
+    if store.verify(user.username, body.current_password) is None:
+        get_audit_logger().log(
+            action="password_change_self",
+            username=user.username,
+            role=user.role,
+            detail="wrong current password",
+            ip=client_ip,
+            success=False,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect"
+        )
+
+    if len(body.new_password) < MIN_PASSWORD_LENGTH:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"New password must be at least {MIN_PASSWORD_LENGTH} characters"
+        )
+
+    if body.new_password == body.current_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="New password must differ from the current one"
+        )
+
+    try:
+        store.set_password(user.username, body.new_password)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    get_audit_logger().log(
+        action="password_change_self",
+        username=user.username,
+        role=user.role,
+        ip=client_ip,
+        success=True,
+    )
+    logger.info(f"User {user.username} changed own password")
+    return {"success": True, "message": "Password changed"}
 
 
 @router.get("/me", response_model=UserInfo)

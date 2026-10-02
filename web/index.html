@@ -74,7 +74,10 @@
                         <span id="display-username" class="name">User</span>
                         <span id="userRole" class="role-badge">operator</span>
                     </div>
-                    <button class="btn btn-outline btn-sm" id="logoutBtn">Sign out</button>
+                    <div class="user-actions">
+                        <button class="btn btn-outline btn-sm" id="changePasswordBtn" title="Change password">рџ”‘</button>
+                        <button class="btn btn-outline btn-sm" id="logoutBtn">Sign out</button>
+                    </div>
                 </div>
             </div>
         </aside>
@@ -458,6 +461,37 @@
             <div class="modal-footer">
                 <button class="btn btn-outline" id="modalCloseBtn">Close</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Change Password Modal -->
+    <div class="modal" id="changePasswordModal">
+        <div class="modal-dialog dialog-sm">
+            <div class="modal-header">
+                <h3>Change password</h3>
+                <button class="btn-icon" id="changePasswordClose">вњ•</button>
+            </div>
+            <form id="changePasswordForm">
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label class="form-label">Current password</label>
+                        <input type="password" id="cpCurrent" class="form-control" autocomplete="current-password" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">New password</label>
+                        <input type="password" id="cpNew" class="form-control" autocomplete="new-password" minlength="6" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Repeat new password</label>
+                        <input type="password" id="cpConfirm" class="form-control" autocomplete="new-password" minlength="6" required>
+                    </div>
+                    <p id="cpError" class="error-message"></p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" id="changePasswordCancel">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="changePasswordSubmit">Save</button>
+                </div>
+            </form>
         </div>
     </div>
 

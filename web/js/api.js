@@ -55,6 +55,12 @@ const API = {
         me() {
             return API.request('/auth/me');
         },
+        changePassword(current_password, new_password) {
+            return API.request('/auth/change-password', {
+                method: 'POST',
+                body: JSON.stringify({ current_password, new_password }),
+            });
+        },
     },
 
     // ------------------------------------------------------------- Servers

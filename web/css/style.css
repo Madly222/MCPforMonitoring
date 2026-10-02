@@ -164,6 +164,8 @@ button { font-family: inherit; }
     .col-span-2 { grid-column: span 1; }
 }
 
+.user-actions { display: flex; align-items: center; gap: 6px; }
+
 #logoutBtn {
     color: var(--danger);
     border-color: var(--danger-border);

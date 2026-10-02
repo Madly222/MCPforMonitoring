@@ -148,6 +148,7 @@ function initializeUI() {
     if (roleEl) roleEl.textContent = currentUser.role;
     
     document.getElementById('logoutBtn').addEventListener('click', handleLogout);
+    initChangePassword();
     
     const executeBtn = document.getElementById('executeBtn');
     if (executeBtn) executeBtn.addEventListener('click', handleExecute);
@@ -171,6 +172,58 @@ function initializeUI() {
             if (e.target.id === 'serverModal') closeModal();
         });
     }
+}
+
+function initChangePassword() {
+    const modal = document.getElementById('changePasswordModal');
+    const form = document.getElementById('changePasswordForm');
+    const errorEl = document.getElementById('cpError');
+    const submitBtn = document.getElementById('changePasswordSubmit');
+    if (!modal || !form) return;
+
+    const showError = (msg) => { errorEl.textContent = msg; };
+    const open = () => {
+        form.reset();
+        showError('');
+        modal.classList.add('active');
+        setTimeout(() => document.getElementById('cpCurrent').focus(), 100);
+    };
+    const close = () => modal.classList.remove('active');
+
+    document.getElementById('changePasswordBtn').addEventListener('click', open);
+    document.getElementById('changePasswordClose').addEventListener('click', close);
+    document.getElementById('changePasswordCancel').addEventListener('click', close);
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) close();
+    });
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const current = document.getElementById('cpCurrent').value;
+        const next = document.getElementById('cpNew').value;
+        const confirm = document.getElementById('cpConfirm').value;
+
+        if (next !== confirm) {
+            showError('New passwords do not match');
+            return;
+        }
+        if (next === current) {
+            showError('New password must differ from the current one');
+            return;
+        }
+
+        submitBtn.disabled = true;
+        showError('');
+        try {
+            await API.auth.changePassword(current, next);
+            close();
+            await Dialog.alert('Password changed successfully', 'Change password');
+        } catch (err) {
+            showError(err.message);
+        } finally {
+            submitBtn.disabled = false;
+        }
+    });
 }
 
 async function handleLogout() {
