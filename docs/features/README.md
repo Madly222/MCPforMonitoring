@@ -29,6 +29,8 @@ flowchart LR
 | 4 | [⌨️ Терминал и AI-команды](04-terminal.md) | команды обычным языком через Claude, прямая SSH-консоль | **Servers → Terminal Interpretation** |
 | 5 | [📡 GPON / ONU](05-onu.md) | OLT ZTE C320, оптический сигнал, регистрация ONU, поиск и фильтры | **ONU** |
 | 6 | [🗂️ NetBox](06-netbox.md) | автозаполнение NetBox со свитчей и роутеров, синхронизация MAC и портов | **NetBox** |
+| 6a | ↳ [🔄 Синхронизация MAC и портов](06a-netbox-mac-sync.md) | phpDHCPAdmin → MAC → порт абонента, разбор отчёта | **NetBox → Sync MAC / Sync Ports** |
+| 6b | ↳ [🔗 CDP и автозаполнение](06b-netbox-cdp.md) | что читается с Cisco, как строятся кабели, что пишется в NetBox | **NetBox → Single Device / Batch** |
 | 7 | [⚡💧 Отключения света и воды](07-outages.md) | Premier Energy, acc.md, расписание проверок, письма | шапка ⚡ 💧, **Admin → Settings** |
 | 8 | [👑 Консоль superadmin](08-admin.md) | пользователи, серверы, OLT, настройки, `.env`, журнал аудита | **Admin** |
 

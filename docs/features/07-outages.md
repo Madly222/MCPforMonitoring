@@ -1,4 +1,4 @@
-[← NetBox](06-netbox.md) · **7 / 8** · [Карта](README.md) · [Дальше: Консоль superadmin →](08-admin.md)
+[← CDP и автозаполнение](06b-netbox-cdp.md) · **7 / 8** · [Карта](README.md) · [Дальше: Консоль superadmin →](08-admin.md)
 
 # ⚡💧 Отключения света и воды
 
@@ -70,4 +70,4 @@ flowchart LR
 | Настройки, меняемые на лету | `src/web/runtime_config.py` |
 
 ---
-[← NetBox](06-netbox.md) · [Карта](README.md) · [Дальше: Консоль superadmin →](08-admin.md)
+[← CDP и автозаполнение](06b-netbox-cdp.md) · [Карта](README.md) · [Дальше: Консоль superadmin →](08-admin.md)

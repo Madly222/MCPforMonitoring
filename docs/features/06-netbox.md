@@ -1,9 +1,16 @@
-[← GPON / ONU](05-onu.md) · **6 / 8** · [Карта](README.md) · [Дальше: Отключения света и воды →](07-outages.md)
+[← GPON / ONU](05-onu.md) · **6 / 8** · [Карта](README.md) · [Дальше: Синхронизация MAC →](06a-netbox-mac-sync.md)
 
 # 🗂️ NetBox
 
 Вкладка **NetBox** — панель сама заполняет NetBox данными с реального оборудования, чтобы не переносить их руками.
 Все действия — для **admin** и **superadmin**.
+
+Это обзорная страница. Подробности вынесены в две отдельные:
+
+| Подробно | Что внутри |
+|----------|-----------|
+| [🔄 Синхронизация MAC и портов](06a-netbox-mac-sync.md) | откуда берутся MAC, как находится порт абонента, что значит каждый статус в отчёте, настройки |
+| [🔗 CDP и автозаполнение](06b-netbox-cdp.md) | какие команды выполняются на Cisco, как ищется сосед по CDP, что именно пишется в NetBox, о чём помнить перед Apply |
 
 ```mermaid
 %%{init: {"flowchart": {"nodeSpacing": 14, "rankSpacing": 45, "curve": "basis", "padding": 8, "wrappingWidth": 260}}}%%
@@ -36,30 +43,12 @@ flowchart LR
     classDef admin fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
 ```
 
-## Как работают синхронизации
-
-Две кнопки работают **по цепочке**: сначала MAC попадают в NetBox, потом по ним находится порт абонента.
-
-```mermaid
-%%{init: {"flowchart": {"nodeSpacing": 14, "rankSpacing": 45, "curve": "basis", "padding": 8, "wrappingWidth": 260}}}%%
-flowchart LR
-    DB[("🗄️ phpDHCPAdmin<br/>MySQL")]:::src -- "🔄 Sync MAC" --> IP["NetBox: IP-адрес<br/>+ поле MAC"]:::nb
-    IP -- "🔗 Sync Ports" --> SCAN["Таблицы MAC<br/>со всего оборудования<br/>Cisco · TP-Link · ZTE OLT"]:::src
-    SCAN --> LEAF{"Порт, где этот MAC<br/>и мало других MAC?"}
-    LEAF -- "да — порт абонента" --> OK["✅ IP привязан<br/>к интерфейсу в NetBox"]:::nb
-    LEAF -- "много MAC — аплинк" --> SKIP["⏭️ Пропустить"]:::src
-    OK -.-> MISS["Интерфейса нет в NetBox?<br/>→ только в отчёт,<br/>сам не создаётся"]:::src
-
-    classDef src fill:#fef3c7,stroke:#d97706,color:#78350f
-    classDef nb  fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
-```
-
-| Кнопка | Откуда | Куда | Зачем |
-|--------|--------|------|-------|
-| 🔍 Scan → Apply | свитч / роутер по SSH | интерфейсы, VLAN, IP, кабели | NetBox отражает реальную коммутацию |
-| 🚀 Run All | список IP | то же самое пачкой | обойти весь узел за раз |
-| 🔄 Sync MAC | база phpDHCPAdmin | поле MAC у IP-адреса | знать, какое устройство за каким IP |
-| 🔗 Sync Ports | MAC-таблицы оборудования | привязка IP к интерфейсу | видеть, в каком порту сидит абонент |
+| Кнопка | Откуда | Куда | Зачем | Подробно |
+|--------|--------|------|-------|:-:|
+| 🔍 Scan → Apply | свитч / роутер по SSH + CDP | интерфейсы, VLAN, IP, кабели | NetBox отражает реальную коммутацию | [6b](06b-netbox-cdp.md) |
+| 🚀 Run All | список IP свитчей | то же самое пачкой, без просмотра | обойти весь узел за раз | [6b](06b-netbox-cdp.md) |
+| 🔄 Sync MAC | база phpDHCPAdmin | поле MAC у IP-адреса | знать, какое устройство за каким IP | [6a](06a-netbox-mac-sync.md) |
+| 🔗 Sync Ports | MAC-таблицы Cisco, TP-Link, D-Link, MikroTik, ZTE OLT | привязка IP к интерфейсу | видеть, в каком порту сидит абонент | [6a](06a-netbox-mac-sync.md) |
 
 ## Где это в коде
 
@@ -72,4 +61,4 @@ flowchart LR
 | Вкладка NetBox | `web/js/netbox.js` |
 
 ---
-[← GPON / ONU](05-onu.md) · [Карта](README.md) · [Дальше: Отключения света и воды →](07-outages.md)
+[← GPON / ONU](05-onu.md) · [Карта](README.md) · [Дальше: Синхронизация MAC →](06a-netbox-mac-sync.md)
