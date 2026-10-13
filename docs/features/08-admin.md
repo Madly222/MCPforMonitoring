@@ -22,18 +22,18 @@ flowchart LR
     ROOT --> OLT["📡 OLT Devices"]:::group
     OLT --> O1["Добавить / изменить / убрать OLT"]:::super
 
-    ROOT --> SET["⚙️ Settings"]:::group
-    SET --> OUT["⚡💧 Отключения"]:::group
-    OUT --> T1["Адреса · шаблон · время"]:::super
-    SET --> NET["🔌 Связь"]:::group
+    ROOT --> OUT["⚙️ Settings: отключения"]:::group
+    OUT --> T1["⚡💧 Адреса · шаблон · время"]:::super
+
+    ROOT --> NET["⚙️ Settings: связь"]:::group
     NET --> T2["Автопроверка соединений<br/>вкл/выкл + интервал"]:::super
     NET --> T3["Тайм-аут SSH-подключения"]:::super
     NET --> T4["Тайм-аут команды в терминале"]:::super
     NET --> T5["Тестовая DNS-зона<br/>для проверки резолва"]:::super
-    SET --> ENV["📝 Файл .env"]:::group
-    ENV --> T6["Редактор, секреты скрыты<br/>нужен перезапуск"]:::super
-    SET --> RES["↩️ Сброс к secrets.yaml"]:::group
-    RES --> T7["Reload Servers · OLTs · Users"]:::super
+
+    ROOT --> ENV["⚙️ Settings: файлы"]:::group
+    ENV --> T6["📝 Редактор .env<br/>секреты скрыты, нужен перезапуск"]:::super
+    ENV --> T7["↩️ Сброс к secrets.yaml<br/>Servers · OLTs · Users"]:::super
 
     ROOT --> AUD["📋 Log"]:::group
     AUD --> A1["Журнал аудита:<br/>кто, что, когда, с какого IP"]:::super

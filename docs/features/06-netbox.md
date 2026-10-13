@@ -10,15 +10,15 @@
 flowchart LR
     ROOT(["🗂️ NetBox"]):::root
 
-    ROOT --> ONE["🔍 Single Device"]:::group
-    ONE --> SW["🔀 Свитч Cisco"]:::group
+    ROOT --> SW["🔀 Single Device: свитч Cisco"]:::group
+    SW --> SW0["Вход по SSH или RADIUS"]:::admin
     SW --> SW1["Порты, описания,<br/>VLAN access / trunk / native"]:::admin
     SW --> SW2["Соседи по CDP"]:::admin
     SW --> SW3["Предпросмотр → Apply:<br/>интерфейсы, VLAN, кабели"]:::admin
-    ONE --> RT["🌐 Роутер Cisco"]:::group
+
+    ROOT --> RT["🌐 Single Device: роутер Cisco"]:::group
     RT --> RT1["Интерфейсы, IP,<br/>маршруты, CDP"]:::admin
     RT --> RT2["Apply:<br/>интерфейсы, IP, кабели"]:::admin
-    ONE --> CR["Вход по SSH или RADIUS"]:::admin
 
     ROOT --> BATCH["🚀 Batch Mode"]:::group
     BATCH --> B1["Список IP —<br/>по одному в строке"]:::admin
