@@ -9,6 +9,8 @@
 
 A self-hosted control plane that watches a fleet of Linux servers over SSH, detects problems in real time, lets operators run natural-language commands (interpreted by Claude), and automates a set of recurring operational and billing tasks. It exposes a FastAPI backend, a lightweight web dashboard, and a role-gated superadmin console for managing users, servers, OLTs, and runtime settings without editing files by hand.
 
+> 🌳 **Feature map** — what the app can do, split into 8 small visual trees: [docs/features](docs/features/README.md)
+
 ---
 
 ## Table of Contents
@@ -580,6 +582,7 @@ Extended docs live in [`docs/`](docs/):
 - [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) — every config field across `secrets.yaml`, `.env`, and `settings.yaml`.
 - [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — systemd setup for the web service and timer jobs.
 - [`docs/API.md`](docs/API.md) — REST API reference.
+- [`docs/features/`](docs/features/README.md) — feature map: 8 visual trees (access, servers, monitoring, terminal, ONU, NetBox, outages, admin).
 
 ---
 
