@@ -18,6 +18,7 @@ A self-hosted control plane that watches a fleet of Linux servers over SSH, dete
 - [Overview](#overview)
 - [Architecture](#architecture)
 - [Features](#features)
+- [MCP Server](#mcp-server)
 - [Tech Stack](#tech-stack)
 - [Project Structure](#project-structure)
 - [Requirements](#requirements)
@@ -43,8 +44,9 @@ MCP Server Monitor connects to remote servers over SSH and provides:
 - **AI-assisted operations** — operators type plain-language commands (e.g. *"restart dhcp on dhcp-primary"*, *"show errors from the last hour"*); Claude interprets intent and the system executes the corresponding action, with a keyword-based fallback if the API is unavailable.
 - **Service management** — first-class handlers for DHCP, DNS, and RADIUS (status, restart/reload, health diagnostics, log inspection). Postfix, Dovecot, Apache, and SpamAssassin are supported at a generic level (status/restart via SSH) without dedicated diagnostic handlers.
 - **Operations automation** — a set of scheduled jobs handling utility-outage alerts and inventory sync (see [Monitoring & Automation Modules](#monitoring--automation-modules)).
-- **GPON visibility** — SNMP-based ONU monitoring for ZTE C320 OLTs (signal levels, status, MAC retrieval).
+- **GPON visibility** — ONU monitoring for ZTE C320 OLTs via SNMP and the OLT CLI (optical levels, registration status, MAC retrieval).
 - **Administration** — a superadmin console for user/role management, live server & OLT CRUD, editable runtime settings (notifications, outage patterns/addresses), an append-only audit log, an SSH command console, and a Claude API health probe.
+- **MCP server** — read-only MCP tools so Claude Desktop / Claude Code can query status, errors, ONUs and outages in natural language (see [MCP Server](#mcp-server)).
 
 The application runs as a single ASGI service (Uvicorn + FastAPI) on port **4455** by default, plus optional systemd timer units for the scheduled jobs.
 
@@ -172,6 +174,12 @@ flowchart TB
 
 ---
 
+## MCP Server
+
+`mcp_server/` is a [Model Context Protocol](https://modelcontextprotocol.io) server that exposes the monitor to MCP clients such as Claude Desktop and Claude Code as **read-only tools**: overall status, servers, recent log errors, health reports, GPON ONU status, planned power outages and pending updates. It is a thin client of the REST API (logs in with a dedicated `operator` account), runs in its own virtualenv, and never performs state-changing actions. Setup and the tool list: [mcp_server/README.md](mcp_server/README.md).
+
+---
+
 ## Tech Stack
 
 - **Language:** Python 3.10+
@@ -227,6 +235,7 @@ ServersMonitoringMCP/
 │       ├── users.py            # JSON-backed runtime user store
 │       ├── runtime_config.py   # Live-editable settings + server/OLT store
 │       └── audit.py            # Append-only audit log (logs/audit.jsonl)
+├── mcp_server/                 # MCP server (read-only tools for Claude Desktop / Claude Code)
 ├── services/
 │   └── netbox-autofill/        # Standalone Cisco→NetBox automation
 │       ├── orchestrator.py
