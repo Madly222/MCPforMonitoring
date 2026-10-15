@@ -255,7 +255,7 @@ ServersMonitoringMCP/
 ├── secrets.example.yaml        # Template -> copy to secrets.yaml
 ├── .env.example                # Template -> copy to .env
 ├── requirements.txt
-├── server_launch.md            # Quick systemd deployment notes
+├── docs/server_launch.ru.md    # Quick systemd deployment notes (RU)
 └── README.md
 ```
 
@@ -292,7 +292,7 @@ sudo apt update && sudo apt install -y openssh-client snmp mysql-client
 
 ```bash
 # 1. Get the code
-git clone <your-repo-url> ServersMonitoringMCP
+git clone https://github.com/Madly222/MCPforMonitoring.git ServersMonitoringMCP
 cd ServersMonitoringMCP
 
 # 2. Create and activate a virtualenv
@@ -348,7 +348,7 @@ Non-sensitive tuning: monitoring intervals, error processing, Claude cache/rate-
 ### Other config files
 - `config/safe_actions.yaml` — risk policy for auto-remediation (which actions may auto-run).
 - `config/services/*.yaml` — per-service detection commands and parameters.
-- `config/electric_addresses.txt` — addresses to watch for power outages.
+- `config/electric_addresses.txt` — addresses to watch for power outages (git-ignored; start from `config/electric_addresses.example.txt`).
 
 ---
 
@@ -362,7 +362,7 @@ python -m src.main
 ```
 
 ### Production (systemd)
-Create the service unit (see also `server_launch.md`):
+Create the service unit (see also `docs/server_launch.ru.md`):
 
 ```ini
 # /etc/systemd/system/mcp-monitor.service
@@ -589,4 +589,3 @@ Extended docs live in [`docs/`](docs/):
 ## License
 
 MIT License.
-test

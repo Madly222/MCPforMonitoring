@@ -73,23 +73,23 @@ def _default_notification(channel: str) -> dict:
     if channel == "electric":
         return {
             "enabled": _env("ELECTRIC_EMAIL_ENABLED", default="true").lower() == "true",
-            "smtp_server": _env("ELECTRIC_SMTP_SERVER", "ACC_SMTP_SERVER", default="mail.rapidlink.md"),
+            "smtp_server": _env("ELECTRIC_SMTP_SERVER", "ACC_SMTP_SERVER", default="mail.example.md"),
             "smtp_port": int(_env("ELECTRIC_SMTP_PORT", "ACC_SMTP_PORT", default="25")),
             "smtp_user": _env("ELECTRIC_SMTP_USER", "ACC_SMTP_USER", default=""),
             "smtp_password": _env("ELECTRIC_SMTP_PASSWORD", "ACC_SMTP_PASSWORD", default=""),
             "smtp_tls": _env("ELECTRIC_SMTP_TLS", "ACC_SMTP_TLS", default="false").lower() == "true",
-            "from": _env("ELECTRIC_EMAIL_FROM", "ACC_EMAIL_FROM", default="control@rapidlink.md"),
-            "to": _env("ELECTRIC_EMAIL_TO", "ACC_EMAIL_TO", default="admin@rapidlink.md"),
+            "from": _env("ELECTRIC_EMAIL_FROM", "ACC_EMAIL_FROM", default="control@example.md"),
+            "to": _env("ELECTRIC_EMAIL_TO", "ACC_EMAIL_TO", default="admin@example.md"),
         }
     return {
         "enabled": _env("ACC_EMAIL_ENABLED", default="true").lower() == "true",
-        "smtp_server": _env("ACC_SMTP_SERVER", default="mail.rapidlink.md"),
+        "smtp_server": _env("ACC_SMTP_SERVER", default="mail.example.md"),
         "smtp_port": int(_env("ACC_SMTP_PORT", default="25")),
         "smtp_user": _env("ACC_SMTP_USER", default=""),
         "smtp_password": _env("ACC_SMTP_PASSWORD", default=""),
         "smtp_tls": _env("ACC_SMTP_TLS", default="false").lower() == "true",
-        "from": _env("ACC_EMAIL_FROM", default="control@rapidlink.md"),
-        "to": _env("ACC_EMAIL_TO", default="admin@rapidlink.md"),
+        "from": _env("ACC_EMAIL_FROM", default="control@example.md"),
+        "to": _env("ACC_EMAIL_TO", default="admin@example.md"),
     }
 
 
@@ -255,7 +255,7 @@ def set_auto_check(enabled: bool, interval_seconds) -> dict:
 # own listening IP). Set it to a zone the monitored DNS servers are actually
 # authoritative for, otherwise the check will fail on healthy servers.
 
-_DEFAULT_DNS_TEST_ZONE = "rapidlink.md"
+_DEFAULT_DNS_TEST_ZONE = os.getenv("DNS_TEST_ZONE", "example.com")
 _DNS_ZONE_RE = re.compile(r'^(?=.{1,253}$)([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,63}$')
 
 

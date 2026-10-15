@@ -1,0 +1,9 @@
+# Addresses monitored for electricity outages (Premier Energy notices, Chisinau)
+# Format: Street HouseNumber  |  one per line
+# Copy to config/electric_addresses.txt (git-ignored) or manage it from the web admin panel.
+
+# PoP example-1
+Stefan cel Mare 1
+
+# PoP example-2
+Example Street 10

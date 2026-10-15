@@ -25,3 +25,10 @@ logs/
 .DS_Store
 config/New_Rich_Text_Document.RTF
 *.swp
+
+# Archives
+*.tar.gz
+*.zip
+
+# Site-specific data (real addresses of network sites) — keep out of git
+config/electric_addresses.txt

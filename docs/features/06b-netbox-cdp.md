@@ -94,7 +94,7 @@ flowchart LR
 ```mermaid
 %%{init: {"flowchart": {"nodeSpacing": 14, "rankSpacing": 45, "curve": "basis", "padding": 8, "wrappingWidth": 260}}}%%
 flowchart TB
-    CLI["🖥️ SW36 говорит по CDP:<br/>«на Gi0/1 сосед<br/>CIS-4948-SW122.rapidlink.local,<br/>его порт Gi1/31»"]:::auto
+    CLI["🖥️ SW36 говорит по CDP:<br/>«на Gi0/1 сосед<br/>CIS-4948-SW122.corp.local,<br/>его порт Gi1/31»"]:::auto
     CLI --> N1["NetBox: SW36 / Gi0/1 ✅"]:::nb
     CLI --> N2["NetBox: SW122 / Gi1/31 ✅"]:::nb
     N1 --> CAB["🔗 Кабель CAT6<br/>SW36 Gi0/1 ↔ SW122 Gi1/31"]:::nb

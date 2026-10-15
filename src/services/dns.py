@@ -240,7 +240,7 @@ class DNSService(BaseService):
                 from src.web import runtime_config as rc
                 zone = rc.get_dns_test_zone()
             except Exception:
-                zone = "rapidlink.md"
+                zone = "example.com"
             custom_test = custom_test.replace("{zone}", zone)
         
         dns_test = await self.ssh.execute(

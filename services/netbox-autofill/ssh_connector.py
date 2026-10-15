@@ -162,7 +162,7 @@ class CiscoSSH:
             parts = line.split()
             if len(parts) >= 6:
                 device_id = parts[0]
-                # Strip domain (e.g. .rapidlink.local)
+                # Strip domain (e.g. .corp.local)
                 device_name = device_id.split('.')[0]
 
                 # Find local interface — typically like "Gig 0/1" or "Fas 0/1"
