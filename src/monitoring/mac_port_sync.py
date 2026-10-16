@@ -391,7 +391,7 @@ EXTRA_DEVICES_FILE = os.getenv(
     str(Path(__file__).parent.parent.parent / "config" / "scan_devices.txt"),
 )
 
-MAC_MGMT_PREFIX = os.getenv("MAC_MGMT_PREFIX", "198.51.100.0/24")
+MAC_MGMT_PREFIX = os.getenv("MAC_MGMT_PREFIX", "")
 
 
 def _creds_for(vendor, runtime_user, runtime_pass):
@@ -529,9 +529,13 @@ def sync_ports_to_netbox(leaf_threshold=None, cred_sets=None, progress_callback=
                 failures.append({"device": f"OLT {olt.id}", "ip": olt.host, "reason": str(e)})
                 log(f"  FAIL OLT {olt.id} ({olt.host}): {e}")
 
-        log(f"Listing NetBox devices in mgmt prefix {MAC_MGMT_PREFIX}...")
-        prefix_devices = nb.list_devices_in_prefix(MAC_MGMT_PREFIX)
-        log(f"  {len(prefix_devices)} device(s) have an IP in {MAC_MGMT_PREFIX}")
+        if MAC_MGMT_PREFIX:
+            log(f"Listing NetBox devices in mgmt prefix {MAC_MGMT_PREFIX}...")
+            prefix_devices = nb.list_devices_in_prefix(MAC_MGMT_PREFIX)
+            log(f"  {len(prefix_devices)} device(s) have an IP in {MAC_MGMT_PREFIX}")
+        else:
+            log("MAC_MGMT_PREFIX not set - skipping mgmt prefix scan")
+            prefix_devices = []
 
         primary_devices = nb.list_devices_with_primary_ip()
         log(f"  {len(primary_devices)} device(s) have a primary IP")
