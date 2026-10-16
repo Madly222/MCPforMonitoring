@@ -36,7 +36,6 @@ flowchart LR
 | `list_olts` | `GET /api/onu/olts` | Configured OLTs |
 | `get_olt_onus` | `GET /api/onu/olt/{id}` | ONUs of one OLT |
 | `get_power_outages` | `GET /api/electric/status` | Planned outages affecting network sites |
-| `get_pending_updates` | `GET /api/updates/status` | Pending package updates |
 
 ## Setup
 

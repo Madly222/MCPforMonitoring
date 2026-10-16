@@ -113,6 +113,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // shared with onu.js / router.js for role-gated controls
         window.currentUser = currentUser;
         initializeUI();
+        loadBranding();
         await loadServerStatus();
         populateConsoleServers();
         checkClaudeHealth();
@@ -137,6 +138,17 @@ async function setupAutoRefresh() {
     }
     if (cfg.enabled && cfg.interval_seconds >= 5) {
         refreshInterval = setInterval(loadServerStatus, cfg.interval_seconds * 1000);
+    }
+}
+
+async function loadBranding() {
+    try {
+        const brand = await API.request('/branding');
+        document.getElementById('brandName').textContent = brand.name;
+        document.getElementById('brandSub').textContent = brand.sub;
+        document.getElementById('brandAvatar').textContent = brand.avatar;
+    } catch (e) {
+        console.warn('Branding unavailable, keeping defaults:', e);
     }
 }
 
@@ -374,18 +386,6 @@ function createServerCard(server, state) {
 
     const systemInfo = server.system_info ? `<div class="text-muted mt-3 mb-3" style="font-size: 12px;">Load: ${server.system_info.load || 'N/A'}</div>` : '';
     
-    // Updates indicator
-    let updatesHtml = '';
-    if (server.updates) {
-        const updatesTitle = server.updates.available > 0 
-            ? `${server.updates.available} updates available (${server.updates.security} security)`
-            : 'System up to date';
-        const updateColor = server.updates.available > 0 ? 'color: var(--accent-yellow);' : 'color: var(--accent-green);';
-        updatesHtml = `<span class="role-badge" style="${updateColor}" title="${updatesTitle}">
-            ${server.updates.available > 0 ? '⚠️ Updates' : '✓ Up to date'}
-        </span>`;
-    }
-
     return `
         <div class="card server-card" data-server-id="${server.id}" style="cursor: pointer; transition: border-color 0.2s;">
             <div class="card-header" style="justify-content: space-between;">
@@ -393,7 +393,6 @@ function createServerCard(server, state) {
                     <span class="dot ok"></span>
                     ${server.id}
                 </div>
-                ${updatesHtml}
             </div>
             <div class="text-muted">${server.host}</div>
             ${systemInfo}
@@ -448,8 +447,6 @@ async function showServerDetails(serverId) {
         
         // Security Section
         html += '<div class="info-section"><h4>&#128274; Security</h4><div class="detail-list">';
-        var updClass = data.security.updates_available > 0 ? 'warning-text' : '';
-        html += '<div class="detail-item"><span class="detail-label">Updates</span><span class="detail-value ' + updClass + '">' + data.security.updates_available + ' available (' + data.security.security_updates + ' security)</span></div>';
         var rebootClass = data.security.reboot_required ? 'warning-text' : '';
         html += '<div class="detail-item"><span class="detail-label">Reboot Required</span><span class="detail-value ' + rebootClass + '">' + (data.security.reboot_required ? 'Yes' : 'No') + '</span></div>';
         html += '<div class="detail-item"><span class="detail-label">Firewall</span><span class="detail-value">' + data.security.firewall_status + '</span></div>';
@@ -480,7 +477,6 @@ async function showServerDetails(serverId) {
         // Admin actions
         if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'superadmin')) {
             html += '<div class="admin-actions"><h4>&#9889; System Actions</h4><div class="action-buttons">';
-            html += '<button class="btn btn-secondary" onclick="checkUpdates(\'' + serverId + '\')">Check Updates</button>';
             html += '<button class="btn btn-secondary" onclick="showServerDetails(\'' + serverId + '\')">Refresh</button>';
             html += '</div></div>';
         }
@@ -488,24 +484,6 @@ async function showServerDetails(serverId) {
         body.innerHTML = html;
     } catch (error) {
         body.innerHTML = '<p class="error-message">Error: ' + error.message + '</p>';
-    }
-}
-
-async function checkUpdates(serverId) {
-    const output = document.getElementById('outputArea');
-    output.textContent = 'Checking updates on ' + serverId + '...';
-    try {
-        const result = await API.servers.checkUpdates(serverId);
-        if (result.success) {
-            output.textContent = 'OK: ' + result.message + '\n\nPackages:\n' + (result.packages.join('\n') || 'None');
-        } else {
-            output.textContent = 'Error: ' + result.message + '\n\n' + (result.output || '');
-        }
-        addToHistory('check updates ' + serverId, result.success);
-        await loadServerStatus();
-    } catch (error) {
-        output.textContent = 'Error: ' + error.message;
-        addToHistory('check updates ' + serverId, false);
     }
 }
 

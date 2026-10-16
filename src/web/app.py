@@ -15,7 +15,6 @@ from src.core.ssh_manager import get_ssh_manager
 from src.monitoring.log_watcher import get_log_watcher, LogEvent
 from src.monitoring.error_detector import get_error_detector
 from src.monitoring.health_checker import get_health_checker
-from src.monitoring.updates_checker import get_updates_checker
 from src.web.api import router as api_router
 from src.web.auth import router as auth_router
 from src.web.api_netbox import router as netbox_router
@@ -65,7 +64,6 @@ async def lifespan(app: FastAPI):
     # Start monitoring components
     log_watcher = get_log_watcher()
     health_checker = get_health_checker()
-    updates_checker = get_updates_checker()
     
     # Add log event handler
     log_watcher.add_handler(handle_log_event)
@@ -84,13 +82,6 @@ async def lifespan(app: FastAPI):
         logger.info("Health checker started")
     except Exception as e:
         logger.error(f"Failed to start health checker: {e}")
-    
-    # Start updates checker (checks once per day)
-    try:
-        await updates_checker.start()
-        logger.info("Updates checker started (24h interval)")
-    except Exception as e:
-        logger.error(f"Failed to start updates checker: {e}")
     
     # Start ONU monitor if configured
     onu_monitor = None
@@ -120,7 +111,6 @@ async def lifespan(app: FastAPI):
     
     await log_watcher.stop()
     await health_checker.stop()
-    await updates_checker.stop()
     
     # Stop ONU monitor if it was started
     if onu_monitor:

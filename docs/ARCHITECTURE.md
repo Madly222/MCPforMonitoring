@@ -33,7 +33,7 @@ state is held in memory and on disk (YAML config, log files, learned patterns).
 Two execution contexts share the same `src/` code:
 
 1. **The web service** — long-running; serves the API and runs the in-process
-   background monitors (log watcher, health checker, updates checker, ONU
+   background monitors (log watcher, health checker, ONU
    monitor) started in the FastAPI lifespan.
 2. **Scheduled one-shots** — short-lived processes launched by systemd timers
    (e.g. `check_electric.py`) that import a monitoring module, do one pass, and
@@ -75,7 +75,7 @@ detection and backend-specific commands are data-driven from
 Two kinds of components live here:
 
 - **In-process monitors** (started by lifespan): `log_watcher`,
-  `error_detector`, `health_checker`, `updates_checker`, `onu_monitor`.
+  `error_detector`, `health_checker`, `onu_monitor`.
 - **Job modules** (invoked on demand by API or by timers): `electric_monitor`,
   `acc_monitor`, `dhcp_mac_sync`.
 
@@ -122,11 +122,9 @@ log_watcher (SSH tail -F)  →  LogEvent
 Detected errors are retained in memory and surfaced via
 `GET /api/monitoring/errors` and the dashboard.
 
-### 3.3 Health & updates
+### 3.3 Health
 `health_checker` polls each server/service on an interval and stores the latest
-`HealthReport` per server. `updates_checker` runs roughly daily, caches results,
-and exposes them via `GET /api/updates/status`. Both start in the lifespan and
-stop on shutdown.
+`HealthReport` per server. It starts in the lifespan and stops on shutdown.
 
 ### 3.4 ONU / GPON monitoring
 `onu_monitor` polls each enabled OLT (`secrets.yaml > onu_monitoring.olts`)
@@ -151,7 +149,7 @@ send email alerts. They run both on demand (`/api/electric/check`,
   SSH pool is closed.
 - Singletons are obtained through `get_*()` accessors
   (`get_config`, `get_ssh_manager`, `get_claude_client`, `get_log_watcher`,
-  `get_health_checker`, `get_updates_checker`, `get_onu_monitor`,
+  `get_health_checker`, `get_onu_monitor`,
   `get_error_detector`, `get_session_store`).
 
 ---

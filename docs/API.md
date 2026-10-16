@@ -10,7 +10,7 @@ returned cookie authorizes subsequent requests.
 
 - Most read endpoints require any authenticated user.
 - Command/action endpoints require the **`admin`** role
-  (`/api/execute`, `/api/updates/refresh`).
+  (`/api/execute`).
 - `operator` is read-only.
 
 Dependencies in code: `get_current_user` (any user) and `require_admin`.
@@ -98,7 +98,7 @@ confidence ≤ 0.7 or the API fails, falls back to keyword parsing
 Restart a service (simplified entry point).
 
 ### GET `/api/monitoring/status`
-State of the monitoring subsystem (watcher, health checker, updates checker).
+State of the monitoring subsystem (watcher, health checker).
 
 ### GET `/api/monitoring/errors`
 Recently detected errors (from the log-watch + error-detector pipeline).
@@ -109,19 +109,6 @@ Latest per-server health reports.
 
 ### GET `/api/health`
 App liveness probe (no auth-sensitive data).
-
----
-
-## Updates
-
-### GET `/api/updates/status`
-Cached system-update availability across servers (refreshed ~daily).
-
-### POST `/api/updates/refresh`  · *admin*
-Force a refresh of update information.
-
-### POST `/api/servers/{server_id}/updates/check`
-Check available updates for a single server.
 
 ---
 

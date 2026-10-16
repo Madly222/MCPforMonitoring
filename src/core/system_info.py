@@ -46,8 +46,6 @@ class ServerReport:
     init_system: str = ""
     
     # Security
-    updates_available: int = 0
-    security_updates: int = 0
     reboot_required: bool = False
     firewall_status: str = "unknown"
     
@@ -185,28 +183,6 @@ class SystemInfoCollector:
     
     async def _collect_security(self, server_id: str, report: ServerReport):
         """Collect security information."""
-        # Available updates (may be slow)
-        updates = await self._run(
-            server_id,
-            "apt list --upgradable 2>/dev/null | grep -v Listing | wc -l",
-            timeout=30.0
-        )
-        try:
-            report.updates_available = int(updates)
-        except ValueError:
-            pass
-        
-        # Security updates
-        sec = await self._run(
-            server_id,
-            "apt list --upgradable 2>/dev/null | grep -i security | wc -l",
-            timeout=30.0
-        )
-        try:
-            report.security_updates = int(sec)
-        except ValueError:
-            pass
-        
         # Reboot required
         reboot = await self._run(server_id, "[ -f /var/run/reboot-required ] && echo yes || echo no")
         report.reboot_required = reboot == "yes"
@@ -272,8 +248,6 @@ def report_to_dict(report: ServerReport) -> dict:
             "init_system": report.init_system
         },
         "security": {
-            "updates_available": report.updates_available,
-            "security_updates": report.security_updates,
             "reboot_required": report.reboot_required,
             "firewall_status": report.firewall_status
         },

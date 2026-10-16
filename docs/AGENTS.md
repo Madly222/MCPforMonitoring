@@ -95,7 +95,7 @@ Host/port come from `secrets.yaml > mcp_server`.
 | File | Role |
 |------|------|
 | `app.py` | FastAPI factory, CORS, router mounting (incl. `admin_router` at `/api/admin`), lifespan. |
-| `api.py` | Main REST API: status, servers, actions, `/execute`, `/console/exec` (raw SSH), `/claude/health`, monitoring, updates, ONU, utilities, invoicing. Audits commands/actions. |
+| `api.py` | Main REST API: status, servers, actions, `/execute`, `/console/exec` (raw SSH), `/claude/health`, monitoring, ONU, utilities, invoicing. Audits commands/actions. |
 | `api_netbox.py` | NetBox auto-fill endpoints. |
 | `auth.py` | bcrypt auth via user store, sessions, `get_current_user`, `require_admin` (admin+superadmin), `require_superadmin`, login/logout audit. |
 | **`users.py`** | Runtime user store (`sessions/users.json`), seeded from secrets. `get_user_store()`, verify/add/delete/set_role/set_password. Roles in `VALID_ROLES`. |
@@ -108,7 +108,7 @@ Host/port come from `secrets.yaml > mcp_server`.
 `service_handlers` map in `api.py`.
 
 ### Monitoring & automation (`src/monitoring/`)
-`log_watcher`, `error_detector`, `health_checker`, `updates_checker`, `onu_monitor`
+`log_watcher`, `error_detector`, `health_checker`, `onu_monitor`
 (in-process monitors); `electric_monitor`, `acc_monitor` (read settings live from
 (temporary), `dhcp_mac_sync`.
 

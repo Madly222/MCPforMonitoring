@@ -98,9 +98,6 @@ const API = {
                 `/servers/${serverId}/services/${serviceType}/diagnostics/${diagnosticName}`
             );
         },
-        checkUpdates(serverId) {
-            return API.request(`/servers/${serverId}/updates/check`, { method: 'POST' });
-        },
     },
 
     // ----------------------------------------------------------------- ONU
@@ -151,16 +148,6 @@ const API = {
         },
         health() {
             return API.request('/monitoring/health');
-        },
-    },
-
-    // --------------------------------------------------------------- Updates
-    updates: {
-        status() {
-            return API.request('/updates/status');
-        },
-        refresh() {
-            return API.request('/updates/refresh', { method: 'POST' });
         },
     },
 

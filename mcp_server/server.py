@@ -121,11 +121,5 @@ async def get_power_outages() -> str:
     return await _get("/api/electric/status")
 
 
-@mcp.tool()
-async def get_pending_updates() -> str:
-    """Pending package updates found on the monitored servers."""
-    return await _get("/api/updates/status")
-
-
 if __name__ == "__main__":
     mcp.run()

@@ -176,7 +176,7 @@ flowchart TB
 
 ## MCP Server
 
-`mcp_server/` is a [Model Context Protocol](https://modelcontextprotocol.io) server that exposes the monitor to MCP clients such as Claude Desktop and Claude Code as **read-only tools**: overall status, servers, recent log errors, health reports, GPON ONU status, planned power outages and pending updates. It is a thin client of the REST API (logs in with a dedicated `operator` account), runs in its own virtualenv, and never performs state-changing actions. Setup and the tool list: [mcp_server/README.md](mcp_server/README.md).
+`mcp_server/` is a [Model Context Protocol](https://modelcontextprotocol.io) server that exposes the monitor to MCP clients such as Claude Desktop and Claude Code as **read-only tools**: overall status, servers, recent log errors, health reports, GPON ONU status and planned power outages. It is a thin client of the REST API (logs in with a dedicated `operator` account), runs in its own virtualenv, and never performs state-changing actions. Setup and the tool list: [mcp_server/README.md](mcp_server/README.md).
 
 ---
 
@@ -219,7 +219,6 @@ ServersMonitoringMCP/
 │   │   ├── log_watcher.py
 │   │   ├── error_detector.py
 │   │   ├── health_checker.py
-│   │   ├── updates_checker.py
 │   │   ├── onu_monitor.py
 │   │   ├── electric_monitor.py
 │   │   ├── acc_monitor.py
@@ -450,9 +449,6 @@ All endpoints are under `/api`. Authentication is session-based; most require a 
 ### Updates
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/updates/status` | Cached update info |
-| POST | `/api/updates/refresh` | Force refresh (admin) |
-| POST | `/api/servers/{id}/updates/check` | Check one server |
 
 ### ONU / GPON
 | Method | Path | Description |
@@ -515,7 +511,6 @@ All endpoints are under `/api/admin` and require the `superadmin` role.
 | `log_watcher` | Real-time SSH log tailing | `settings.yaml`, servers |
 | `error_detector` | Match logs to known patterns | `knowledge_base/` |
 | `health_checker` | Periodic per-service health | `settings.yaml` |
-| `updates_checker` | Daily system-update tracking | `settings.yaml` |
 | `onu_monitor` | ZTE C320 ONU SNMP monitoring | `secrets.yaml` (OLTs) |
 | `electric_monitor` | Premier Energy outage alerts | `.env`, `config/electric_addresses.txt` |
 | `acc_monitor` | acc.md water outage alerts | `.env`, panel (pattern) |

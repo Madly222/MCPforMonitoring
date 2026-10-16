@@ -4,6 +4,7 @@ REST API Endpoints.
 Provides API for server monitoring and management.
 """
 
+import os
 from typing import Optional
 from datetime import datetime
 
@@ -17,7 +18,6 @@ from src.web.auth import get_current_user, require_admin, UserInfo
 from src.services.dhcp import DHCPService
 from src.services.dns import DNSService
 from src.services.radius import RADIUSService
-from src.monitoring.updates_checker import get_updates_checker
 
 
 class ServerStatus(BaseModel):
@@ -73,37 +73,20 @@ class ConsoleRequest(BaseModel):
 router = APIRouter()
 
 
-def get_package_manager_commands(distro: str) -> dict:
-    distro = (distro or "").lower()
-    
-    if distro in ("debian", "ubuntu"):
-        return {
-            "update": "apt-get update -qq",
-            "list_upgradable": "apt-get -s upgrade 2>/dev/null | grep -E '^Inst ' | awk '{print $2}'",
-            "upgrade": "DEBIAN_FRONTEND=noninteractive apt-get upgrade -y",
-            "check_reboot": "[ -f /var/run/reboot-required ] && echo 'yes' || echo 'no'"
-        }
-    elif distro in ("centos", "rhel", "rocky", "alma"):
-        return {
-            "update": "yum makecache -q",
-            "list_upgradable": "yum check-update -q 2>/dev/null | awk '{print $1}' || true",
-            "upgrade": "yum update -y",
-            "check_reboot": "needs-restarting -r >/dev/null 2>&1 && echo 'no' || echo 'yes'"
-        }
-    elif distro == "fedora":
-        return {
-            "update": "dnf makecache -q",
-            "list_upgradable": "dnf check-update -q 2>/dev/null | awk '{print $1}' || true",
-            "upgrade": "dnf update -y",
-            "check_reboot": "needs-restarting -r >/dev/null 2>&1 && echo 'no' || echo 'yes'"
-        }
-    else:
-        return {
-            "update": "apt-get update -qq",
-            "list_upgradable": "apt-get -s upgrade 2>/dev/null | grep -E '^Inst ' | awk '{print $2}'",
-            "upgrade": "DEBIAN_FRONTEND=noninteractive apt-get upgrade -y",
-            "check_reboot": "[ -f /var/run/reboot-required ] && echo 'yes' || echo 'no'"
-        }
+_BRAND_DEFAULTS = {"name": "Network Operations", "sub": "AI Network Ops · MCP", "avatar": "NO"}
+
+
+@router.get("/branding")
+async def get_branding(user: UserInfo = Depends(get_current_user)):
+    """Sidebar branding from .env (BRAND_NAME / BRAND_SUB / BRAND_AVATAR), read live."""
+    from dotenv import dotenv_values
+    from src.web.env_config import ENV_PATH
+
+    env = dotenv_values(ENV_PATH) if ENV_PATH.exists() else {}
+    return {
+        key: env.get(f"BRAND_{key.upper()}") or os.getenv(f"BRAND_{key.upper()}") or default
+        for key, default in _BRAND_DEFAULTS.items()
+    }
 
 
 async def build_server_status(server) -> dict:
@@ -124,7 +107,6 @@ async def build_server_status(server) -> dict:
         "connected": False,
         "services": [],
         "system_info": None,
-        "updates": None
     }
     
     try:
@@ -160,16 +142,6 @@ async def build_server_status(server) -> dict:
                     })
                 else:
                     server_status["services"].append(svc_result)
-            
-            updates_checker = get_updates_checker()
-            update_status = updates_checker.get_status(server.id)
-            if update_status:
-                server_status["updates"] = {
-                    "available": update_status.updates_available,
-                    "security": update_status.security_updates,
-                    "status": update_status.status,
-                    "checked_at": update_status.checked_at.isoformat()
-                }
     
     except Exception as e:
         logger.error(f"Error getting status for {server.id}: {e}")
@@ -1324,102 +1296,6 @@ async def get_server_full_info(
     report = await collector.collect(server_id)
     
     return report_to_dict(report)
-
-
-@router.post("/servers/{server_id}/updates/check")
-async def check_server_updates(
-    server_id: str,
-    user: UserInfo = Depends(require_admin)
-):
-    """Check for available system updates."""
-    config = get_config()
-    server = config.get_server_by_id(server_id)
-    
-    if not server:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Server not found: {server_id}"
-        )
-    
-    ssh = get_ssh_manager()
-    pm_commands = get_package_manager_commands(server.distro)
-    
-    result = await ssh.execute_sudo(
-        server_id,
-        f"{pm_commands['update']} 2>&1",
-        timeout=120.0
-    )
-    
-    if not result.success:
-        return {
-            "success": False,
-            "message": "Failed to check updates. Sudo access may be required.",
-            "output": result.stderr or result.stdout
-        }
-    
-    list_result = await ssh.execute_sudo(
-        server_id,
-        pm_commands['list_upgradable'],
-        timeout=60.0
-    )
-    
-    packages = []
-    for line in list_result.stdout.strip().split("\n"):
-        line = line.strip()
-        if line and not line.startswith(("Listing", "Loaded", "Loading")):
-            pkg_name = line.split()[0] if line.split() else line
-            if pkg_name:
-                packages.append(pkg_name)
-    
-    return {
-        "success": True,
-        "message": f"Found {len(packages)} updates available",
-        "updates_count": len(packages),
-        "packages": packages[:50],
-        "output": result.stdout[-500:] if len(result.stdout) > 500 else result.stdout
-    }
-
-
-@router.get("/updates/status")
-async def get_updates_status(user: UserInfo = Depends(get_current_user)):
-    """Get cached updates status for all servers."""
-    updates_checker = get_updates_checker()
-    statuses = updates_checker.get_all_status()
-    
-    return {
-        "servers": {
-            server_id: {
-                "available": status.updates_available,
-                "security": status.security_updates,
-                "status": status.status,
-                "checked_at": status.checked_at.isoformat(),
-                "error": status.error
-            }
-            for server_id, status in statuses.items()
-        }
-    }
-
-
-@router.post("/updates/refresh")
-async def refresh_updates(user: UserInfo = Depends(require_admin)):
-    """Manually trigger updates check for all servers."""
-    updates_checker = get_updates_checker()
-    await updates_checker.check_all_servers()
-    
-    statuses = updates_checker.get_all_status()
-    
-    return {
-        "success": True,
-        "message": "Updates check completed",
-        "servers": {
-            server_id: {
-                "available": status.updates_available,
-                "security": status.security_updates,
-                "status": status.status
-            }
-            for server_id, status in statuses.items()
-        }
-    }
 
 
 # ==============================================================================

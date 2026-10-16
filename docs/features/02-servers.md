@@ -25,11 +25,6 @@ flowchart LR
     SVC --> S3["RADIUS — FreeRADIUS 2.x / 3.x"]:::all
     SVC --> S4["Почта и веб — Postfix · Dovecot<br/>Apache · SpamAssassin"]:::all
 
-    ROOT --> UPD["📦 Обновления ОС"]:::group
-    UPD --> U1["Сколько обновлений, из них security"]:::all
-    UPD --> U2["Проверить один сервер"]:::admin
-    UPD --> U3["Обновить данные по всем"]:::admin
-
     ROOT --> PROF["🧬 Профиль сервера"]:::group
     PROF --> P1["systemd или SysVinit, дистрибутив"]:::auto
     PROF --> P2["Определяется один раз и запоминается"]:::auto
@@ -49,7 +44,6 @@ flowchart LR
 | 🗂️ Карточка | За секунду видно, какой сервер лежит и какой сервис на нём упал |
 | 🎛️ Управление | Перезапустить DHCP/DNS/RADIUS из браузера, не заходя по SSH |
 | 🧩 Сервисы | Тип сервера определяется автоматически — панель сама находит конфиги, логи и файлы аренд. DHCP показывает аренды и пулы, DNS проверяет резолв тестовой зоны, почта и веб — только статус и рестарт |
-| 📦 Обновления | Не забыть про security-патчи: проверка раз в сутки, результат кэшируется |
 | 🧬 Профиль | Одна и та же кнопка «restart» работает и на systemd, и на старом SysVinit |
 
 > Добавить, изменить или убрать сервер можно во вкладке **Admin → Servers** — см. [👑 Консоль superadmin](08-admin.md).
@@ -62,7 +56,6 @@ flowchart LR
 | Отчёт о сервере | `src/core/system_info.py` |
 | Профиль сервера (`sessions/server_profiles.json`) | `src/core/server_profile.py` |
 | DHCP / DNS / RADIUS | `src/services/dhcp.py`, `dns.py`, `radius.py` + `config/services/*.yaml` |
-| Обновления ОС | `src/monitoring/updates_checker.py` |
 
 ---
 [← Доступ и роли](01-access.md) · [Карта](README.md) · [Дальше: Фоновый мониторинг →](03-monitoring.md)
