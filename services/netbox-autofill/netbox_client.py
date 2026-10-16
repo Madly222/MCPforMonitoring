@@ -18,7 +18,7 @@ class NetBoxClient:
     def __init__(self, config: NetBoxConfig = None):
         if config is None:
             config = NetBoxConfig(
-                url=os.getenv("NETBOX_URL", "http://192.0.2.57/"),
+                url=os.getenv("NETBOX_URL", ""),
                 token=os.getenv("NETBOX_TOKEN", ""),
             )
         self.nb = pynetbox.api(config.url, token=config.token)

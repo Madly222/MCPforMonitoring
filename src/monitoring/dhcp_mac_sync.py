@@ -19,7 +19,7 @@ load_dotenv(Path(__file__).parent.parent.parent / ".env")
 # SETTINGS FROM .ENV
 # ============================================================================
 
-NETBOX_URL = os.getenv("NETBOX_URL", "http://192.0.2.57")
+NETBOX_URL = os.getenv("NETBOX_URL", "")
 NETBOX_TOKEN = os.getenv("NETBOX_TOKEN", "")
 
 DHCP_SSH_HOST = os.getenv("DHCP_SSH_HOST", "")
