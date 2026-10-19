@@ -33,6 +33,8 @@ A self-hosted control plane that watches a fleet of Linux servers over SSH, dete
 
 </details>
 
+**[Full gallery: 26 screens grouped by feature →](docs/SCREENSHOTS.md)** roles, SSH console, ONU filters, router scan, MAC sync, batch mode, outage alerts, superadmin settings.
+
 All screenshots use made-up demo data. Addresses are from the documentation ranges 192.0.2.0/24 and 198.51.100.0/24.
 
 ---
