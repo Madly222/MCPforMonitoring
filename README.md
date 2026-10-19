@@ -11,10 +11,35 @@ A self-hosted control plane that watches a fleet of Linux servers over SSH, dete
 
 > 🌳 **Feature map** — what the app can do, split into 8 small visual trees: [docs/features](docs/features/README.md)
 
+<p align="center">
+  <img src="docs/screenshots/01-servers.png" alt="Server monitoring dashboard" width="100%">
+</p>
+
+## Screenshots
+
+| | |
+|---|---|
+| ![Natural-language command interpreted by Claude](docs/screenshots/02-ai-console.png) | ![Server details](docs/screenshots/03-server-details.png) |
+| **AI console:** a plain-language request turned into a shell command, run over SSH and summarised by Claude | **Server details:** OS, hardware, network, firewall and per-service controls |
+| ![OLT overview](docs/screenshots/04-olts.png) | ![NetBox auto-fill](docs/screenshots/06-netbox.png) |
+| **GPON:** ONU status per OLT: online, low signal, offline, registration | **NetBox auto-fill:** switch ports, VLANs and CDP neighbours ready to push to NetBox |
+
+<details>
+<summary>ONU list with optical levels, and the audit log</summary>
+
+![ONU list](docs/screenshots/05-onus.png)
+
+![Audit log](docs/screenshots/07-audit.png)
+
+</details>
+
+All screenshots use made-up demo data. Addresses are from the documentation ranges 192.0.2.0/24 and 198.51.100.0/24.
+
 ---
 
 ## Table of Contents
 
+- [Screenshots](#screenshots)
 - [Overview](#overview)
 - [Architecture](#architecture)
 - [Features](#features)
