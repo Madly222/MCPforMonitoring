@@ -608,7 +608,7 @@ async function checkClaudeHealth() {
 
 function addToHistory(command, success) {
     var list = document.getElementById('historyList');
-    var empty = list.querySelector('.empty-history');
+    var empty = list.querySelector('.empty-state');
     if (empty) empty.remove();
     var time = new Date().toLocaleTimeString();
     var item = document.createElement('div');
