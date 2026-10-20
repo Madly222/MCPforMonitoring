@@ -41,7 +41,6 @@ from src.core.server_profile import get_profile_detector, ServerProfile
 
 RESOLVER_CACHE_STORE = SESSIONS_DIR / "resolver_cache.json"
 
-# Intent identifiers
 STATUS = "status"
 LOGS = "logs"
 ERRORS = "errors"

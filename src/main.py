@@ -17,7 +17,6 @@ from src.core.config import get_config, LOGS_DIR, SECRETS_FILE
 
 
 def setup_logging():
-    """Configure application logging."""
     config = get_config()
     settings = config.load_settings()
     
@@ -47,7 +46,6 @@ def setup_logging():
 
 
 def check_configuration():
-    """Verify configuration before starting."""
     if not SECRETS_FILE.exists():
         logger.error(f"Secrets file not found: {SECRETS_FILE}")
         logger.info("Please copy secrets.example.yaml to secrets.yaml and configure it:")
@@ -76,7 +74,6 @@ def check_configuration():
 
 
 def main():
-    """Main entry point."""
     setup_logging()
     
     logger.info("=" * 60)

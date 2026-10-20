@@ -23,13 +23,11 @@ from src.core.config import get_config
 # ==============================================================================
 
 class LoginRequest(BaseModel):
-    """Login request model."""
     username: str
     password: str
 
 
 class LoginResponse(BaseModel):
-    """Login response model."""
     success: bool
     message: str
     username: Optional[str] = None
@@ -37,7 +35,6 @@ class LoginResponse(BaseModel):
 
 
 class UserInfo(BaseModel):
-    """User information model."""
     username: str
     role: str
 
@@ -63,7 +60,6 @@ class SessionStore:
         self._config = get_config()
     
     def create_session(self, username: str, role: str) -> str:
-        """Create new session and return session ID."""
         session_id = secrets.token_urlsafe(32)
         
         secrets_config = self._config.load_secrets()
@@ -80,7 +76,6 @@ class SessionStore:
         return session_id
     
     def get_session(self, session_id: str) -> Optional[dict]:
-        """Get session by ID if valid."""
         if session_id not in self._sessions:
             return None
         
@@ -93,7 +88,6 @@ class SessionStore:
         return session
     
     def delete_session(self, session_id: str) -> bool:
-        """Delete session."""
         if session_id in self._sessions:
             username = self._sessions[session_id]["username"]
             del self._sessions[session_id]
@@ -102,7 +96,6 @@ class SessionStore:
         return False
     
     def cleanup_expired(self) -> int:
-        """Remove expired sessions."""
         now = datetime.now()
         expired = [
             sid for sid, session in self._sessions.items()
@@ -117,7 +110,6 @@ _session_store = SessionStore()
 
 
 def get_session_store() -> SessionStore:
-    """Get session store instance."""
     return _session_store
 
 
@@ -133,7 +125,6 @@ def hash_password(password: str) -> str:
 
 
 def verify_password(password: str, hashed: str) -> bool:
-    """Verify password against hash."""
     try:
         if hashed.startswith('$2b$') or hashed.startswith('$2a$'):
             return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
@@ -202,7 +193,6 @@ async def require_admin(user: UserInfo = Depends(get_current_user)) -> UserInfo:
 
 
 async def require_superadmin(user: UserInfo = Depends(get_current_user)) -> UserInfo:
-    """Dependency to require superadmin role."""
     if user.role != "superadmin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

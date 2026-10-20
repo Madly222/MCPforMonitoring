@@ -18,11 +18,6 @@ from src.core.ssh_manager import SSHManager
 
 
 class RADIUSService(BaseService):
-    """
-    RADIUS service handler.
-    
-    Supports FreeRADIUS (versions 2.x and 3.x).
-    """
     
     service_type: str = "radius"
     
@@ -31,9 +26,6 @@ class RADIUSService(BaseService):
         self._version: Optional[str] = None
     
     async def detect(self) -> Optional[dict]:
-        """
-        Auto-detect RADIUS server type.
-        """
         if self._detected_service is not None:
             return self._detected_service
         
@@ -72,7 +64,6 @@ class RADIUSService(BaseService):
         return None
     
     async def get_version(self) -> str:
-        """Get FreeRADIUS version."""
         if self._version:
             return self._version
         
@@ -97,7 +88,6 @@ class RADIUSService(BaseService):
         return self._version
     
     async def get_config_file(self) -> Optional[str]:
-        """Find RADIUS config file."""
         if self._config_file is not None:
             return self._config_file
         
@@ -130,7 +120,6 @@ class RADIUSService(BaseService):
         """
         results = []
         
-        # Check process
         status = await self.get_status()
         results.append(HealthCheckResult(
             name="process_running",
@@ -165,7 +154,6 @@ class RADIUSService(BaseService):
             message="UDP port 1813 (acct) is listening" if acct_listening else "UDP port 1813 (acct) is not listening"
         ))
         
-        # Check config file
         config_file = await self.get_config_file()
         results.append(HealthCheckResult(
             name="config_exists",
@@ -191,9 +179,6 @@ class RADIUSService(BaseService):
         return results
     
     async def get_extra_info(self) -> dict[str, Any]:
-        """
-        Get RADIUS-specific information.
-        """
         info = {}
         
         det = await self.detect()
@@ -201,7 +186,6 @@ class RADIUSService(BaseService):
         info["version"] = await self.get_version()
         info["config_file"] = await self.get_config_file()
         
-        # Get active sessions count from radutmp
         sessions_result = await self.ssh.execute_sudo(
             self.server_id,
             "wc -l < /var/log/freeradius/radutmp 2>/dev/null || echo '0'"
@@ -212,7 +196,6 @@ class RADIUSService(BaseService):
         except:
             info["active_sessions_estimate"] = 0
         
-        # Get today's auth count from log
         auth_count_result = await self.ssh.execute_sudo(
             self.server_id,
             "grep -c 'Login OK' /var/log/freeradius/radius.log 2>/dev/null || echo '0'"
@@ -222,7 +205,6 @@ class RADIUSService(BaseService):
         except:
             info["logins_today"] = 0
         
-        # Get failed auth count
         fail_count_result = await self.ssh.execute_sudo(
             self.server_id,
             "grep -c 'Login incorrect' /var/log/freeradius/radius.log 2>/dev/null || echo '0'"
@@ -235,7 +217,6 @@ class RADIUSService(BaseService):
         return info
     
     async def get_log_files(self) -> list[str]:
-        """Get RADIUS log file paths."""
         log_paths = [
             "/var/log/freeradius/radius.log",
             "/var/log/radius/radius.log",
@@ -243,7 +224,6 @@ class RADIUSService(BaseService):
             "/var/log/daloradius.log"
         ]
         
-        # Check service_config
         det = await self.detect()
         if det:
             log_config = self.service_config.get("log_files", {}).get(det["name"], [])
@@ -345,24 +325,20 @@ class RADIUSService(BaseService):
             )
         
         elif name == "get_stats":
-            # Get various stats
             stats = []
             
-            # Logins today
             result = await self.ssh.execute_sudo(
                 self.server_id,
                 "grep -c 'Login OK' /var/log/freeradius/radius.log 2>/dev/null || echo '0'"
             )
             stats.append(f"Successful logins (current log): {result.stdout.strip()}")
             
-            # Failed logins
             result = await self.ssh.execute_sudo(
                 self.server_id,
                 "grep -c 'Login incorrect' /var/log/freeradius/radius.log 2>/dev/null || echo '0'"
             )
             stats.append(f"Failed logins (current log): {result.stdout.strip()}")
             
-            # Active sessions estimate
             result = await self.ssh.execute_sudo(
                 self.server_id,
                 "wc -c < /var/log/freeradius/radutmp 2>/dev/null || echo '0'"
@@ -428,9 +404,6 @@ class RADIUSService(BaseService):
             )
     
     async def get_recent_logs(self, lines: int = 50) -> str:
-        """
-        Get recent RADIUS log entries.
-        """
         log_files = await self.get_log_files()
         
         if not log_files:

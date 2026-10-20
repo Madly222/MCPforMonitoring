@@ -18,7 +18,6 @@ from src.core.ssh_manager import get_ssh_manager, SSHManager
 
 
 class LogEventType(Enum):
-    """Type of log event."""
     ERROR = "error"
     WARNING = "warning"
     INFO = "info"
@@ -27,7 +26,6 @@ class LogEventType(Enum):
 
 @dataclass
 class LogEvent:
-    """Represents a log event from monitored server."""
     server_id: str
     service_type: str
     log_file: str
@@ -61,14 +59,12 @@ class LogWatcher:
         self._load_patterns()
     
     def _load_patterns(self):
-        """Load error and ignore patterns from knowledge base."""
         import re
         
         try:
             import yaml
             from src.core.config import KNOWLEDGE_DIR
             
-            # Load ignore patterns
             ignore_file = KNOWLEDGE_DIR / "ignore_patterns.yaml"
             if ignore_file.exists():
                 with open(ignore_file) as f:
@@ -78,7 +74,6 @@ class LogWatcher:
                     if isinstance(patterns, list):
                         self._ignore_patterns.extend(patterns)
             
-            # Common error patterns
             self._error_patterns = [
                 r"error",
                 r"fail(ed|ure)?",
@@ -106,7 +101,6 @@ class LogWatcher:
             logger.error(f"Failed to load patterns: {e}")
     
     def _should_ignore(self, line: str) -> bool:
-        """Check if line should be ignored."""
         import re
         
         for pattern in self._ignore_patterns:
@@ -119,7 +113,6 @@ class LogWatcher:
         return False
     
     def _classify_line(self, line: str) -> LogEventType:
-        """Classify log line by severity."""
         import re
         
         line_lower = line.lower()
@@ -135,17 +128,14 @@ class LogWatcher:
         return LogEventType.INFO
     
     def add_handler(self, handler: LogEventHandler):
-        """Add event handler."""
         self._handlers.append(handler)
         logger.debug(f"Added log event handler: {handler.__name__}")
     
     def remove_handler(self, handler: LogEventHandler):
-        """Remove event handler."""
         if handler in self._handlers:
             self._handlers.remove(handler)
     
     async def _notify_handlers(self, event: LogEvent):
-        """Notify all handlers about event."""
         for handler in self._handlers:
             try:
                 await handler(event)
@@ -159,7 +149,6 @@ class LogWatcher:
         log_file: str,
         filter_pattern: Optional[str] = None
     ):
-        """Watch a single log file."""
         task_id = f"{server_id}:{log_file}"
         logger.info(f"Starting log watch: {task_id}")
         
@@ -180,7 +169,6 @@ class LogWatcher:
                     
                     event_type = self._classify_line(line)
                     
-                    # Only process warnings and errors
                     if event_type in (LogEventType.ERROR, LogEventType.WARNING):
                         event = LogEvent(
                             server_id=server_id,
@@ -244,7 +232,6 @@ class LogWatcher:
             try:
                 service_config = self.config.load_service_config(service_type)
                 
-                # Get log files for this service
                 log_files = service_config.get("log_files", {})
                 
                 # Try to detect which variant is installed
@@ -260,7 +247,6 @@ class LogWatcher:
                 if detected_name and detected_name in log_files:
                     files_config = log_files[detected_name]
                 else:
-                    # Use first available
                     files_config = list(log_files.values())[0] if log_files else []
                 
                 for log_config in files_config:
@@ -274,7 +260,6 @@ class LogWatcher:
                     if not log_path:
                         continue
                     
-                    # Check if file exists
                     if await self.ssh.file_exists(server.id, log_path):
                         task_id = f"{server.id}:{log_path}"
                         task = asyncio.create_task(
@@ -293,7 +278,6 @@ class LogWatcher:
                 logger.error(f"Log watcher setup failed for {server.id}/{service_type}: {e}")
     
     async def stop(self):
-        """Stop watching all log files."""
         if not self._running:
             return
         
@@ -320,12 +304,10 @@ class LogWatcher:
     
     @property
     def is_running(self) -> bool:
-        """Check if watcher is running."""
         return self._running
     
     @property
     def watched_files(self) -> list[str]:
-        """Get list of watched files."""
         return list(self._tasks.keys())
 
 
@@ -333,7 +315,6 @@ _log_watcher: Optional[LogWatcher] = None
 
 
 def get_log_watcher() -> LogWatcher:
-    """Get log watcher singleton instance."""
     global _log_watcher
     if _log_watcher is None:
         _log_watcher = LogWatcher()

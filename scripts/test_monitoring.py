@@ -22,7 +22,6 @@ from src.monitoring.health_checker import HealthChecker
 
 
 def setup_logging():
-    """Configure logging for test script."""
     logger.remove()
     logger.add(
         sys.stderr,
@@ -32,13 +31,11 @@ def setup_logging():
 
 
 async def handle_log_event(event: LogEvent):
-    """Handle log event from watcher."""
     icon = "🔴" if event.event_type.value == "error" else "🟡"
     logger.info(f"{icon} [{event.server_id}:{event.service_type}] {event.line[:100]}")
 
 
 async def test_health_checker(server_id: str):
-    """Test health checker."""
     logger.info("=" * 60)
     logger.info("Testing Health Checker")
     logger.info("=" * 60)
@@ -67,14 +64,12 @@ async def test_health_checker(server_id: str):
 
 
 async def test_error_detector():
-    """Test error detector with sample events."""
     logger.info("=" * 60)
     logger.info("Testing Error Detector")
     logger.info("=" * 60)
     
     detector = ErrorDetector()
     
-    # Test events
     test_events = [
         LogEvent(
             server_id="test-server",
@@ -122,7 +117,6 @@ async def test_error_detector():
 
 
 async def test_log_watcher(server_id: str, duration: int = 30):
-    """Test log watcher."""
     logger.info("=" * 60)
     logger.info(f"Testing Log Watcher (duration: {duration}s)")
     logger.info("=" * 60)
@@ -134,7 +128,6 @@ async def test_log_watcher(server_id: str, duration: int = 30):
     events_received = []
     
     async def combined_handler(event: LogEvent):
-        """Handle and detect errors."""
         events_received.append(event)
         await handle_log_event(event)
         
@@ -168,7 +161,6 @@ async def test_log_watcher(server_id: str, duration: int = 30):
 
 
 async def main():
-    """Main entry point."""
     setup_logging()
     
     logger.info("MCP Server Monitor - Monitoring Test")
@@ -192,10 +184,8 @@ async def main():
     # Test error detector (no server needed)
     await test_error_detector()
     
-    # Test health checker
     await test_health_checker(server_id)
     
-    # Test log watcher
     await test_log_watcher(server_id, duration)
     
     logger.info("=" * 60)

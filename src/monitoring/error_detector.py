@@ -21,7 +21,6 @@ from src.monitoring.log_watcher import LogEvent, LogEventType
 
 @dataclass
 class ErrorPattern:
-    """Known error pattern."""
     pattern: str
     service: str
     severity: str
@@ -34,7 +33,6 @@ class ErrorPattern:
 
 @dataclass
 class DetectedError:
-    """Detected error with context."""
     event: LogEvent
     pattern: Optional[ErrorPattern]
     error_hash: str
@@ -63,7 +61,6 @@ class ErrorDetector:
         self._load_patterns()
     
     def _load_patterns(self):
-        """Load error patterns from knowledge base."""
         patterns_file = KNOWLEDGE_DIR / "known_errors.yaml"
         
         if not patterns_file.exists():
@@ -98,7 +95,6 @@ class ErrorDetector:
             logger.error(f"Failed to load error patterns: {e}")
     
     def _compute_error_hash(self, event: LogEvent) -> str:
-        """Compute hash for error deduplication."""
         # Normalize the line (remove timestamps, PIDs, IPs)
         normalized = re.sub(r'\d{4}-\d{2}-\d{2}', 'DATE', event.line)
         normalized = re.sub(r'\d{2}:\d{2}:\d{2}', 'TIME', normalized)
@@ -110,8 +106,6 @@ class ErrorDetector:
         return hashlib.md5(key.encode()).hexdigest()[:16]
     
     def _match_pattern(self, event: LogEvent) -> Optional[ErrorPattern]:
-        """Find matching error pattern."""
-        # Check service-specific patterns
         service_patterns = self._patterns.get(event.service_type, [])
         
         for pattern in service_patterns:
@@ -124,7 +118,6 @@ class ErrorDetector:
         return None
     
     def _is_duplicate(self, error_hash: str) -> bool:
-        """Check if error is duplicate within dedup window."""
         settings = self.config.load_settings()
         window = settings.error_processing.dedup_window_seconds
         
@@ -136,7 +129,6 @@ class ErrorDetector:
         return False
     
     def _is_in_cooldown(self, error_hash: str, pattern: ErrorPattern) -> bool:
-        """Check if error is in cooldown for auto-fix."""
         if error_hash not in self._cooldowns:
             return False
         
@@ -144,7 +136,6 @@ class ErrorDetector:
         return datetime.now() < cooldown_until
     
     def _set_cooldown(self, error_hash: str, seconds: int):
-        """Set cooldown for error."""
         self._cooldowns[error_hash] = datetime.now() + timedelta(seconds=seconds)
     
     def process_event(self, event: LogEvent) -> Optional[DetectedError]:
@@ -153,25 +144,20 @@ class ErrorDetector:
         
         Returns DetectedError if error detected and not duplicate.
         """
-        # Only process errors and warnings
         if event.event_type not in (LogEventType.ERROR, LogEventType.WARNING):
             return None
         
         error_hash = self._compute_error_hash(event)
         
-        # Check for duplicate
         if self._is_duplicate(error_hash):
-            # Update existing error
             existing = self._recent_errors[error_hash]
             existing.last_seen = datetime.now()
             existing.count += 1
             logger.debug(f"Duplicate error (count={existing.count}): {error_hash}")
             return None
         
-        # Match against known patterns
         pattern = self._match_pattern(event)
         
-        # Create detected error
         detected = DetectedError(
             event=event,
             pattern=pattern,
@@ -180,10 +166,8 @@ class ErrorDetector:
             last_seen=datetime.now()
         )
         
-        # Store for deduplication
         self._recent_errors[error_hash] = detected
         
-        # Log detection
         if pattern:
             logger.info(f"Known error detected: {pattern.diagnosis[:50]}...")
         else:
@@ -192,7 +176,6 @@ class ErrorDetector:
         return detected
     
     def can_auto_fix(self, detected: DetectedError) -> bool:
-        """Check if error can be auto-fixed."""
         if not detected.pattern:
             return False
         
@@ -206,7 +189,6 @@ class ErrorDetector:
         return True
     
     def get_fix_commands(self, detected: DetectedError) -> list[str]:
-        """Get fix commands for detected error."""
         if not detected.pattern:
             return []
         
@@ -218,7 +200,6 @@ class ErrorDetector:
             self._set_cooldown(detected.error_hash, detected.pattern.cooldown)
     
     def mark_resolved(self, detected: DetectedError, resolution: str):
-        """Mark error as resolved."""
         detected.resolved = True
         detected.resolution = resolution
         
@@ -227,7 +208,6 @@ class ErrorDetector:
             self._recent_errors[detected.error_hash].resolution = resolution
     
     def get_recent_errors(self, minutes: int = 60) -> list[DetectedError]:
-        """Get errors from last N minutes."""
         cutoff = datetime.now() - timedelta(minutes=minutes)
         
         return [
@@ -236,14 +216,12 @@ class ErrorDetector:
         ]
     
     def get_unresolved_errors(self) -> list[DetectedError]:
-        """Get all unresolved errors."""
         return [
             error for error in self._recent_errors.values()
             if not error.resolved
         ]
     
     def cleanup_old_errors(self, hours: int = 24):
-        """Remove old errors from memory."""
         cutoff = datetime.now() - timedelta(hours=hours)
         
         to_remove = [
@@ -258,7 +236,6 @@ class ErrorDetector:
             logger.debug(f"Cleaned up {len(to_remove)} old errors")
     
     def get_error_stats(self) -> dict[str, Any]:
-        """Get error statistics."""
         errors = list(self._recent_errors.values())
         
         return {
@@ -280,7 +257,6 @@ _error_detector: Optional[ErrorDetector] = None
 
 
 def get_error_detector() -> ErrorDetector:
-    """Get error detector singleton instance."""
     global _error_detector
     if _error_detector is None:
         _error_detector = ErrorDetector()

@@ -36,7 +36,6 @@ class AuditLogger:
         success: Optional[bool] = None,
         ip: Optional[str] = None,
     ) -> None:
-        """Append a single audit entry."""
         entry = {
             "timestamp": datetime.now().isoformat(),
             "username": username,
@@ -99,7 +98,6 @@ _audit_logger: Optional[AuditLogger] = None
 
 
 def get_audit_logger() -> AuditLogger:
-    """Get the singleton audit logger instance."""
     global _audit_logger
     if _audit_logger is None:
         _audit_logger = AuditLogger()

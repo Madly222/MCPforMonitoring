@@ -70,7 +70,6 @@ def house_in_range(target: str, range_str: str) -> bool:
     """Check if target house number is in a range like '15-23' or matches exactly."""
     target_base, target_suffix = parse_house_number(target)
     
-    # Check for range: 15-23
     range_match = re.match(r'^(\d+)\s*[-–]\s*(\d+)$', range_str.strip())
     if range_match:
         start = int(range_match.group(1))
@@ -93,7 +92,6 @@ def house_in_range(target: str, range_str: str) -> bool:
 def find_house_in_list(target: str, houses_text: str) -> bool:
     """Check if target house is in a list like '12/1, 12/2, 15-23, 25A'."""
     # Split by comma and space, but be careful with ranges
-    # Pattern to extract house numbers/ranges
     pattern = r'(\d+(?:/\d+)?(?:[A-Za-z])?(?:\s*[-–]\s*\d+)?)'
     houses = re.findall(pattern, houses_text)
     
@@ -104,7 +102,6 @@ def find_house_in_list(target: str, houses_text: str) -> bool:
 
 
 def send_email_notification(matches: list) -> bool:
-    """Send email notification about electricity disconnection."""
     
     EMAIL_CONFIG = _email_config()
     if not EMAIL_CONFIG["enabled"]:
@@ -252,7 +249,6 @@ def parse_address(addr: str) -> Tuple[str, Optional[str]]:
         # Last part might be house number
         last = parts[-1]
         if re.match(r'^\d+', last):
-            # Has house number
             street = ' '.join(parts[:-1])
             return street, last
     return addr, None
@@ -270,7 +266,6 @@ async def fetch_page(session: aiohttp.ClientSession, url: str) -> str:
 
 
 def clean_html(content: str) -> str:
-    """Remove HTML tags and decode entities."""
     text = re.sub(r'<[^>]+>', ' ', content)
     text = text.replace('&nbsp;', ' ')
     text = text.replace('&ndash;', '–')
@@ -311,7 +306,6 @@ def find_in_chisinau(content: str, addresses: list, date_str: str) -> list:
         for addr in addresses:
             street, house_num = parse_address(addr)
             
-            # Find street in block
             street_pattern = re.compile(
                 r'(?:str\.\s*|bd\.\s*|str-la\s*\d*\s*)?' + re.escape(street) + r'(?:\s+(?:bd\.|str\.|str-la))?\s*([\d\s,/\-–A-Za-z]+?)(?=\s+în\s+intervalul|\s+pentru|\s*$|[A-Z][a-z]+\s+\d)',
                 re.IGNORECASE
@@ -321,7 +315,6 @@ def find_in_chisinau(content: str, addresses: list, date_str: str) -> list:
             if street_match:
                 houses_text = street_match.group(1) if street_match.lastindex else ""
                 
-                # If we need specific house number, check it
                 if house_num:
                     if not find_house_in_list(house_num, houses_text):
                         continue
@@ -329,7 +322,6 @@ def find_in_chisinau(content: str, addresses: list, date_str: str) -> list:
                 time_match = re.search(r'(\d{1,2}:\d{2})\s*[-–]\s*(\d{1,2}:\d{2})', block)
                 time_info = time_match.group(0) if time_match else ""
                 
-                # Extract context around street
                 street_pos = block.lower().find(street.lower())
                 if street_pos >= 0:
                     start = max(0, street_pos - 20)

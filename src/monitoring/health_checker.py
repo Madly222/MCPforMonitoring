@@ -21,7 +21,6 @@ from src.services.base import HealthStatus, ServiceState
 
 
 class CheckResult(Enum):
-    """Health check result."""
     HEALTHY = "healthy"
     DEGRADED = "degraded"
     UNHEALTHY = "unhealthy"
@@ -30,7 +29,6 @@ class CheckResult(Enum):
 
 @dataclass
 class ServerHealthReport:
-    """Health report for a server."""
     server_id: str
     host: str
     reachable: bool
@@ -44,7 +42,6 @@ class ServerHealthReport:
 HealthReportHandler = Callable[[ServerHealthReport], Awaitable[None]]
 
 
-# Service handlers registry
 SERVICE_HANDLERS = {
     "dhcp": DHCPService,
     "dns": DNSService,
@@ -72,16 +69,13 @@ class HealthChecker:
         self._last_reports: dict[str, ServerHealthReport] = {}
     
     def add_handler(self, handler: HealthReportHandler):
-        """Add health report handler."""
         self._handlers.append(handler)
     
     def remove_handler(self, handler: HealthReportHandler):
-        """Remove health report handler."""
         if handler in self._handlers:
             self._handlers.remove(handler)
     
     async def _notify_handlers(self, report: ServerHealthReport):
-        """Notify all handlers about health report."""
         for handler in self._handlers:
             try:
                 await handler(report)
@@ -89,7 +83,6 @@ class HealthChecker:
                 logger.error(f"Health handler error: {e}")
     
     async def _check_service(self, server_id: str, service_type: str) -> dict:
-        """Check a single service and return status dict."""
         handler_class = SERVICE_HANDLERS.get(service_type)
         
         if handler_class:
@@ -145,12 +138,6 @@ class HealthChecker:
                 }
     
     async def check_server(self, server_id: str) -> ServerHealthReport:
-        """
-        Perform health check on a single server.
-        
-        Returns:
-            ServerHealthReport with check results
-        """
         server = self.config.get_server_by_id(server_id)
         
         if not server:
@@ -172,7 +159,6 @@ class HealthChecker:
         )
         
         try:
-            # Check connectivity
             reachable = await self.ssh.test_connection(server_id)
             report.reachable = reachable
             
@@ -181,7 +167,6 @@ class HealthChecker:
                 report.error = "SSH connection failed"
                 return report
             
-            # Get system info
             report.system_info = await self.ssh.get_system_info(server_id)
             
             # Check all services in parallel
@@ -217,7 +202,6 @@ class HealthChecker:
                     service_report.pop("is_running", None)
                     report.services.append(service_report)
                 
-                # Determine overall health
                 if any_unhealthy:
                     report.check_result = CheckResult.UNHEALTHY
                 elif not all_healthy:
@@ -233,7 +217,6 @@ class HealthChecker:
             report.error = str(e)
             report.check_result = CheckResult.UNREACHABLE
         
-        # Store last report
         self._last_reports[server_id] = report
         
         return report
@@ -245,15 +228,12 @@ class HealthChecker:
         if not servers:
             return []
         
-        # Check all servers in parallel
         tasks = [self.check_server(server.id) for server in servers]
         reports = await asyncio.gather(*tasks, return_exceptions=True)
         
-        # Process results and notify handlers
         valid_reports = []
         for i, report in enumerate(reports):
             if isinstance(report, Exception):
-                # Create error report
                 server = servers[i]
                 error_report = ServerHealthReport(
                     server_id=server.id,
@@ -272,7 +252,6 @@ class HealthChecker:
         return valid_reports
     
     async def _check_loop(self):
-        """Main health check loop."""
         settings = self.config.load_settings()
         interval = settings.monitoring.health_check.interval_seconds
         
@@ -283,7 +262,6 @@ class HealthChecker:
                 logger.debug("Running health checks...")
                 reports = await self.check_all_servers()
                 
-                # Log summary
                 healthy = sum(1 for r in reports if r.check_result == CheckResult.HEALTHY)
                 unhealthy = sum(1 for r in reports if r.check_result == CheckResult.UNHEALTHY)
                 unreachable = sum(1 for r in reports if r.check_result == CheckResult.UNREACHABLE)
@@ -298,7 +276,6 @@ class HealthChecker:
         logger.info("Health check loop stopped")
     
     async def start(self):
-        """Start periodic health checks."""
         if self._running:
             logger.warning("Health checker already running")
             return
@@ -308,7 +285,6 @@ class HealthChecker:
         logger.info("Health checker started")
     
     async def stop(self):
-        """Stop periodic health checks."""
         if not self._running:
             return
         
@@ -324,16 +300,13 @@ class HealthChecker:
         logger.info("Health checker stopped")
     
     def get_last_report(self, server_id: str) -> Optional[ServerHealthReport]:
-        """Get last health report for server."""
         return self._last_reports.get(server_id)
     
     def get_all_reports(self) -> list[ServerHealthReport]:
-        """Get all last health reports."""
         return list(self._last_reports.values())
     
     @property
     def is_running(self) -> bool:
-        """Check if health checker is running."""
         return self._running
 
 
@@ -341,7 +314,6 @@ _health_checker: Optional[HealthChecker] = None
 
 
 def get_health_checker() -> HealthChecker:
-    """Get health checker singleton instance."""
     global _health_checker
     if _health_checker is None:
         _health_checker = HealthChecker()

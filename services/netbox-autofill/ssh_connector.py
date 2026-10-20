@@ -82,7 +82,6 @@ class CiscoSSH:
             self.connection.disconnect()
 
     def get_connected_ports(self) -> list[PortInfo]:
-        """Get all ports with 'connected' status."""
         output = self.connection.send_command("show interfaces status")
         ports = []
 
@@ -107,35 +106,29 @@ class CiscoSSH:
         return ports
 
     def get_port_config(self, interface: str) -> PortInfo:
-        """Get detailed config for a specific interface."""
         output = self.connection.send_command(f"show running-config interface {interface}")
 
         port = PortInfo(name=interface, status="", vlan="")
 
-        # Description
         desc_match = re.search(r'description\s+(.+)', output)
         if desc_match:
             port.description = desc_match.group(1).strip()
 
-        # Switchport mode
         if "switchport mode trunk" in output:
             port.mode = "trunk"
         elif "switchport mode access" in output:
             port.mode = "access"
 
-        # Trunk allowed VLANs
         trunk_match = re.search(r'switchport trunk allowed vlan\s+(.+)', output)
         if trunk_match:
             vlan_str = trunk_match.group(1).strip()
             port.trunk_vlans = self._parse_vlan_list(vlan_str)
             port.mode = "trunk"  # if trunk vlans exist, it's trunk
 
-        # Access VLAN
         access_match = re.search(r'switchport access vlan\s+(\d+)', output)
         if access_match:
             port.vlan = access_match.group(1)
 
-        # Native VLAN
         native_match = re.search(r'switchport trunk native vlan\s+(\d+)', output)
         if native_match:
             port.native_vlan = native_match.group(1)
@@ -200,7 +193,7 @@ class CiscoSSH:
             ip_match = re.search(r'IP address:\s*(\S+)', block)
 
             if device_match and local_match and remote_match:
-                device_name = device_match.group(1).split('.')[0]  # strip domain
+                device_name = device_match.group(1).split('.')[0]
                 neighbors.append(CDPNeighbor(
                     local_port=self._normalize_interface(local_match.group(1)),
                     remote_device=device_name,
@@ -239,7 +232,6 @@ class CiscoSSH:
         return name.strip()
 
     def _find_interface_in_parts(self, parts: list, start_idx: int, reverse: bool = False) -> str:
-        """Find interface name in split line parts."""
         prefixes = ['Gig', 'Fas', 'Ten', 'Gi', 'Fa', 'Te', 'Eth']
         search_range = reversed(range(len(parts))) if reverse else range(start_idx, len(parts))
 
@@ -284,7 +276,6 @@ class RouterInfo:
 
 
 class CiscoRouterSSH(CiscoSSH):
-    """Extended SSH connector for Cisco routers."""
 
     def get_interfaces(self) -> list[RouterInterface]:
         """Get interfaces from 'show ip interface brief'."""
@@ -350,7 +341,6 @@ class CiscoRouterSSH(CiscoSSH):
         output = self.connection.send_command("show version")
         info = RouterInfo()
 
-        # Hostname
         hostname_match = re.search(r'^(\S+)\s+uptime is', output, re.MULTILINE)
         if hostname_match:
             info.hostname = hostname_match.group(1)
@@ -360,22 +350,18 @@ class CiscoRouterSSH(CiscoSSH):
         if model_match:
             info.model = model_match.group(1)
         else:
-            # Try another format
             model_match2 = re.search(r'[Cc]isco\s+(ISR\d+|C\d+|CISCO\d+)', output)
             if model_match2:
                 info.model = model_match2.group(1)
 
-        # Serial number
         serial_match = re.search(r'Processor board ID\s+(\S+)', output)
         if serial_match:
             info.serial = serial_match.group(1)
 
-        # IOS version
         ios_match = re.search(r'Version\s+(\S+)', output)
         if ios_match:
             info.ios_version = ios_match.group(1).rstrip(',')
 
-        # Uptime
         uptime_match = re.search(r'uptime is\s+(.+)', output)
         if uptime_match:
             info.uptime = uptime_match.group(1).strip()
@@ -387,11 +373,9 @@ class CiscoRouterSSH(CiscoSSH):
         interfaces = self.get_interfaces()
         descriptions = self.get_interface_descriptions()
         
-        # Add descriptions and MTU to interfaces
         for iface in interfaces:
             if iface.name in descriptions:
                 iface.description = descriptions[iface.name]
-            # Get MTU for tunnel interfaces
             if "tunnel" in iface.name.lower():
                 mtu = self.get_interface_mtu(iface.name)
                 if mtu:

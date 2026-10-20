@@ -21,11 +21,6 @@ from src.core.ssh_manager import SSHManager
 
 
 class DHCPService(BaseService):
-    """
-    DHCP service handler.
-    
-    Supports isc-dhcp-server, kea-dhcp4, and dnsmasq.
-    """
     
     service_type: str = "dhcp"
     
@@ -34,7 +29,6 @@ class DHCPService(BaseService):
         self._leases_file: Optional[str] = None
     
     async def get_leases_file(self) -> Optional[str]:
-        """Find and return leases file path."""
         if self._leases_file is not None:
             return self._leases_file
         
@@ -379,15 +373,6 @@ class DHCPService(BaseService):
         return leases
 
     async def get_recent_logs(self, lines: int = 50) -> str:
-        """
-        Get recent DHCP log entries.
-        
-        Args:
-            lines: Number of lines to retrieve
-            
-        Returns:
-            Recent log content
-        """
         log_files = await self.get_log_files()
         
         if not log_files:

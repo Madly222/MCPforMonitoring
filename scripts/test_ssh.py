@@ -18,7 +18,6 @@ from src.core.ssh_manager import get_ssh_manager
 
 
 def setup_logging():
-    """Configure logging for test script."""
     logger.remove()
     logger.add(
         sys.stderr,
@@ -28,7 +27,6 @@ def setup_logging():
 
 
 async def test_single_server(server_id: str) -> bool:
-    """Test connection to a single server."""
     config = get_config()
     ssh = get_ssh_manager()
     
@@ -125,7 +123,6 @@ async def test_single_server(server_id: str) -> bool:
 
 
 async def test_all_servers() -> dict:
-    """Test connection to all enabled servers."""
     config = get_config()
     results = {}
     
@@ -146,7 +143,6 @@ async def test_all_servers() -> dict:
 
 
 async def main():
-    """Main entry point."""
     setup_logging()
     
     logger.info("MCP Server Monitor - SSH Connection Test")

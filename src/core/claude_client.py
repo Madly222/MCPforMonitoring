@@ -22,7 +22,6 @@ from src.core.config import get_config
 
 @dataclass
 class AnalysisResult:
-    """Result of Claude analysis."""
     diagnosis: str
     severity: str
     can_auto_fix: bool
@@ -34,7 +33,6 @@ class AnalysisResult:
 
 @dataclass
 class CommandInterpretation:
-    """Interpreted command from natural language."""
     intent: str
     server_id: Optional[str]
     service_type: Optional[str]
@@ -46,7 +44,6 @@ class CommandInterpretation:
 
 @dataclass
 class CacheEntry:
-    """Cache entry for API responses."""
     response: Any
     created_at: datetime
 
@@ -115,18 +112,15 @@ Rules:
     
     @property
     def client(self) -> Anthropic:
-        """Get or create Anthropic client."""
         if self._client is None:
             secrets = self.config.load_secrets()
             self._client = Anthropic(api_key=secrets.claude.api_key)
         return self._client
     
     def _get_cache_key(self, prompt: str) -> str:
-        """Generate cache key for prompt."""
         return hashlib.md5(prompt.encode()).hexdigest()
     
     def _get_cached(self, key: str) -> Optional[Any]:
-        """Get cached response if valid."""
         if key not in self._cache:
             return None
         
@@ -141,24 +135,20 @@ Rules:
         return entry.response
     
     def _set_cached(self, key: str, response: Any):
-        """Cache response."""
         self._cache[key] = CacheEntry(
             response=response,
             created_at=datetime.now()
         )
     
     def _check_rate_limit(self) -> bool:
-        """Check if we're within rate limits."""
         settings = self.config.load_settings()
         now = datetime.now()
         
-        # Clean old entries
         minute_ago = now - timedelta(minutes=1)
         hour_ago = now - timedelta(hours=1)
         
         self._request_times = [t for t in self._request_times if t > hour_ago]
         
-        # Check limits
         requests_last_minute = sum(1 for t in self._request_times if t > minute_ago)
         requests_last_hour = len(self._request_times)
         
@@ -176,7 +166,6 @@ Rules:
         return True
     
     def _record_request(self):
-        """Record API request for rate limiting."""
         self._request_times.append(datetime.now())
     
     async def analyze_error(
@@ -196,7 +185,6 @@ Rules:
         Returns:
             AnalysisResult with diagnosis and recommendations
         """
-        # Build prompt
         prompt = f"""Server: {server_info.get('server_id', 'unknown')}
 Distro: {server_info.get('distro', 'unknown')}
 Services: {', '.join(server_info.get('services', []))}
@@ -212,14 +200,12 @@ Context:
 {chr(10).join(context_lines[-30:])}
 """
         
-        # Check cache
         cache_key = self._get_cache_key(prompt)
         cached = self._get_cached(cache_key)
         if cached:
             logger.debug("Using cached analysis")
             return cached
         
-        # Check rate limit
         if not self._check_rate_limit():
             return AnalysisResult(
                 diagnosis="Rate limit exceeded, please try again later",
@@ -244,10 +230,8 @@ Context:
                 ]
             )
             
-            # Parse response
             content = response.content[0].text
             
-            # Try to extract JSON
             try:
                 # Handle potential markdown code blocks and extract JSON
                 json_str = content.strip()
@@ -295,7 +279,6 @@ Context:
                     suggestions=data.get("suggestions", [])
                 )
                 
-                # Cache result
                 self._set_cached(cache_key, result)
                 
                 logger.info(f"Claude analysis: {result.diagnosis[:50]}...")
@@ -343,14 +326,12 @@ Context:
             servers=", ".join(available_servers)
         )
         
-        # Check cache
         cache_key = self._get_cache_key(f"cmd:{command}")
         cached = self._get_cached(cache_key)
         if cached:
             logger.debug("Using cached interpretation")
             return cached
         
-        # Check rate limit
         if not self._check_rate_limit():
             return CommandInterpretation(
                 intent="error",
@@ -394,7 +375,6 @@ Context:
                     confidence=data.get("confidence", 0.5)
                 )
                 
-                # Cache result
                 self._set_cached(cache_key, result)
                 
                 logger.info(f"Command interpreted: intent={result.intent}, server={result.server_id}")
@@ -486,7 +466,6 @@ Context:
             return None
 
     def get_stats(self) -> dict:
-        """Get client statistics."""
         now = datetime.now()
         minute_ago = now - timedelta(minutes=1)
         hour_ago = now - timedelta(hours=1)
@@ -502,7 +481,6 @@ _claude_client: Optional[ClaudeClient] = None
 
 
 def get_claude_client() -> ClaudeClient:
-    """Get Claude client singleton instance."""
     global _claude_client
     if _claude_client is None:
         _claude_client = ClaudeClient()

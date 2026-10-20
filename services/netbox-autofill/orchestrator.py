@@ -10,7 +10,6 @@ from netbox_client import NetBoxClient
 
 @dataclass
 class PortAction:
-    """Represents a planned action for a port."""
     port_name: str
     description: str = ""
     mode: str = ""
@@ -28,7 +27,6 @@ class PortAction:
 
 @dataclass
 class ScanResult:
-    """Full scan result for a device."""
     host: str
     hostname: str = ""
     device_id: int = 0
@@ -53,7 +51,6 @@ class Orchestrator:
             if progress_callback:
                 progress_callback(msg)
 
-        # Step 1: Find device in NetBox
         log(f"🔍 Searching NetBox for {host}...")
         nb_device = self.nb.find_device_by_ip(host)
         if not nb_device:
@@ -64,7 +61,6 @@ class Orchestrator:
             result.device_name = nb_device["name"]
             log(f"✅ Found device: {nb_device['name']} (ID: {nb_device['id']})")
 
-        # Step 2: Connect SSH
         log(f"🔌 Connecting SSH to {host}...")
         ssh = CiscoSSH(host, username=self.ssh_username, password=self.ssh_password)
         conn_result = ssh.connect()
@@ -90,12 +86,10 @@ class Orchestrator:
                     log(f"  ❌ Rename failed: {rename_res['error']}")
 
         try:
-            # Step 3: Get connected ports
             log("📡 Getting connected ports...")
             connected_ports = ssh.get_connected_ports()
             log(f"✅ Found {len(connected_ports)} connected ports")
 
-            # Step 4: Get CDP neighbors
             log("🔗 Getting CDP neighbors...")
             cdp_neighbors = ssh.get_cdp_neighbors_detail()
             cdp_map = {}
@@ -118,20 +112,17 @@ class Orchestrator:
                     native_vlan=port_config.native_vlan,
                 )
 
-                # CDP neighbor info
                 cdp = cdp_map.get(port.name)
                 if cdp:
                     action.cdp_neighbor = cdp.remote_device
                     action.cdp_remote_port = cdp.remote_port
 
-                # Find NetBox interface IDs
                 if result.device_id:
                     nb_iface = self.nb.find_interface(result.device_id, port.name)
                     if nb_iface:
                         action.netbox_interface_id = nb_iface["id"]
                         action.cable_exists = self.nb.check_cable_exists(nb_iface["id"])
 
-                    # Find neighbor device and interface in NetBox
                     if cdp and cdp.remote_device:
                         nb_neighbor = self.nb.find_device_by_name(cdp.remote_device)
                         if nb_neighbor:
@@ -169,7 +160,6 @@ class Orchestrator:
         if scan_result.device_id and scan_result.host:
             log("🌐 Step 1: Setting up VLAN 200 management interface...")
 
-            # Check if Vlan200 interface already exists
             vlan_iface = self.nb.find_interface(scan_result.device_id, "Vlan200")
             if not vlan_iface:
                 vlan_iface = self.nb.find_interface(scan_result.device_id, "Vlan 200")
@@ -177,10 +167,8 @@ class Orchestrator:
             if vlan_iface:
                 log(f"  ℹ️  Vlan200 interface already exists (ID: {vlan_iface['id']})")
             else:
-                # Find VLAN 200 in NetBox
                 vlan200 = self.nb.find_vlan_by_vid(200)
                 if vlan200:
-                    # Create Vlan200 interface with mode=access, untagged_vlan=200
                     create_res = self.nb.create_vlan_interface(
                         device_id=scan_result.device_id,
                         vlan_vid=200,
@@ -195,7 +183,6 @@ class Orchestrator:
                 else:
                     log("  ⚠️  VLAN 200 not found in NetBox, skipping VLAN interface creation")
 
-            # Check/create IP address on Vlan200
             if vlan_iface:
                 ip_addr = f"{scan_result.host}/24"
                 ip_exists = self.nb.check_ip_on_interface(vlan_iface["id"], ip_addr)

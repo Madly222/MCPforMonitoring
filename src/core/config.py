@@ -64,7 +64,6 @@ class ServerConfig(BaseModel):
 # ==============================================================================
 
 class OLTConfig(BaseModel):
-    """Configuration for a single OLT device."""
     id: str
     host: str
     port: int = 161
@@ -99,13 +98,11 @@ class OLTConfig(BaseModel):
 
 
 class ONUThresholds(BaseModel):
-    """Signal level thresholds for ONU monitoring."""
     good: float = -20.0
     warning: float = -25.0
 
 
 class ONUMonitoringConfig(BaseModel):
-    """ONU monitoring configuration."""
     poll_interval: int = 60
     thresholds: ONUThresholds = Field(default_factory=ONUThresholds)
     olts: list[OLTConfig] = Field(default_factory=list)

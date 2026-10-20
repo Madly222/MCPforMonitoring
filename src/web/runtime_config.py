@@ -145,7 +145,6 @@ def get_acc_pattern() -> str:
 
 
 def set_acc_pattern(pattern: str) -> str:
-    """Persist the ACC address pattern."""
     pattern = (pattern or "").strip()
     if not pattern:
         raise ValueError("Pattern is required")
@@ -260,7 +259,6 @@ _DNS_ZONE_RE = re.compile(r'^(?=.{1,253}$)([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z
 
 
 def get_dns_test_zone() -> str:
-    """Return the zone used for the DNS resolution health check."""
     value = (_load().get("dns_test_zone") or "").strip()
     return value or _DEFAULT_DNS_TEST_ZONE
 
@@ -292,7 +290,6 @@ _MAX_SSH_TIMEOUT = 120
 
 
 def get_ssh_timeout() -> int:
-    """Return the SSH connect timeout in seconds."""
     stored = _load().get("ssh_connect_timeout", _DEFAULT_SSH_TIMEOUT)
     try:
         value = int(stored)

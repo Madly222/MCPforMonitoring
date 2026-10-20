@@ -108,7 +108,6 @@ def decode_port_index(port_index: int, onu_id: str) -> str:
         # ZTE format: the port number is in bits 8-15
         port = (port_index >> 8) & 0xFF
         
-        # Return readable format: 1/1/port:onu_id
         return f"1/1/{port}:{onu_id}"
         
     except:
@@ -116,15 +115,12 @@ def decode_port_index(port_index: int, onu_id: str) -> str:
 
 
 def clean_description(desc: str) -> str:
-    """Remove $$$$ prefix and clean up description."""
     if not desc:
         return ""
     
-    # Remove $$$$ prefix
     if desc.startswith("$$$$"):
         desc = desc[4:]
     
-    # Remove quotes
     desc = desc.strip('"').strip()
     
     # If it's just "ONU-X:Y", return empty (not useful)
@@ -146,11 +142,9 @@ def parse_onu_serial_number(hex_string: str) -> str:
     if not hex_string:
         return ""
     
-    # Remove "Hex-STRING: " prefix if present
     if "Hex-STRING:" in hex_string:
         hex_string = hex_string.split("Hex-STRING:")[-1].strip()
     
-    # Split by spaces
     hex_bytes = hex_string.strip().split()
     
     if len(hex_bytes) < 4:
@@ -161,7 +155,7 @@ def parse_onu_serial_number(hex_string: str) -> str:
         vendor = ""
         for i in range(4):
             byte_val = int(hex_bytes[i], 16)
-            if 32 <= byte_val <= 126:  # Printable ASCII
+            if 32 <= byte_val <= 126:
                 vendor += chr(byte_val)
             else:
                 vendor += hex_bytes[i]
@@ -172,7 +166,6 @@ def parse_onu_serial_number(hex_string: str) -> str:
         return vendor + serial
         
     except (ValueError, IndexError):
-        # If parsing fails, return cleaned hex string
         return "".join(hex_bytes).upper()
 
 
@@ -186,14 +179,11 @@ def format_mac_address(mac_str: str) -> str:
     if not mac_str:
         return ""
     
-    # Remove quotes and whitespace
     mac_str = mac_str.strip().strip('"')
     
-    # If already formatted with colons
     if ":" in mac_str:
         return mac_str.upper()
     
-    # If 12 hex chars without separators
     if len(mac_str) == 12 and mac_str.isalnum():
         return ":".join(mac_str[i:i+2] for i in range(0, 12, 2)).upper()
     
@@ -236,16 +226,13 @@ async def snmpwalk_cli(host: str, community: str, oid: str, timeout: int = 30) -
                 # Format: iso.3.6.1.4.1.3902...268502016.1 = STRING: "ONU-4:1"
                 oid_part, value_part = line.split(" = ", 1)
                 
-                # Convert iso -> 1
                 oid_nums = oid_part.replace("iso", "1").split(".")
                 
-                # Extract index (everything after base OID)
                 if len(oid_nums) > len(base_parts):
                     index = ".".join(oid_nums[len(base_parts):])
                 else:
                     continue
                 
-                # Parse value
                 if ": " in value_part:
                     value_type, value = value_part.split(": ", 1)
                     value = value.strip('"')
@@ -300,7 +287,6 @@ async def ssh_get_olt_data(
     rx_table: dict[str, float] = {}
     tx_table: dict[str, float] = {}
     
-    # Build expect script for interactive SSH
     expect_script = f'''
 set timeout {timeout}
 spawn ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o KexAlgorithms=+diffie-hellman-group1-sha1 -o HostKeyAlgorithms=+ssh-dss -o Ciphers=+aes128-cbc -p {port} {username}@{host}
@@ -473,7 +459,7 @@ class ONUMonitor:
     """SNMP-based ONU monitoring for ZTE C320 GPON OLT."""
     
     # How long to keep history for averaging (seconds)
-    HISTORY_DURATION = 300  # 5 minutes
+    HISTORY_DURATION = 300
     
     def __init__(self):
         self.config = get_config()
@@ -485,11 +471,9 @@ class ONUMonitor:
         self._power_history: dict[str, list[tuple[datetime, Optional[float], Optional[float]]]] = {}
     
     def _get_onu_key(self, olt_id: str, index: str) -> str:
-        """Generate unique key for ONU."""
         return f"{olt_id}:{index}"
     
     def _add_to_history(self, key: str, rx_power: Optional[float], tx_power: Optional[float]):
-        """Add power reading to history."""
         now = datetime.now()
         
         if key not in self._power_history:
@@ -497,7 +481,6 @@ class ONUMonitor:
         
         self._power_history[key].append((now, rx_power, tx_power))
         
-        # Remove old entries (older than HISTORY_DURATION)
         cutoff = now - timedelta(seconds=self.HISTORY_DURATION)
         self._power_history[key] = [
             (ts, rx, tx) for ts, rx, tx in self._power_history[key]
@@ -505,7 +488,6 @@ class ONUMonitor:
         ]
     
     def _get_averages(self, key: str) -> tuple[Optional[float], Optional[float]]:
-        """Get average Rx and Tx power from history."""
         if key not in self._power_history or not self._power_history[key]:
             return None, None
         
@@ -518,7 +500,6 @@ class ONUMonitor:
         return rx_avg, tx_avg
     
     async def poll_olt(self, olt: OLTConfig) -> list[ONUInfo]:
-        """Poll single OLT for all ONU information."""
         logger.debug(f"Polling OLT: {olt.id} ({olt.host})")
         
         oids = ZTE_C320_OIDS
@@ -537,7 +518,6 @@ class ONUMonitor:
             
             logger.debug(f"Got {len(name_results)} ONU names")
             
-            # Get other data
             type_results = await snmpwalk_cli(olt.host, community, oids["onu_type"])
             desc_results = await snmpwalk_cli(olt.host, community, oids["onu_description"])
             sn_results = await snmpwalk_cli(olt.host, community, oids["onu_sn"])
@@ -582,13 +562,11 @@ class ONUMonitor:
                     f"OLT {olt.id}: не заданы ssh_username/ssh_password — "
                     f"MAC и мощность будут пустыми"
                 )
-            
-            # Get thresholds
+
             onu_config = self.config.get_onu_monitoring_config()
             thresholds = onu_config.thresholds if onu_config else None
             warning_threshold = thresholds.warning if thresholds else -25
             
-            # Process each ONU
             for index, onu_name in name_results.items():
                 try:
                     # Parse index: "port_index.onu_id"
@@ -599,12 +577,10 @@ class ONUMonitor:
                     port_index = int(parts[0])
                     onu_id = parts[1]
                     
-                    # Get values
                     onu_type = type_results.get(index, "")
                     description = clean_description(desc_results.get(index, ""))
                     serial_number = parse_onu_serial_number(sn_results.get(index, ""))
                     
-                    # Get MAC address from SSH table
                     # Key format: "port:onu_id" e.g. "3:2"
                     port_num = (port_index >> 8) & 0xFF
                     mac_key = f"{port_num}:{onu_id}"
@@ -621,16 +597,14 @@ class ONUMonitor:
                     rx_power = rx_table.get(mac_key)
                     tx_power = tx_table.get(mac_key)
                     
-                    # Check last offline time
                     last_offline = last_offline_results.get(index, "")
                     if last_offline and "0000" in last_offline:
                         last_offline = None  # Never was offline
                     
                     # Get offline reason from phase_state (OID ...2.1.4)
                     # 1=LOS, 3=Dying Gasp, 6=Working
-                    # Only set offline_reason if device is actually offline
                     offline_reason = None
-                    if snmp_status == 2:  # Only for offline devices
+                    if snmp_status == 2:
                         phase_state_raw = phase_state_results.get(index, "6")
                         try:
                             phase_code = int(phase_state_raw)
@@ -665,10 +639,8 @@ class ONUMonitor:
                     else:
                         status = ONUStatus.ONLINE
                     
-                    # Decode port to readable format: 1/1/3:5
                     port_str = decode_port_index(port_index, onu_id)
                     
-                    # Add to history and get averages
                     onu_key = self._get_onu_key(olt.id, index)
                     self._add_to_history(onu_key, rx_power, tx_power)
                     rx_power_avg, tx_power_avg = self._get_averages(onu_key)
@@ -696,11 +668,10 @@ class ONUMonitor:
                     logger.debug(f"Error processing ONU {index}: {e}")
                     continue
             
-            # Sort by port number then ONU ID
             def sort_key(onu):
                 try:
                     # Parse "1/1/3:5" -> (3, 5)
-                    port_part = onu.port.split("/")[-1]  # "3:5"
+                    port_part = onu.port.split("/")[-1]
                     port_num, onu_num = port_part.split(":")
                     return (int(port_num), int(onu_num))
                 except:
@@ -719,7 +690,6 @@ class ONUMonitor:
         return onus
     
     async def poll_all(self) -> dict[str, list[ONUInfo]]:
-        """Poll all enabled OLTs."""
         results = {}
         olts = self.config.get_enabled_olts()
         
@@ -730,7 +700,6 @@ class ONUMonitor:
         return results
     
     async def _poll_loop(self):
-        """Main polling loop."""
         onu_config = self.config.get_onu_monitoring_config()
         interval = onu_config.poll_interval if onu_config else 60
         
@@ -747,7 +716,6 @@ class ONUMonitor:
         logger.info("ONU monitor loop stopped")
     
     async def start(self):
-        """Start ONU monitoring."""
         if self._running:
             return
         
@@ -761,7 +729,6 @@ class ONUMonitor:
         logger.info(f"ONU monitor started for {len(olts)} OLT(s)")
     
     async def stop(self):
-        """Stop ONU monitoring."""
         if not self._running:
             return
         
@@ -776,7 +743,6 @@ class ONUMonitor:
         logger.info("ONU monitor stopped")
     
     def get_cached_onus(self, olt_id: Optional[str] = None) -> list[ONUInfo]:
-        """Get cached ONU data."""
         if olt_id:
             return self._onu_cache.get(olt_id, [])
         
@@ -786,11 +752,9 @@ class ONUMonitor:
         return all_onus
     
     def get_last_poll_time(self, olt_id: str) -> Optional[datetime]:
-        """Get last poll time for OLT."""
         return self._last_poll.get(olt_id)
     
     def get_stats(self) -> dict:
-        """Get monitoring statistics."""
         all_onus = self.get_cached_onus()
         
         return {

@@ -33,7 +33,6 @@ class ACCStatus:
     error: Optional[str] = None
 
 
-# Configuration
 ACC_CONFIG = {
     "base_url": "https://www.acc.md/disconnections",
     "address_pattern": os.getenv("ACC_ADDRESS_PATTERN", r"Asachi\s*,?\s*71"),
@@ -41,7 +40,6 @@ ACC_CONFIG = {
     "timeout": 30,
 }
 
-# Email configuration
 def _email_config() -> dict:
     """Read notification config live from the runtime store (with env fallback)."""
     from src.web.runtime_config import get_notification_config, get_notification_recipients
@@ -63,7 +61,6 @@ _last_check_time: Optional[datetime] = None
 
 
 def send_email_notification(matches: list) -> bool:
-    """Send email notification about water disconnection."""
     
     EMAIL_CONFIG = _email_config()
     if not EMAIL_CONFIG["enabled"]:
@@ -214,7 +211,6 @@ async def fetch_acc_page(date_str: str, tab: int = 2) -> str:
 
 
 def decode_html_entities(text: str) -> str:
-    """Decode HTML entities."""
     replacements = {
         '&nbsp;': ' ',
         '&ndash;': '–',

@@ -18,12 +18,10 @@ async def main():
     
     claude = get_claude_client()
     
-    # Test command
     command = "check status of dhcp-primary"
     print(f"\nCommand: {command}")
     print("-" * 50)
     
-    # Call Claude directly and print raw response
     from anthropic import Anthropic
     
     secrets = config.load_secrets()
@@ -42,7 +40,6 @@ async def main():
     print(response.content[0].text)
     print("-" * 50)
     
-    # Now test interpretation
     result = await claude.interpret_command(command, servers)
     print(f"\nParsed result:")
     print(f"  intent: {result.intent}")

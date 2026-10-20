@@ -21,12 +21,6 @@ from src.core.ssh_manager import SSHManager
 
 
 class DNSService(BaseService):
-    """
-    DNS service handler.
-    
-    Supports bind9, dnsmasq, unbound, and PowerDNS.
-    Auto-detects which DNS server is running.
-    """
     
     service_type: str = "dns"
     
@@ -97,7 +91,6 @@ class DNSService(BaseService):
         return None
     
     async def get_config_file(self) -> Optional[str]:
-        """Find DNS config file based on detected server type."""
         if self._config_file is not None:
             return self._config_file
         
@@ -105,7 +98,6 @@ class DNSService(BaseService):
         if not det:
             return None
         
-        # Config file paths by DNS server type
         config_paths = {
             "bind9": [
                 "/etc/bind/named.conf",
@@ -138,7 +130,6 @@ class DNSService(BaseService):
         return self._config_file
     
     async def get_zones_dir(self) -> Optional[str]:
-        """Find DNS zones directory."""
         if self._zones_dir is not None:
             return self._zones_dir
         
@@ -184,7 +175,6 @@ class DNSService(BaseService):
         """
         results = []
         
-        # Check process
         status = await self.get_status()
         results.append(HealthCheckResult(
             name="process_running",
@@ -193,7 +183,6 @@ class DNSService(BaseService):
             details={"pid": status.pid} if status.pid else None
         ))
         
-        # Check UDP port 53
         port_check_udp = await self.ssh.execute(
             self.server_id,
             "netstat -uln 2>/dev/null | grep -q ':53 ' && echo 'ok' || "
@@ -206,7 +195,6 @@ class DNSService(BaseService):
             message="UDP port 53 is listening" if udp_listening else "UDP port 53 is not listening"
         ))
         
-        # Check TCP port 53
         port_check_tcp = await self.ssh.execute(
             self.server_id,
             "netstat -tln 2>/dev/null | grep -q ':53 ' && echo 'ok' || "
@@ -219,7 +207,6 @@ class DNSService(BaseService):
             message="TCP port 53 is listening" if tcp_listening else "TCP port 53 is not listening"
         ))
         
-        # Check config file
         config_file = await self.get_config_file()
         results.append(HealthCheckResult(
             name="config_exists",
@@ -278,7 +265,6 @@ class DNSService(BaseService):
         info["config_file"] = await self.get_config_file()
         info["zones_dir"] = await self.get_zones_dir()
         
-        # Count zones for bind9
         if det and det["name"] == "bind9" and info["zones_dir"]:
             count_result = await self.ssh.execute(
                 self.server_id,
@@ -289,7 +275,6 @@ class DNSService(BaseService):
             except (ValueError, TypeError):
                 info["zones_count"] = 0
         
-        # Get query stats for bind9
         if det and det["name"] == "bind9":
             stats_result = await self.ssh.execute(
                 self.server_id,
@@ -301,12 +286,10 @@ class DNSService(BaseService):
         return info
     
     async def get_log_files(self) -> list[str]:
-        """Get DNS log file paths."""
         det = await self.detect()
         if not det:
             return []
         
-        # Log file paths by DNS server type
         log_paths = {
             "bind9": [
                 "/var/log/named/queries.log",
@@ -435,7 +418,6 @@ class DNSService(BaseService):
             )
         
         elif name == "query_test":
-            # Test DNS resolution
             result = await self.ssh.execute(
                 self.server_id,
                 "dig @127.0.0.1 google.com A +short +time=5 2>&1 || "
@@ -513,15 +495,6 @@ class DNSService(BaseService):
             )
     
     async def get_recent_logs(self, lines: int = 50) -> str:
-        """
-        Get recent DNS log entries.
-        
-        Args:
-            lines: Number of lines to retrieve
-            
-        Returns:
-            Recent log content
-        """
         det = await self.detect()
         log_files = await self.get_log_files()
         
@@ -546,7 +519,6 @@ class DNSService(BaseService):
         if result.success and result.stdout.strip():
             return result.stdout
         
-        # Try with sudo for protected log files
         result = await self.ssh.execute_sudo(
             self.server_id,
             f"tail -n {lines} {log_file} 2>/dev/null || echo 'Cannot read log file'"

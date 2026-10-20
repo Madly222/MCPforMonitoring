@@ -48,7 +48,6 @@ const Dialog = {
         const btnContainer = document.createElement('div');
         btnContainer.className = 'dialog-buttons';
 
-        // Add Cancel button for confirm/prompt types
         if (options.type === 'confirm' || options.type === 'prompt') {
             const cancelBtn = document.createElement('button');
             cancelBtn.className = 'btn btn-secondary';
@@ -414,7 +413,6 @@ async function showServerDetails(serverId) {
         
         let html = '<div class="server-info-grid">';
         
-        // OS Section
         html += '<div class="info-section"><h4>&#128421; Operating System</h4><div class="detail-list">';
         html += '<div class="detail-item"><span class="detail-label">OS</span><span class="detail-value">' + (data.os.name || 'Unknown') + '</span></div>';
         html += '<div class="detail-item"><span class="detail-label">Kernel</span><span class="detail-value">' + (data.os.kernel || 'Unknown') + '</span></div>';
@@ -422,14 +420,12 @@ async function showServerDetails(serverId) {
         html += '<div class="detail-item"><span class="detail-label">Init System</span><span class="detail-value">' + (data.status.init_system || 'Unknown') + '</span></div>';
         html += '</div></div>';
         
-        // Hardware Section
         html += '<div class="info-section"><h4>&#9881; Hardware</h4><div class="detail-list">';
         html += '<div class="detail-item"><span class="detail-label">CPU</span><span class="detail-value">' + (data.hardware.cpu_model || 'Unknown') + ' (' + data.hardware.cpu_cores + ' cores)</span></div>';
         html += '<div class="detail-item"><span class="detail-label">Memory</span><span class="detail-value">' + data.hardware.memory_used_mb + '/' + data.hardware.memory_total_mb + ' MB (' + data.hardware.memory_percent + '%)</span></div>';
         html += '<div class="detail-item"><span class="detail-label">Disk</span><span class="detail-value">' + data.hardware.disk_used_gb + '/' + data.hardware.disk_total_gb + ' GB (' + data.hardware.disk_percent + '%)</span></div>';
         html += '</div></div>';
         
-        // Status Section
         html += '<div class="info-section"><h4>&#128202; Status</h4><div class="detail-list">';
         html += '<div class="detail-item"><span class="detail-label">Hostname</span><span class="detail-value">' + (data.network.hostname || 'Unknown') + '</span></div>';
         html += '<div class="detail-item"><span class="detail-label">Uptime</span><span class="detail-value">' + (data.status.uptime || 'Unknown') + '</span></div>';
@@ -437,7 +433,6 @@ async function showServerDetails(serverId) {
         html += '<div class="detail-item"><span class="detail-label">Services</span><span class="detail-value">' + data.services.running + ' running / ' + data.services.total + ' total</span></div>';
         html += '</div></div>';
         
-        // Network Section
         html += '<div class="info-section"><h4>&#127760; Network</h4><div class="detail-list">';
         var ifaces = data.network.interfaces.map(function(i) { return i.name + ': ' + i.ip; }).join('<br>');
         html += '<div class="detail-item"><span class="detail-label">Interfaces</span><span class="detail-value">' + ifaces + '</span></div>';
@@ -445,7 +440,6 @@ async function showServerDetails(serverId) {
         html += '<div class="detail-item"><span class="detail-label">Open Ports</span><span class="detail-value">' + ports + '</span></div>';
         html += '</div></div>';
         
-        // Security Section
         html += '<div class="info-section"><h4>&#128274; Security</h4><div class="detail-list">';
         var rebootClass = data.security.reboot_required ? 'warning-text' : '';
         html += '<div class="detail-item"><span class="detail-label">Reboot Required</span><span class="detail-value ' + rebootClass + '">' + (data.security.reboot_required ? 'Yes' : 'No') + '</span></div>';
@@ -454,7 +448,6 @@ async function showServerDetails(serverId) {
         
         html += '</div>';
         
-        // Services section
         try {
             var serverData = await API.servers.get(serverId);
             if (serverData.services && serverData.services.length > 0) {

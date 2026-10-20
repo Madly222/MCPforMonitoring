@@ -12,7 +12,6 @@ from pathlib import Path
 from loguru import logger
 from dotenv import load_dotenv
 
-# Load .env
 load_dotenv(Path(__file__).parent.parent.parent / ".env")
 
 # ============================================================================

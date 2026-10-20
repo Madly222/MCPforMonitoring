@@ -75,7 +75,6 @@ class NetBoxClient:
             # Also extract model prefix like NX3K, 4948, 2950, 3750
             model_match = re.search(r'(NX\d+K|[A-Z]*\d{4})', name, re.IGNORECASE)
             
-            # Search NetBox with switch number
             devices = list(self.nb.dcim.devices.filter(name__ic=sw_num))
             
             if len(devices) == 1:
@@ -102,7 +101,6 @@ class NetBoxClient:
         return None
 
     def _device_to_dict(self, device) -> dict:
-        """Convert pynetbox device object to dict."""
         primary_ip = str(device.primary_ip).split('/')[0] if device.primary_ip else ""
         return {
             "id": device.id,
@@ -113,7 +111,6 @@ class NetBoxClient:
         }
 
     def update_device_name(self, device_id: int, new_name: str) -> dict:
-        """Update device name (hostname) in NetBox."""
         try:
             device = self.nb.dcim.devices.get(device_id)
             if not device:
@@ -126,7 +123,6 @@ class NetBoxClient:
     # ── Interface Operations ───────────────────────────────────────
 
     def get_device_interfaces(self, device_id: int) -> list[dict]:
-        """Get all interfaces for a device."""
         interfaces = self.nb.dcim.interfaces.filter(device_id=device_id)
         result = []
         for iface in interfaces:
@@ -265,7 +261,6 @@ class NetBoxClient:
     # ── VLAN Operations ────────────────────────────────────────────
 
     def get_vlans(self, site: str = None) -> list[dict]:
-        """Get all VLANs, optionally filtered by site."""
         params = {}
         if site:
             params["site"] = site
@@ -273,7 +268,6 @@ class NetBoxClient:
         return [{"id": v.id, "vid": v.vid, "name": str(v.name)} for v in vlans]
 
     def find_vlan_by_vid(self, vid: int, site: str = None) -> dict | None:
-        """Find VLAN by its VID number."""
         params = {"vid": vid}
         if site:
             params["site"] = site
@@ -294,7 +288,6 @@ class NetBoxClient:
     # ── IP Address Operations ──────────────────────────────────────
 
     def create_ip_address(self, address: str, interface_id: int = None) -> dict:
-        """Create IP address and optionally assign to interface."""
         data = {"address": address}
         if interface_id:
             data["assigned_object_type"] = "dcim.interface"
@@ -309,7 +302,6 @@ class NetBoxClient:
     # ── Cable Operations ───────────────────────────────────────────
 
     def create_cable(self, interface_a_id: int, interface_b_id: int, cable_type: str = "cat6") -> dict:
-        """Create cable connection between two interfaces."""
         try:
             cable = self.nb.dcim.cables.create({
                 "termination_a_type": "dcim.interface",
@@ -324,12 +316,10 @@ class NetBoxClient:
             return {"success": False, "error": str(e)}
 
     def check_cable_exists(self, interface_id: int) -> bool:
-        """Check if interface already has a cable."""
         iface = self.nb.dcim.interfaces.get(interface_id)
         return iface.cable is not None if iface else False
 
     def delete_cable(self, interface_id: int) -> bool:
-        """Delete existing cable on an interface."""
         try:
             iface = self.nb.dcim.interfaces.get(interface_id)
             if iface and iface.cable:
@@ -358,7 +348,6 @@ class NetBoxClient:
 
             iface = self.nb.dcim.interfaces.create(iface_data)
 
-            # Assign IP
             if ip_address:
                 self.create_ip_address(ip_address, interface_id=iface.id)
 
@@ -367,7 +356,6 @@ class NetBoxClient:
             return {"success": False, "error": str(e)}
 
     def check_ip_on_interface(self, interface_id: int, address: str) -> bool:
-        """Check if IP is already assigned to an interface."""
         try:
             ips = self.nb.ipam.ip_addresses.filter(interface_id=interface_id)
             for ip in ips:
@@ -390,7 +378,6 @@ class NetBoxClient:
 
     def create_device(self, name: str, device_type_id: int = None, site_id: int = None,
                       role_id: int = None, serial: str = None) -> dict:
-        """Create a new device in NetBox."""
         try:
             if not device_type_id:
                 device_types = list(self.nb.dcim.device_types.all())
@@ -429,7 +416,6 @@ class NetBoxClient:
             return {"success": False, "error": str(e)}
 
     def find_or_create_device_type(self, model: str, manufacturer: str = "Cisco") -> dict:
-        """Find or create device type by model name."""
         try:
             manufacturers = list(self.nb.dcim.manufacturers.filter(name=manufacturer))
             if manufacturers:
@@ -453,7 +439,6 @@ class NetBoxClient:
             return {"success": False, "error": str(e)}
 
     def find_ip_address(self, address: str) -> dict | None:
-        """Find IP address in NetBox."""
         try:
             ips = list(self.nb.ipam.ip_addresses.filter(address=address))
             if ips:
@@ -473,9 +458,7 @@ class NetBoxClient:
             return None
 
     def create_interface(self, device_id: int, name: str, description: str = "", mtu: int = None) -> dict:
-        """Create interface on device."""
         try:
-            # Determine interface type based on name
             iface_type = "other"
             name_lower = name.lower()
             if "gigabit" in name_lower or name_lower.startswith("gi"):

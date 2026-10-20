@@ -19,7 +19,6 @@ from src.services.dhcp import DHCPService
 
 
 def setup_logging():
-    """Configure logging for test script."""
     logger.remove()
     logger.add(
         sys.stderr,
@@ -29,7 +28,6 @@ def setup_logging():
 
 
 async def test_dhcp_service(server_id: str) -> bool:
-    """Test DHCP service on specified server."""
     ssh = get_ssh_manager()
     
     try:
@@ -135,7 +133,6 @@ async def test_dhcp_service(server_id: str) -> bool:
 
 
 async def main():
-    """Main entry point."""
     setup_logging()
     
     if len(sys.argv) < 2:

@@ -67,7 +67,7 @@ new = [m for m in all_m if em._match_signature(m) not in em.get_notified_signatu
 check("newly added outage still triggers email", m_tomorrow in new and m_active not in new)
 
 print("\n== electric: past entries pruned ==")
-em.mark_notified([m_yesterday])  # date in past
+em.mark_notified([m_yesterday])
 em.cleanup_old_notifications()
 check("past-date signature pruned", em._match_signature(m_yesterday) not in em.get_notified_signatures())
 

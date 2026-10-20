@@ -360,11 +360,9 @@ class SSHManager:
             # Escape single quotes in password
             escaped_password = sudo_password.replace("'", "'\\''")
             # -S reads password from stdin, -p '' suppresses custom prompt
-            # Use env inside sudo to set PATH properly
             sudo_command = f"echo '{escaped_password}' | sudo -S -p '' env PATH={sudo_path} {command} 2>&1"
         else:
             # Try passwordless sudo (requires NOPASSWD in sudoers)
-            # Still use env to ensure PATH is set correctly
             sudo_command = f"sudo env PATH={sudo_path} {command}"
         
         return await self.execute(server_id, sudo_command, timeout)
@@ -622,7 +620,6 @@ class SSHManager:
         return info
     
     async def check_updates(self, server_id: str) -> CommandResult:
-        """Check for available system updates."""
         server = self._config.get_server_by_id(server_id)
         if not server:
             raise ValueError(f"Server not found: {server_id}")
@@ -630,7 +627,6 @@ class SSHManager:
         distro = (server.distro or "").lower()
         
         if distro in ("debian", "ubuntu"):
-            # Update package list and check for upgrades
             cmd = "apt update -qq && apt list --upgradable 2>/dev/null | grep -v '^Listing'"
         elif distro in ("centos", "rhel", "rocky", "alma"):
             cmd = "yum check-update -q || true"
@@ -668,7 +664,6 @@ class SSHManager:
             return False, _friendly_ssh_error(str(e))
     
     async def test_sudo(self, server_id: str) -> bool:
-        """Test if sudo works correctly on the server."""
         try:
             result = await self.execute_sudo(server_id, "whoami", timeout=10.0)
             return result.success and result.stdout.strip() == "root"

@@ -25,7 +25,6 @@ USERS_FILE = PROJECT_ROOT / "sessions" / "users.json"
 
 
 def _hash_password(password: str) -> str:
-    """Hash a password using bcrypt."""
     return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 
@@ -198,7 +197,6 @@ _user_store: Optional[UserStore] = None
 
 
 def get_user_store() -> UserStore:
-    """Get the singleton user store instance."""
     global _user_store
     if _user_store is None:
         _user_store = UserStore()

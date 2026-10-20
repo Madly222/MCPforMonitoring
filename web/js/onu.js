@@ -3,7 +3,6 @@
  * Path: ~/ServersMonitoringMCP/web/js/onu.js
  */
 
-// ONU State
 let onuData = [];
 let oltsData = [];
 let onuFilter = 'all';
@@ -12,7 +11,6 @@ let selectedOlt = null;
 let onuThresholds = { good: -10, warning: -22 };
 let onuRefreshInterval = null;
 
-// Initialize when DOM ready
 document.addEventListener('DOMContentLoaded', () => {
     setupTabs();
     setupOnuEventListeners();
@@ -69,12 +67,10 @@ function setupTabs() {
     });
 }
 
-// ONU Event Listeners
 function setupOnuEventListeners() {
     // Initial setup - handlers will be re-attached dynamically
 }
 
-// Load ONU Data
 async function loadOnuData() {
     const refreshBtn = document.getElementById('refreshOnuBtn');
 
@@ -85,10 +81,8 @@ async function loadOnuData() {
         onuData = response.onus || [];
         onuThresholds = response.thresholds || { good: -20, warning: -25 };
 
-        // Group by OLT
         groupByOlt();
 
-        // Update view
         if (selectedOlt) {
             showOnuView();
         } else {
@@ -128,7 +122,6 @@ async function pollSelectedOlt() {
     }
 }
 
-// Group ONU by OLT
 function groupByOlt() {
     const oltMap = {};
 
@@ -165,7 +158,6 @@ function showOltList() {
 
     if (!container) return;
 
-    // Header with refresh button
     header.innerHTML = `
         <div class="onu-toolbar">
             <h3>📡 OLT Devices</h3>
@@ -180,7 +172,6 @@ function showOltList() {
         return;
     }
 
-    // Calculate totals
     const totalStats = oltsData.reduce((acc, olt) => {
         acc.total += olt.total;
         acc.online += olt.online;
@@ -203,7 +194,6 @@ function showOltList() {
         </div>
     `;
 
-    // Add click handlers
     document.querySelectorAll('.olt-card').forEach(card => {
         card.addEventListener('click', () => {
             selectedOlt = card.dataset.oltId;
@@ -212,7 +202,6 @@ function showOltList() {
     });
 }
 
-// Render OLT Card
 function renderOltCard(olt) {
     const healthClass = olt.offline > 0 ? 'has-offline' : (olt.low_signal > 0 ? 'has-warning' : 'all-ok');
     
@@ -451,7 +440,6 @@ function renderOnuList() {
     `;
 }
 
-// Render ONU Row
 function renderOnuRow(onu) {
     const statusClass = onu.status || 'unknown';
     // `status` = optical signal presence, `registration` = presence on the OLT.

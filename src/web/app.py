@@ -21,7 +21,6 @@ from src.web.api_netbox import router as netbox_router
 from src.web.admin import router as admin_router
 
 async def handle_log_event(event: LogEvent):
-    """Process log events from watcher."""
     detector = get_error_detector()
     detected = detector.process_event(event)
     
@@ -29,7 +28,6 @@ async def handle_log_event(event: LogEvent):
         if detected.pattern:
             logger.info(f"Known error on {event.server_id}: {detected.pattern.diagnosis[:50]}...")
             
-            # Check if auto-fix is possible
             if detector.can_auto_fix(detected):
                 logger.info(f"Auto-fix available for: {detected.error_hash}")
                 # TODO: Execute auto-fix in Stage 5
@@ -40,7 +38,6 @@ async def handle_log_event(event: LogEvent):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan handler."""
     logger.info("Starting MCP Server Monitor...")
     
     config = get_config()
@@ -54,21 +51,17 @@ async def lifespan(app: FastAPI):
     for server in enabled_servers:
         logger.info(f"  - {server.id} ({server.host})")
     
-    # Log enabled OLTs
     enabled_olts = config.get_enabled_olts()
     if enabled_olts:
         logger.info(f"Enabled OLTs: {len(enabled_olts)}")
         for olt in enabled_olts:
             logger.info(f"  - {olt.id} ({olt.host})")
     
-    # Start monitoring components
     log_watcher = get_log_watcher()
     health_checker = get_health_checker()
     
-    # Add log event handler
     log_watcher.add_handler(handle_log_event)
     
-    # Start log watcher if realtime monitoring enabled
     if settings.monitoring.realtime.enabled:
         try:
             await log_watcher.start()
@@ -76,14 +69,12 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.error(f"Failed to start log watcher: {e}")
     
-    # Start health checker
     try:
         await health_checker.start()
         logger.info("Health checker started")
     except Exception as e:
         logger.error(f"Failed to start health checker: {e}")
     
-    # Start ONU monitor if configured
     onu_monitor = None
     if enabled_olts:
         try:
@@ -112,7 +103,6 @@ async def lifespan(app: FastAPI):
     await log_watcher.stop()
     await health_checker.stop()
     
-    # Stop ONU monitor if it was started
     if onu_monitor:
         try:
             await onu_monitor.stop()
@@ -126,7 +116,6 @@ async def lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
-    """Create and configure FastAPI application."""
     config = get_config()
     secrets = config.load_secrets()
     
