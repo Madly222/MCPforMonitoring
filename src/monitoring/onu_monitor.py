@@ -548,6 +548,11 @@ class ONUMonitor:
                     )
                 except Exception as e:
                     logger.warning(f"SSH data retrieval failed for {olt.id}: {e}")
+            else:
+                logger.warning(
+                    f"OLT {olt.id}: не заданы ssh_username/ssh_password — "
+                    f"MAC и мощность будут пустыми"
+                )
 
             # If the session failed, fall back to SNMP status so that an SSH
             # timeout does not turn into a false mass Offline.
@@ -556,11 +561,6 @@ class ONUMonitor:
                 logger.warning(
                     f"OLT {olt.id}: оптика не получена, статус ONU определяется "
                     f"по SNMP-регистрации (может расходиться с реальным сигналом)"
-                )
-            else:
-                logger.warning(
-                    f"OLT {olt.id}: не заданы ssh_username/ssh_password — "
-                    f"MAC и мощность будут пустыми"
                 )
 
             onu_config = self.config.get_onu_monitoring_config()
