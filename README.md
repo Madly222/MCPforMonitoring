@@ -4,7 +4,6 @@
 
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.109-009688)
-![License](https://img.shields.io/badge/license-MIT-green)
 ![Status](https://img.shields.io/badge/status-production-success)
 
 A self-hosted control plane that watches a fleet of Linux servers over SSH, detects problems in real time, lets operators run natural-language commands (interpreted by Claude), and automates a set of recurring operational and billing tasks. It exposes a FastAPI backend, a lightweight web dashboard, and a role-gated superadmin console for managing users, servers, OLTs, and runtime settings without editing files by hand.
@@ -60,7 +59,6 @@ All screenshots use made-up demo data. Addresses are from the documentation rang
 - [Tests](#tests)
 - [Development](#development)
 - [Documentation](#documentation)
-- [License](#license)
 
 ---
 
@@ -620,9 +618,3 @@ Extended docs live in [`docs/`](docs/):
 - [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — systemd setup for the web service and timer jobs.
 - [`docs/API.md`](docs/API.md) — REST API reference.
 - [`docs/features/`](docs/features/README.md) — feature map: 8 visual trees (access, servers, monitoring, terminal, ONU, NetBox, outages, admin).
-
----
-
-## License
-
-MIT License.

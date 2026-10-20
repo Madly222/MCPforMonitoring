@@ -1,6 +1,5 @@
 /**
  * ONU Monitoring Module - Tree View
- * Path: ~/ServersMonitoringMCP/web/js/onu.js
  */
 
 let onuData = [];

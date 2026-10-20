@@ -3,8 +3,7 @@ ONU SNMP Monitor for ZTE C320.
 
 Monitors GPON ONU devices via SNMP on ZTE C320 OLT.
 Uses CLI snmpwalk for reliability.
-Uses SSH for MAC address retrieval.
-Path: ~/ServersMonitoringMCP/src/monitoring/onu_monitor.py
+Uses SSH for MAC addresses and optical power.
 """
 
 import asyncio
