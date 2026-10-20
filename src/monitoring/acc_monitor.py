@@ -342,13 +342,13 @@ async def check_acc_status(force: bool = False) -> ACCStatus:
 
     all_matches = []
     
-    # Tab 1 = Planned notifications (Уведомления)
+    # Tab 1 = Planned notifications
     content1 = await fetch_acc_page(today, tab=1)
     if content1:
         matches1 = parse_notifications(content1, regex)
         all_matches.extend(matches1)
     
-    # Tab 2 = Current works (Текущие работы)
+    # Tab 2 = Current works
     content2 = await fetch_acc_page(today, tab=2)
     if content2:
         matches2 = parse_table_rows(content2, regex)

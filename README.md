@@ -42,14 +42,14 @@ All screenshots use made-up demo data. Addresses are from the documentation rang
 ## Table of Contents
 
 - [Screenshots](#screenshots)
-- [Overview](#overview)
+- [What it does](#what-it-does)
 - [Architecture](#architecture)
 - [Features](#features)
 - [MCP Server](#mcp-server)
 - [Tech Stack](#tech-stack)
 - [Project Structure](#project-structure)
 - [Requirements](#requirements)
-- [Installation](#installation)
+- [Quick start](#quick-start)
 - [Configuration](#configuration)
 - [Running the Server](#running-the-server)
 - [Web Interface](#web-interface)
@@ -57,13 +57,14 @@ All screenshots use made-up demo data. Addresses are from the documentation rang
 - [Monitoring & Automation Modules](#monitoring--automation-modules)
 - [Knowledge Base](#knowledge-base)
 - [Security](#security)
+- [Tests](#tests)
 - [Development](#development)
 - [Documentation](#documentation)
 - [License](#license)
 
 ---
 
-## Overview
+## What it does
 
 MCP Server Monitor connects to remote servers over SSH and provides:
 
@@ -323,7 +324,7 @@ sudo apt update && sudo apt install -y openssh-client snmp mysql-client
 
 ---
 
-## Installation
+## Quick start
 
 ```bash
 # 1. Get the code
@@ -473,10 +474,6 @@ All endpoints are under `/api`. Authentication is session-based; most require a 
 | GET | `/api/monitoring/health` | Latest health reports |
 | GET | `/api/health` | App liveness probe |
 
-### Updates
-| Method | Path | Description |
-|--------|------|-------------|
-
 ### ONU / GPON
 | Method | Path | Description |
 |--------|------|-------------|
@@ -573,6 +570,17 @@ Auto-remediation is gated by **`config/safe_actions.yaml`**, which classifies ac
 
 ---
 
+## Tests
+
+```bash
+pip install pytest
+python -m pytest tests -q
+```
+
+The pytest suite lives in `tests/` (e.g. `tests/test_mac_port_sync.py`). The scripts below are manual checks, not part of the suite; several of them need real servers or API keys.
+
+---
+
 ## Development
 
 ### Test scripts
@@ -588,8 +596,6 @@ python scripts/test_resolver.py               # command resolver
 python scripts/test_schedule.py               # in-app scheduler
 python scripts/test_outage_filters.py         # outage message filters
 ```
-
-The `tests/` directory holds the pytest suite (e.g. `tests/test_mac_port_sync.py`); run it with `pytest`.
 
 ### Adding a new service handler
 1. Create `src/services/<name>.py` extending `BaseService`.

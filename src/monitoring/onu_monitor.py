@@ -20,7 +20,7 @@ from src.core.config import get_config, OLTConfig
 
 
 class ONUStatus(Enum):
-    """Состояние САМОЙ ONU — есть ли оптический сигнал."""
+    """State of the ONU itself: whether it has an optical signal."""
     ONLINE = "online"
     OFFLINE = "offline"
     LOW_SIGNAL = "low_signal"
@@ -29,11 +29,11 @@ class ONUStatus(Enum):
 
 class ONURegistration(Enum):
     """
-    Состояние регистрации ONU на OLT (SNMP 3.28.2.1.1).
+    ONU registration state on the OLT (SNMP 3.28.2.1.1).
 
-    Это НЕ то же самое, что наличие сигнала: OLT может считать ONU
-    зарегистрированной, когда оптически на ней "no signal". Разнесено
-    в отдельное поле, чтобы Online/Offline означало именно живость ONU.
+    This is NOT the same as having a signal: the OLT may consider an ONU
+    registered while it optically shows "no signal". Kept as a separate
+    field so that Online/Offline means the ONU is actually alive.
     """
     REGISTERED = "registered"
     NOT_REGISTERED = "not_registered"
@@ -71,24 +71,24 @@ ZTE_C320_OIDS = {
     "onu_last_offline": "1.3.6.1.4.1.3902.1012.3.28.2.1.5",   # STRING: datetime
 }
 
-# ВНИМАНИЕ: OID 3.11.4.1.1 и 3.11.4.1.2 РАНЬШЕ использовались как Rx/Tx power.
-# Проверка на живом ZTE-C320-SW30-N показала, что это неверно:
-#   - 3.11.4.1.2 содержит ДИСТАНЦИЮ до ONU в метрах (10317 = "ONU Distance: 10317m"),
-#     а не мощность передатчика;
-#   - 3.11.4.1.1 не коррелирует с реальной мощностью вообще (корреляция Пирсона 0.19
-#     на 22 замерах): почти одинаковые сырые значения 119454 и 119830 соответствуют
-#     -19.13 и -24.43 dBm. Формулы для него не существует.
-# Реальных значений мощности в приватной ветке 3902.1012 нет ни в одном OID.
-# Поэтому оптика теперь читается из CLI командой "show pon power onu-rx".
+# NOTE: OIDs 3.11.4.1.1 and 3.11.4.1.2 USED TO be read as Rx/Tx power.
+# Checking against a live ZTE-C320-SW30-N showed this is wrong:
+#   - 3.11.4.1.2 holds the DISTANCE to the ONU in metres (10317 = "ONU Distance: 10317m"),
+#     not the transmit power;
+#   - 3.11.4.1.1 does not correlate with real power at all (Pearson correlation 0.19
+#     over 22 samples): nearly identical raw values 119454 and 119830 correspond to
+#     -19.13 and -24.43 dBm. No formula exists for it.
+# No OID in the private 3902.1012 branch carries real power values.
+# That is why optical levels are now read from the CLI with "show pon power onu-rx".
 
 
 # ZTE C320 offline reason codes (from phase_state OID ...2.1.4)
 ZTE_OFFLINE_REASONS = {
-    1: "LOS (Loss of Signal)",      # Обрыв оптики
-    2: "LOF (Loss of Frame)",       # Потеря кадра
-    3: "Dying Gasp (Power Off)",    # Отключили питание ONU
-    4: "LOA (Loss of Ack)",         # Нет подтверждения
-    5: "Deregistered",              # Удалён с OLT
+    1: "LOS (Loss of Signal)",      # Fibre cut
+    2: "LOF (Loss of Frame)",
+    3: "Dying Gasp (Power Off)",    # ONU lost power
+    4: "LOA (Loss of Ack)",
+    5: "Deregistered",              # Removed from the OLT
     6: None,                        # Working/Online
     0: None,                        # Unknown/Never offline
 }
@@ -278,22 +278,23 @@ async def ssh_get_olt_data(
     ports: Optional[list[int]] = None,
 ) -> tuple[dict[str, str], dict[str, float], dict[str, float]]:
     """
-    Собрать данные с ZTE C320 за ОДНУ интерактивную SSH-сессию.
+    Collect data from a ZTE C320 in ONE interactive SSH session.
 
-    Возвращает (mac_table, rx_table, tx_table). Ключ везде "port:onu_id",
-    например "6:1". Мощность в dBm, как её отдаёт сама железка.
+    Returns (mac_table, rx_table, tx_table). Keys are always "port:onu_id",
+    e.g. "6:1". Power is in dBm, as reported by the device itself.
 
-    Одна сессия на цикл опроса: команды добавляются в тот же expect-скрипт,
-    что и раньше собирал MAC, поэтому число подключений к OLT не растёт.
+    One session per polling cycle: the commands are appended to the same
+    expect script that already collected MACs, so the number of connections
+    to the OLT does not grow.
 
-    ports — какие GPON-порты опрашивать. Вызывающий передаёт только те, где
-    реально есть ONU (это видно из SNMP до захода по SSH). На OLT с ONU на
-    половине портов это вдвое сокращает число команд и время сессии.
-    По умолчанию все восемь.
+    ports: which GPON ports to query. The caller passes only the ports that
+    actually have ONUs (known from SNMP before going in over SSH). On an OLT
+    with ONUs on half of its ports this halves the command count and the
+    session time. Defaults to all eight.
 
-    timeout — на ОДНУ команду expect. Общий лимит на сессию считается от
-    количества команд, иначе большой OLT не успевает ответить и вся сессия
-    падает по таймауту, теряя и MAC, и оптику.
+    timeout: applies to ONE expect command. The overall session limit is
+    derived from the command count; otherwise a large OLT cannot answer in
+    time and the whole session times out, losing both MACs and optics.
     """
     mac_table: dict[str, str] = {}
     rx_table: dict[str, float] = {}
@@ -339,9 +340,9 @@ expect {{
 
     if with_power:
         for gpon_port in scan_ports:
-            # onu-rx поддерживается всеми прошивками C320.
-            # onu-tx есть не везде; если команды нет, OLT ответит ошибкой,
-            # разбор просто ничего не найдёт и tx останется пустым.
+            # onu-rx is supported by every C320 firmware.
+            # onu-tx is not; where the command is missing the OLT answers with
+            # an error, the parser finds nothing and tx simply stays empty.
             expect_script += f'''
 send "show pon power onu-rx gpon-olt_1/1/{gpon_port}\\r"
 expect {{
@@ -371,7 +372,7 @@ expect eof
             stderr=asyncio.subprocess.PIPE
         )
         
-        # Команд в сессии: по одной на порт для MAC + по две на порт для оптики.
+        # Commands per session: one per port for MACs + two per port for optics.
         num_commands = len(scan_ports) * (3 if with_power else 1)
         total_timeout = timeout + 10 * num_commands
         logger.debug(
@@ -408,11 +409,10 @@ expect eof
                 mac_table[key] = mac_formatted
                 logger.debug(f"Found MAC {mac_formatted} for ONU {key}")
         
-        # Разбор мощности.
-        # Формат строк ZTE C320:
+        # ZTE C320 power lines look like:
         #   gpon-onu_1/1/4:1    -24.432(dbm)
         #   gpon-onu_1/1/4:10 N/A
-        # N/A означает "нет сигнала" и пропускается — значение останется None.
+        # N/A means "no signal" and is skipped, so the value stays None.
         if with_power:
             power_re = re.compile(
                 r'gpon-onu_1/1/(\d+):(\d+)\s+(-?\d+(?:\.\d+)?)\s*\(dbm\)',
@@ -458,10 +458,10 @@ async def ssh_get_mac_table(
     host: str, username: str, password: str, port: int = 22, timeout: int = 30
 ) -> dict[str, str]:
     """
-    Только MAC-таблица, без команд мощности.
+    MAC table only, without the power commands.
 
-    Оставлено для mac_port_sync, который вызывает это отдельно от цикла ONU
-    и в оптике не нуждается — лишние команды к OLT ему не нужны.
+    Kept for mac_port_sync, which calls this outside the ONU polling cycle
+    and has no use for optics, so it should not send extra commands to the OLT.
     """
     mac_table, _, _ = await ssh_get_olt_data(
         host, username, password, port, timeout, with_power=False
@@ -545,13 +545,12 @@ class ONUMonitor:
             phase_state_results = await snmpwalk_cli(olt.host, community, oids["onu_phase_state"])
             last_offline_results = await snmpwalk_cli(olt.host, community, oids["onu_last_offline"])
             
-            # Get MAC addresses via SSH if credentials are configured
-            # MAC и оптика забираются одной SSH-сессией.
-            # Мощность больше не берётся из SNMP: см. комментарий у ZTE_C320_OIDS.
+            # MACs and optics come from a single SSH session (if credentials are set).
+            # Power is no longer read from SNMP: see the note below ZTE_C320_OIDS.
             mac_table = {}
             rx_table = {}
             tx_table = {}
-            # Порты, на которых SNMP уже показал ONU — только их и опрашиваем.
+            # Query only the ports where SNMP has already shown ONUs.
             active_ports = sorted({
                 (int(idx.split(".")[0]) >> 8) & 0xFF
                 for idx in name_results
@@ -570,8 +569,8 @@ class ONUMonitor:
                 except Exception as e:
                     logger.warning(f"SSH data retrieval failed for {olt.id}: {e}")
 
-            # Удалась ли сессия. Если нет — статус берём из SNMP как раньше,
-            # чтобы таймаут SSH не превратился в ложный массовый Offline.
+            # If the session failed, fall back to SNMP status so that an SSH
+            # timeout does not turn into a false mass Offline.
             power_available = bool(rx_table)
             if not power_available:
                 logger.warning(
@@ -618,8 +617,7 @@ class ONUMonitor:
                     except:
                         snmp_status = 1
                     
-                    # Мощность из CLI OLT (ключ тот же "port:onu_id", что у MAC).
-                    # Отсутствие ключа = OLT ответил N/A либо сессия не удалась.
+                    # A missing key means the OLT answered N/A or the session failed.
                     rx_power = rx_table.get(mac_key)
                     tx_power = tx_table.get(mac_key)
                     
@@ -640,7 +638,7 @@ class ONUMonitor:
                         except:
                             pass
                     
-                    # Регистрация на OLT — отдельно от живости ONU.
+                    # Registration on the OLT is tracked separately from ONU liveness.
                     if snmp_status == 1:
                         registration = ONURegistration.REGISTERED
                     elif snmp_status == 2:
@@ -648,13 +646,12 @@ class ONUMonitor:
                     else:
                         registration = ONURegistration.UNKNOWN
 
-                    # Статус самой ONU определяется наличием сигнала.
-                    # Источник истины — Rx из CLI OLT: если OLT показывает N/A,
-                    # ONU физически не отвечает, даже если числится Registered.
+                    # ONU status is decided by the signal. Rx from the OLT CLI is the
+                    # source of truth: N/A means the ONU is physically not answering,
+                    # even if it is still listed as Registered.
                     if not power_available:
-                        # Сессия к OLT не удалась — судить о сигнале не по чему.
-                        # Падаем обратно на SNMP, иначе весь OLT разом уйдёт
-                        # в Offline из-за одного таймаута SSH.
+                        # No optics to judge by: fall back to SNMP, otherwise the
+                        # whole OLT would go Offline because of one SSH timeout.
                         if snmp_status == 2:
                             status = ONUStatus.OFFLINE
                         elif snmp_status == 1:
