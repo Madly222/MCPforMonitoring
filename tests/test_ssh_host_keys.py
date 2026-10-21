@@ -21,8 +21,13 @@ class _Server(asyncssh.SSHServer):
         return password == "secret"
 
 
-async def _start(key):
-    return await asyncssh.create_server(_Server, "127.0.0.1", 0, server_host_keys=[key])
+async def _start(key, port=0):
+    return await asyncssh.create_server(_Server, "127.0.0.1", port, server_host_keys=[key], reuse_address=True)
+
+
+async def _stop(server):
+    server.close()
+    await server.wait_closed()
 
 
 @pytest.fixture
@@ -59,16 +64,15 @@ def test_first_connection_saves_the_key_and_later_ones_check_it(env):
             await _connect(port)  # same key: accepted
             assert sm.KNOWN_HOSTS_FILE.read_text(encoding="utf-8") == saved  # not added twice
         finally:
-            server.close()
+            await _stop(server)
 
-        impostor = await asyncssh.create_server(_Server, "127.0.0.1", port,
-                                                server_host_keys=[asyncssh.generate_private_key("ssh-ed25519")])
+        impostor = await _start(asyncssh.generate_private_key("ssh-ed25519"), port)
         try:
             with pytest.raises(asyncssh.HostKeyNotVerifiable) as exc:
                 await _connect(port)
             assert "remove its line" in sm._friendly_ssh_error(str(exc.value))
         finally:
-            impostor.close()
+            await _stop(impostor)
 
     asyncio.run(scenario())
 
@@ -82,7 +86,7 @@ def test_checking_can_be_turned_off(env):
         try:
             await _connect(port)
         finally:
-            server.close()
+            await _stop(server)
         assert not sm.KNOWN_HOSTS_FILE.exists()
 
     asyncio.run(scenario())
