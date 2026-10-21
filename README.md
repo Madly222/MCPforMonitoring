@@ -61,7 +61,7 @@ flowchart LR
 | ![Confirmation dialog for a risky command](docs/screenshots/09-confirm-command.png) | ![Incidents card with fix plans](docs/screenshots/08-incidents.png) |
 
 - **Templates first.** Most requests are status, logs, errors or a restart. The resolver renders those from a per-host capability profile (systemd or SysVinit, journald or log files) without calling Claude, and caches whatever Claude resolves per server.
-- **Risk policy.** Every command the app builds, from a template or from Claude, is classified by `src/actions/policy.py`: read-only programs are risk 0, restarts follow `config/safe_actions.yaml`, `stop` is risk 2, and anything unrecognised, writing to a file or using command substitution is risk 3. Pipes and `||` chains take the risk of their worst part, and quoting is respected. Only risk-0 commands and restarts of listed services run without a human.
+- **Risk policy.** Every command the app builds, from a template or from Claude, is classified by `src/actions/policy.py`: read-only programs are risk 0, restarts follow `config/safe_actions.yaml`, `stop` is risk 2, and anything unrecognised, writing to a file or using command substitution is risk 3. Pipes and `||` chains take the risk of their worst part, and quoting is respected. The read-only list is an allowlist with argument checks: programs that can also run code or write (`awk`, `less`, `sed` with `e`/`w`, `sort -o`, `date -s`, …) are refused or checked, and line breaks, unknown environment prefixes such as `LD_PRELOAD` and `sudo -i` are rejected. Only risk-0 commands and restarts of listed services run without a human.
 - **Confirmation.** Anything else comes back to the dashboard with the exact command, its risk and the reason. It runs only when the same admin confirms it within five minutes. Both steps go to the audit log.
 - **Remediation.** Known errors carry fix commands. `auto_remediation.mode` is `suggest` by default (a human applies the fix); in `auto` the policy decides what runs, within per-action cooldowns, hourly caps and a backoff after repeated failures. Claude's suggested fixes for unknown errors are shown, never run.
 - **Shell hygiene.** Paths, patterns and service names are quoted or validated before they reach a remote shell, and `sudo` wraps the whole command, not just the first program in a pipe.
@@ -154,12 +154,12 @@ Environment variables `MONITOR_DATA_DIR`, `MONITOR_SECRETS_FILE`, `DEMO_MODE` an
 ## Tests and CI
 
 ```bash
-pip install pytest ruff
+pip install pytest hypothesis ruff
 ruff check .
 python -m pytest -q
 ```
 
-About 140 tests cover the risk classifier and limiter, the confirmation flow over HTTP, remediation in each mode, the command resolver's templates per init system, sessions, login lockout and role checks, shell quoting, the Claude client against a fake API, and the demo hosts. CI runs them on Python 3.10–3.12, then builds the Docker image, starts the demo and checks that it serves the fleet. Scripts that need live servers are in `scripts/check_*.py`.
+About 220 tests cover the risk classifier (including Hypothesis property tests that glue dangerous commands onto safe ones with every shell construct, and a list of known bypasses) and the limiter, the confirmation flow over HTTP, remediation in each mode, the command resolver's templates per init system, sessions, login lockout and role checks, shell quoting, the Claude client against a fake API, and the demo hosts. CI runs them on Python 3.10–3.12, then builds the Docker image, starts the demo and checks that it serves the fleet. Scripts that need live servers are in `scripts/check_*.py`.
 
 ## Background and design decisions
 

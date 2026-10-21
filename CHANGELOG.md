@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.1.2 — 2026-10-21
+
+### Security
+- The risk classifier let several commands run as root without confirmation, which Claude-generated commands could have reached:
+  - a line break or a mid-word `#` hid the rest of the command from the tokenizer (`uptime x#y; rm -rf /`), and `>& file` was taken for a descriptor duplicate although bash writes the file (found by the property tests);
+  - programs on the read-only list that run code or write: `awk` (`system()`), `less`/`more`, `sed` with the `e`/`w` commands or flags, `sort -o`, `uniq IN OUT`, `named-checkzone -o`, `find -fprint*`/`-execdir`;
+  - programs that change the system: `date -s`, `hostname NAME`, `hostnamectl`/`timedatectl set-*`, `ss -K`, `postqueue -f`, `dmesg -C`, `ping -f`, and `top` without `-b` hung until the timeout;
+  - `VAR=value` prefixes such as `LD_PRELOAD`, `env -S` and `sudo -i`/`-s`.
+- The read-only list now separates programs that are safe with any arguments from those whose arguments are checked; `sed` is allowed only with print/delete/quit and `s///`/`y///` scripts.
+- New tests: every bypass above as a regression case, ordinary diagnostics that must still run unconfirmed, and Hypothesis property tests (dangerous commands glued to safe ones with 30 shell constructs, generated pipelines with a known verdict, arbitrary text). Run against the previous classifier, all four property tests fail.
+- The host-status template uses `head` instead of `awk`.
+
 ## 1.1.1 — 2026-10-21
 
 ### Security

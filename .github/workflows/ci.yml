@@ -29,7 +29,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
           cache-dependency-path: requirements.txt
-      - run: pip install -r requirements.txt pytest
+      - run: pip install -r requirements.txt pytest hypothesis
       - run: python -m pytest -q
 
   docker-demo:

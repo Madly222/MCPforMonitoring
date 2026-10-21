@@ -46,16 +46,22 @@ _LIFECYCLE = {
 }
 _STATUS_VERBS = {"status", "is-active", "is-enabled", "is-failed", "show", "cat", "list-units", "list-unit-files"}
 
-# Programs that only read state. Flags that make some of them write are checked separately.
+# Programs that only read, whatever their arguments. Programs that can also write,
+# set something or run code (awk, less, sed with e/w, sort -o, date -s, ...) are
+# either absent, so they count as unknown, or have their arguments checked in
+# _ARG_CHECKS below.
 _READ_ONLY_PROGRAMS = {
-    "awk", "cat", "cut", "date", "df", "dig", "du", "echo", "egrep", "env", "false", "fgrep", "file",
-    "free", "grep", "head", "host", "hostname", "hostnamectl", "id", "last", "less", "ls", "lsblk",
-    "lscpu", "lsof", "mailq", "more", "netstat", "nproc", "nslookup", "pgrep", "ping", "printf", "ps",
-    "pwd", "readlink", "realpath", "sort", "ss", "stat", "tail", "test", "timedatectl", "top", "tr",
-    "true", "uname", "uniq", "uptime", "w", "wc", "which", "who", "whoami", "zcat", "zgrep",
-    "named-checkconf", "named-checkzone", "postqueue", "radiusd", "freeradius",
+    "cat", "cut", "df", "dig", "du", "echo", "egrep", "false", "fgrep", "file", "free", "grep",
+    "head", "host", "id", "last", "ls", "lsblk", "lscpu", "lsof", "mailq", "netstat", "nproc",
+    "nslookup", "pgrep", "printf", "ps", "pwd", "readlink", "realpath", "stat", "tail", "test",
+    "tr", "true", "uname", "uptime", "w", "wc", "which", "who", "whoami", "zcat", "zgrep",
+    "named-checkconf",
     "[", "[[", "]", "]]",
 }
+# Environment assignments allowed in front of a command (VAR=value cmd). Others,
+# such as LD_PRELOAD or PAGER, can make a read-only program run arbitrary code.
+_SAFE_ENV_VARS = {"LANG", "LANGUAGE", "TZ", "SYSTEMD_COLORS", "SYSTEMD_PAGER", "COLUMNS"}
+_SAFE_ENV_PREFIXES = ("LC_",)
 _SHELL_KEYWORDS = {
     "for", "do", "done", "if", "then", "elif", "else", "fi", "while", "until", "case", "esac",
     "break", "continue", "{", "}", "(", ")", "!",
@@ -74,6 +80,7 @@ _CONFIG_TEST_FLAGS = {
 }
 
 _SEPARATORS = {"|", "||", "&&", ";", "&", ";;", "|&"}
+_ENV_ASSIGNMENT = re.compile(r"([A-Za-z_][A-Za-z0-9_]*)=.*", re.S)
 _REDIRECTS = {">", ">>", "&>", "&>>", ">|", ">&", "<", "<<", "<<<", "<&"}
 
 
@@ -143,6 +150,9 @@ class ActionPolicy:
 
     def classify(self, command: str) -> Classification:
         """Classify a shell command; a compound command takes the risk of its riskiest part."""
+        if any(ch in command for ch in "\n\r\x00") or not command.replace("\t", " ").isprintable():
+            # A newline separates commands in sh, but not for the tokenizer below
+            return Classification(command, UNKNOWN, UNKNOWN_RISK, reason="line break or control character")
         command = command.strip()
         if not command:
             return Classification(command, UNKNOWN, UNKNOWN_RISK, reason="empty command")
@@ -156,6 +166,10 @@ class ActionPolicy:
 
         lexer = shlex.shlex(command, posix=True, punctuation_chars=True)
         lexer.whitespace_split = True
+        # sh only starts a comment at the beginning of a word; shlex would also cut
+        # "x#y; rm -rf /" at the '#'. Treat '#' as an ordinary character instead,
+        # so anything after it is still classified.
+        lexer.commenters = ""
         try:
             tokens = list(lexer)
         except ValueError:
@@ -169,7 +183,9 @@ class ActionPolicy:
                 segments.append([])
             elif tok in _REDIRECTS:
                 target = tokens[i + 1] if i + 1 < len(tokens) else ""
-                if tok in (">&", "<&", "<") or target == "/dev/null":
+                # ">&2" duplicates a descriptor, but ">& file" writes the file in bash
+                fd_dup = tok in (">&", "<&") and (target.isdigit() or target == "-")
+                if fd_dup or tok == "<" or target == "/dev/null":
                     if segments[-1] and segments[-1][-1].isdigit():
                         segments[-1].pop()  # the fd number in "2>/dev/null"
                     i += 2
@@ -188,7 +204,14 @@ class ActionPolicy:
 
     def _classify_segment(self, words: list[str]) -> Classification:
         segment = " ".join(words)
-        words = _strip_prefixes(words)
+        if not words:
+            return Classification(segment, READ_ONLY, 0, reason="empty")
+        stripped, unsafe = _strip_prefixes(words)
+        if unsafe:
+            return Classification(segment, UNKNOWN, UNKNOWN_RISK, reason=unsafe)
+        if not stripped:
+            return Classification(segment, UNKNOWN, UNKNOWN_RISK, reason="sudo or env without a command")
+        words = stripped
         if words and words[0] in ("for", "case", "select"):
             # "for VAR in LIST" / "case WORD in": a loop header, not a command
             return Classification(segment, READ_ONLY, 0, reason="shell syntax")
@@ -224,16 +247,13 @@ class ActionPolicy:
             if any(a.startswith(("--vacuum", "--rotate", "--flush", "--sync")) for a in args):
                 return Classification(segment, UNKNOWN, UNKNOWN_RISK, reason="journalctl maintenance")
             return Classification(segment, READ_ONLY, 0, reason="read-only")
-        if prog == "sed" and any(a == "-i" or a.startswith("-i") or a == "--in-place" for a in args):
-            return Classification(segment, UNKNOWN, UNKNOWN_RISK, reason="sed -i edits files")
-        if prog == "find" and any(a in ("-delete", "-exec", "-execdir", "-ok", "-fprint") for a in args):
-            return Classification(segment, UNKNOWN, UNKNOWN_RISK, reason="find with an action")
-        if prog == "dmesg" and any(a in ("-c", "-C", "--clear", "--read-clear") for a in args):
-            return Classification(segment, UNKNOWN, UNKNOWN_RISK, reason="dmesg clears the buffer")
-        if prog == "ip" and args and args[0] in ("addr", "address", "a", "route", "r", "link", "l", "neigh", "n", "-br", "-4", "-6", "-s"):
-            if not any(a in ("add", "del", "delete", "set", "flush", "change", "replace") for a in args):
-                return Classification(segment, READ_ONLY, 0, reason="read-only")
-        if prog == "sed" or prog in _READ_ONLY_PROGRAMS:
+        check = _ARG_CHECKS.get(prog)
+        if check is not None:
+            problem = check(args)
+            if problem:
+                return Classification(segment, UNKNOWN, UNKNOWN_RISK, reason=f"{prog}: {problem}")
+            return Classification(segment, READ_ONLY, 0, reason="read-only")
+        if prog in _READ_ONLY_PROGRAMS:
             return Classification(segment, READ_ONLY, 0, reason="read-only")
 
         return Classification(segment, UNKNOWN, UNKNOWN_RISK, reason=f"unrecognised program: {prog}")
@@ -270,19 +290,31 @@ def _normalize(command: str) -> str:
     return " ".join(command.split())
 
 
-def _strip_prefixes(words: list[str]) -> list[str]:
-    """Drop sudo, env and VAR=value prefixes so the real program is first."""
+def _strip_prefixes(words: list[str]) -> tuple[list[str], Optional[str]]:
+    """Drop sudo, env and VAR=value prefixes so the real program is first.
+
+    Returns the remaining words and, if a prefix itself is unsafe, why.
+    """
     while words:
         head = words[0]
         if head == "sudo":
             words = words[1:]
             while words and words[0].startswith("-"):
-                words = words[1:] if words[0] not in ("-u", "-g", "-p") else words[2:]
-        elif head == "env" or (re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*=.*", head) is not None):
+                if words[0] in ("-i", "-s", "--login", "--shell", "-e", "--edit"):
+                    return words, f"sudo {words[0]}"
+                words = words[1:] if words[0] not in ("-u", "-g", "-p", "-C", "-h") else words[2:]
+        elif head == "env":
+            words = words[1:]
+            if words and words[0].startswith("-"):
+                return words, f"env {words[0]}"
+        elif (m := _ENV_ASSIGNMENT.fullmatch(head)) is not None:
+            name = m.group(1)
+            if name not in _SAFE_ENV_VARS and not name.startswith(_SAFE_ENV_PREFIXES):
+                return words, f"sets {name}"
             words = words[1:]
         else:
             break
-    return words
+    return words, None
 
 
 def _lifecycle(prog: str, args: list[str]) -> Optional[tuple[str, str]]:
@@ -301,6 +333,168 @@ def _lifecycle(prog: str, args: list[str]) -> Optional[tuple[str, str]]:
     if prog in ("rndc",) and args and args[0] in ("reload", "reconfig"):
         return "reload", "named"
     return None
+
+
+# ==============================================================================
+# ARGUMENT CHECKS
+# ==============================================================================
+# Each returns why the arguments make the command unsafe, or None.
+
+def _short_flags(args: list[str]) -> set[str]:
+    """Letters of grouped short options: ["-tK", "-n"] -> {"t", "K", "n"}."""
+    return {ch for a in args if a.startswith("-") and not a.startswith("--") for ch in a[1:]}
+
+
+def _positionals(args: list[str]) -> list[str]:
+    return [a for a in args if not a.startswith("-")]
+
+
+def _check_date(args):
+    prev = ""
+    for a in args:
+        if a in ("-s", "--set") or a.startswith("--set="):
+            return "sets the clock"
+        if not a.startswith(("-", "+")) and prev not in ("-d", "--date", "-r", "--reference"):
+            return "a bare argument sets the clock"
+        prev = a
+    return None
+
+
+_HOSTNAME_FLAGS = {"-s", "-f", "-d", "-i", "-I", "-a", "-A", "--short", "--fqdn", "--long", "--domain",
+                   "--ip-address", "--all-ip-addresses", "--alias", "--all-fqdns"}
+
+
+def _check_hostname(args):
+    bad = [a for a in args if a not in _HOSTNAME_FLAGS]
+    return f"{bad[0]} changes the host name" if bad else None
+
+
+def _verb_check(allowed):
+    def check(args):
+        verbs = _positionals(args)
+        if verbs and verbs[0] not in allowed:
+            return f"{verbs[0]} changes settings"
+        return None
+    return check
+
+
+def _check_ss(args):
+    if "K" in _short_flags(args) or "--kill" in args:
+        return "-K kills sockets"
+    return None
+
+
+def _check_sort(args):
+    if "o" in _short_flags(args) or any(a.startswith(("--output", "--compress-program")) for a in args):
+        return "writes a file or runs a program"
+    return None
+
+
+def _check_uniq(args):
+    return "a second file argument is written" if len(_positionals(args)) > 1 else None
+
+
+def _check_top(args):
+    return None if "b" in _short_flags(args) else "interactive without -b"
+
+
+def _check_ping(args):
+    return "-f floods" if "f" in _short_flags(args) else None
+
+
+def _check_postqueue(args):
+    return None if args and all(a in ("-p", "-j") for a in args) else "only -p and -j are read-only"
+
+
+def _check_named_checkzone(args):
+    return "-o writes a file" if "-o" in args else None
+
+
+def _check_dmesg(args):
+    if {"c", "C", "D", "E", "n"} & _short_flags(args) or any(
+            a in ("--clear", "--read-clear", "--console-off", "--console-on", "--console-level") for a in args):
+        return "changes the kernel log"
+    return None
+
+
+_FIND_ACTIONS = {"-delete", "-exec", "-execdir", "-ok", "-okdir", "-fprint", "-fprint0", "-fprintf", "-fls"}
+
+
+def _check_find(args):
+    used = _FIND_ACTIONS.intersection(args)
+    return f"{sorted(used)[0]} acts on files" if used else None
+
+
+_IP_READ = {"addr", "address", "a", "route", "r", "link", "l", "neigh", "n", "rule", "maddr", "-br", "-4", "-6",
+            "-s", "-c", "-d", "-j", "-o"}
+_IP_WRITE = {"add", "del", "delete", "set", "flush", "change", "replace", "append", "exec", "netns", "monitor"}
+
+
+def _check_ip(args):
+    if not args or args[0] not in _IP_READ:
+        return "not a read-only ip subcommand"
+    return "changes network state" if _IP_WRITE.intersection(args) else None
+
+
+# sed scripts allowed: print/delete/quit/line-number with an optional address, and
+# s/// or y/// without the e and w flags. Anything else (e, w, r, W, R, labels...) is unknown.
+_SED_ADDRESS = r"(?:\d+|\$|/(?:\\.|[^/\\])*/I?)"
+_SED_SIMPLE = re.compile(rf"(?:{_SED_ADDRESS}(?:,{_SED_ADDRESS})?)?!?\s*[pdq=]?")
+_SED_SUBST = re.compile(
+    rf"(?:{_SED_ADDRESS}(?:,{_SED_ADDRESS})?)?\s*(?:s|y)([^\w\s\\])(?:\\.|(?!\1).)*\1(?:\\.|(?!\1).)*\1[gpiI0-9]*")
+
+
+def _sed_script_ok(script: str) -> bool:
+    return all(_SED_SIMPLE.fullmatch(part.strip()) or _SED_SUBST.fullmatch(part.strip())
+               for part in script.split(";"))
+
+
+def _check_sed(args):
+    scripts, i, have_e = [], 0, False
+    while i < len(args):
+        a = args[i]
+        if a in ("-i", "--in-place") or a.startswith(("-i", "--in-place")) or a in ("-f", "--file") \
+                or a.startswith("--file="):
+            return f"{a} edits files or reads a script"
+        if a in ("-e", "--expression"):
+            if i + 1 >= len(args):
+                return "-e without a script"
+            scripts.append(args[i + 1])
+            have_e = True
+            i += 2
+            continue
+        if a.startswith("--expression="):
+            scripts.append(a.split("=", 1)[1])
+            have_e = True
+        elif a.startswith("-") and a not in ("-n", "--quiet", "--silent", "-E", "-r", "--regexp-extended",
+                                              "-u", "--unbuffered", "-z", "--null-data", "-s", "--separate"):
+            return f"unexpected option {a}"
+        elif not a.startswith("-") and not have_e and not scripts:
+            scripts.append(a)
+        i += 1
+    if not scripts:
+        return "no script"
+    bad = [sc for sc in scripts if not _sed_script_ok(sc)]
+    return f"script {bad[0]!r} is not plainly read-only" if bad else None
+
+
+_ARG_CHECKS = {
+    "date": _check_date,
+    "hostname": _check_hostname,
+    "hostnamectl": _verb_check({"status", "show"}),
+    "timedatectl": _verb_check({"status", "show", "timesync-status", "show-timesync", "list-timezones"}),
+    "ss": _check_ss,
+    "sort": _check_sort,
+    "uniq": _check_uniq,
+    "top": _check_top,
+    "ping": _check_ping,
+    "postqueue": _check_postqueue,
+    "named-checkzone": _check_named_checkzone,
+    "dmesg": _check_dmesg,
+    "find": _check_find,
+    "ip": _check_ip,
+    "sed": _check_sed,
+}
 
 
 # ==============================================================================

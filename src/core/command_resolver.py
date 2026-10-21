@@ -190,7 +190,7 @@ def _build_template(parsed: ParsedRequest, profile: ServerProfile) -> Optional[R
 
     if intent == HOST_STATUS:
         cmd = (
-            "uptime; echo '--- memory ---'; free -m 2>/dev/null | awk 'NR==1||/Mem/'; "
+            "uptime; echo '--- memory ---'; free -m 2>/dev/null | head -n 2; "
             "echo '--- disk / ---'; df -h / | tail -1"
         )
         return rc(cmd, False, "host status (uptime/memory/disk)")

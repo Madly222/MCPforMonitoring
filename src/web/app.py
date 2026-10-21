@@ -127,7 +127,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="NetOps Control Plane",
         description="Intelligent server monitoring and auto-remediation system",
-        version="1.1.1",
+        version="1.1.2",
         lifespan=lifespan
     )
 

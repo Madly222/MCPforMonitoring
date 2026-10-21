@@ -224,7 +224,7 @@ Tests: `tests/test_command_resolver.py` (no live server / key needed).
 ---
 
 ## 10. Versions & defaults
-- App version `1.1.1`; web port `4455`; Python `3.10+`.
+- App version `1.1.2`; web port `4455`; Python `3.10+`.
 - `secrets.yaml > claude.model` — a **current** model (default `claude-opus-5-5`;
   retired ids such as `claude-sonnet-4-20250514` return 404).
 - Roles: `operator` < `admin` < `superadmin`.

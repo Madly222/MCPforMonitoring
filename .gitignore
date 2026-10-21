@@ -36,3 +36,6 @@ config/electric_addresses.txt
 # Demo mode runtime data (DEMO_MODE=1)
 demo-data/
 !demo/secrets.yaml
+
+# Hypothesis example database
+.hypothesis/
