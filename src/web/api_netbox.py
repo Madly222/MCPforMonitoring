@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from loguru import logger
 from dotenv import load_dotenv
 
-from src.web.auth import get_current_user, UserInfo
+from src.web.auth import get_current_user, require_admin, UserInfo
 
 netbox_env = Path(__file__).parent.parent.parent / ".env"
 load_dotenv(netbox_env)
@@ -70,7 +70,7 @@ async def netbox_scan(req: ScanRequest, user: UserInfo = Depends(get_current_use
 
 
 @router.post("/apply")
-async def netbox_apply(req: ApplyRequest, user: UserInfo = Depends(get_current_user)):
+async def netbox_apply(req: ApplyRequest, user: UserInfo = Depends(require_admin)):
     if user.role == "operator":
         raise HTTPException(403, "Access denied for operator role")
     if req.host not in _scan_cache:
@@ -82,7 +82,7 @@ async def netbox_apply(req: ApplyRequest, user: UserInfo = Depends(get_current_u
 
 
 @router.post("/auto")
-async def netbox_auto(req: ScanRequest, user: UserInfo = Depends(get_current_user)):
+async def netbox_auto(req: ScanRequest, user: UserInfo = Depends(require_admin)):
     if user.role == "operator":
         raise HTTPException(403, "Access denied for operator role")
     if not req.username or not req.password:
@@ -198,7 +198,7 @@ async def netbox_scan_router(req: ScanRequest, user: UserInfo = Depends(get_curr
 
 
 @router.post("/apply-router")
-async def netbox_apply_router(req: ApplyRequest, user: UserInfo = Depends(get_current_user)):
+async def netbox_apply_router(req: ApplyRequest, user: UserInfo = Depends(require_admin)):
     """Apply router interfaces to NetBox."""
     if user.role == "operator":
         raise HTTPException(403, "Access denied for operator role")
@@ -366,7 +366,7 @@ async def netbox_apply_router(req: ApplyRequest, user: UserInfo = Depends(get_cu
 # DHCP MAC SYNC ENDPOINT
 # ==============================================================================
 @router.post("/sync-mac")
-async def netbox_sync_mac(user: UserInfo = Depends(get_current_user)):
+async def netbox_sync_mac(user: UserInfo = Depends(require_admin)):
     """Sync MAC addresses from DHCP to NetBox."""
     if user.role == "operator":
         raise HTTPException(403, "Access denied for operator role")
@@ -381,7 +381,7 @@ async def netbox_sync_mac(user: UserInfo = Depends(get_current_user)):
 
 
 @router.post("/sync-interfaces")
-async def netbox_sync_interfaces(payload: dict = Body(default={}), user: UserInfo = Depends(get_current_user)):
+async def netbox_sync_interfaces(payload: dict = Body(default={}), user: UserInfo = Depends(require_admin)):
     """Trace each MAC to its leaf port and assign the IP to that interface in NetBox."""
     if user.role == "operator":
         raise HTTPException(403, "Access denied for operator role")

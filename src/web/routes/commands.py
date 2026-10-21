@@ -12,9 +12,7 @@ from src.web.routes.models import (
     CommandRequest, CommandResponse, ConfirmRequest,
     ConsoleRequest,
 )
-from src.services.dhcp import DHCPService
-from src.services.dns import DNSService
-from src.services.radius import RADIUSService
+from src.services.registry import SERVICE_HANDLERS
 
 router = APIRouter()
 
@@ -248,13 +246,7 @@ async def execute_command(
                     break
 
         if target_server and service_type:
-            service_handlers = {
-                "dhcp": DHCPService,
-                "dns": DNSService,
-                "radius": RADIUSService,
-            }
-
-            handler_class = service_handlers.get(service_type)
+            handler_class = SERVICE_HANDLERS.get(service_type)
 
             if handler_class:
                 handler = handler_class(ssh, target_server)
@@ -387,8 +379,7 @@ async def execute_interpreted_command(
                     break
 
         if server_id and service_type:
-            service_handlers = {"dhcp": DHCPService, "dns": DNSService, "radius": RADIUSService}
-            handler_class = service_handlers.get(service_type)
+            handler_class = SERVICE_HANDLERS.get(service_type)
 
             if handler_class:
                 handler = handler_class(ssh, server_id)
@@ -414,12 +405,10 @@ async def execute_interpreted_command(
         from src.monitoring.error_detector import get_error_detector
 
         if server_id:
-            service_handlers = {"dhcp": DHCPService, "dns": DNSService, "radius": RADIUSService}
-
             server = config.get_server_by_id(server_id)
             if server and server.services:
                 svc_type = service_type or server.services[0]
-                handler_class = service_handlers.get(svc_type)
+                handler_class = SERVICE_HANDLERS.get(svc_type)
 
                 if handler_class:
                     handler = handler_class(ssh, server_id)
@@ -461,8 +450,6 @@ async def execute_interpreted_command(
 
         if server_id:
             server = config.get_server_by_id(server_id)
-            service_handlers = {"dhcp": DHCPService, "dns": DNSService, "radius": RADIUSService}
-
             svc_type = service_type
             if not svc_type and server and server.services:
                 svc_type = server.services[0]
@@ -470,7 +457,7 @@ async def execute_interpreted_command(
             results = []
 
             if svc_type:
-                handler_class = service_handlers.get(svc_type)
+                handler_class = SERVICE_HANDLERS.get(svc_type)
                 if handler_class:
                     handler = handler_class(ssh, server_id)
 
@@ -503,7 +490,7 @@ async def execute_interpreted_command(
                 if server and server.services:
                     results.append("\n=== Services ===")
                     for svc in server.services:
-                        handler_class = service_handlers.get(svc)
+                        handler_class = SERVICE_HANDLERS.get(svc)
                         if handler_class:
                             handler = handler_class(ssh, server_id)
                             try:
@@ -535,8 +522,7 @@ async def execute_interpreted_command(
                     break
 
         if server_id and service_type:
-            service_handlers = {"dhcp": DHCPService, "dns": DNSService, "radius": RADIUSService}
-            handler_class = service_handlers.get(service_type)
+            handler_class = SERVICE_HANDLERS.get(service_type)
 
             if handler_class:
                 handler = handler_class(ssh, server_id)

@@ -181,7 +181,7 @@ There is no database for application state. Persistence is file-based:
 
 - **New monitored host** → add to `secrets.yaml > servers[]`.
 - **New service handler** → subclass `BaseService`, add `config/services/<name>.yaml`,
-  register in the `service_handlers` map in `api.py`.
+  register it in `SERVICE_HANDLERS` (`src/services/registry.py`) and `VALID_SERVICE_TYPES`.
 - **New error pattern** → add to `knowledge_base/known_errors.yaml`.
 - **New automation job** → new module in `src/monitoring/`, keys in `.env(.example)`,
   optional systemd `.service` + `.timer` in `scripts/`.

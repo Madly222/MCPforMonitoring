@@ -10,7 +10,7 @@ import pytest
 SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
 
 
-@pytest.mark.parametrize("name", ["check_resolver", "check_schedule", "check_outage_filters"])
+@pytest.mark.parametrize("name", ["check_schedule", "check_outage_filters"])
 def test_offline_check_script(name):
     result = subprocess.run(
         [sys.executable, str(SCRIPTS / f"{name}.py")],

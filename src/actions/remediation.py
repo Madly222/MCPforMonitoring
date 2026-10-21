@@ -42,11 +42,9 @@ async def resolve_service_name(server_id: str, service_type: str, name: str) -> 
     if name != "service_name":
         return None
     from src.core.ssh_manager import get_ssh_manager
-    from src.services.dhcp import DHCPService
-    from src.services.dns import DNSService
-    from src.services.radius import RADIUSService
+    from src.services.registry import SERVICE_HANDLERS
 
-    handler_class = {"dhcp": DHCPService, "dns": DNSService, "radius": RADIUSService}.get(service_type)
+    handler_class = SERVICE_HANDLERS.get(service_type)
     if handler_class is None:
         return None
     return await handler_class(get_ssh_manager(), server_id).get_service_name()

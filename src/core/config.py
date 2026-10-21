@@ -31,8 +31,8 @@ LOGS_DIR = PROJECT_ROOT / "logs"
 SESSIONS_DIR = PROJECT_ROOT / "sessions"
 
 
-# Service types the monitor has handlers for (mirrors service_handlers /
-# config/services/<type>.yaml). New types are added in code alongside a handler
+# Service types the monitor has handlers for (mirrors SERVICE_HANDLERS in
+# src/services/registry.py and config/services/<type>.yaml). New types are added in code alongside a handler
 # class; the superadmin console only lets operators pick from this list, never
 # invent new ones. Extend this tuple when you add a handler.
 VALID_SERVICE_TYPES = ("dhcp", "dns", "radius")

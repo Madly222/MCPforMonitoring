@@ -1,5 +1,6 @@
 """Servers: status, details, service actions and diagnostics, app restart."""
 
+import asyncio
 import os
 from datetime import datetime
 
@@ -8,13 +9,11 @@ from loguru import logger
 
 from src.core.config import get_config
 from src.core.ssh_manager import get_ssh_manager
-from src.web.auth import get_current_user, require_admin, UserInfo
+from src.web.auth import get_current_user, require_admin, require_superadmin, UserInfo
 from src.web.routes.models import (
     ActionRequest, ActionResponse,
 )
-from src.services.dhcp import DHCPService
-from src.services.dns import DNSService
-from src.services.radius import RADIUSService
+from src.services.registry import SERVICE_HANDLERS
 
 router = APIRouter()
 
@@ -250,13 +249,7 @@ async def get_server_details(
 async def get_service_status(server_id: str, service_type: str) -> dict:
     ssh = get_ssh_manager()
 
-    service_handlers = {
-        "dhcp": DHCPService,
-        "dns": DNSService,
-        "radius": RADIUSService,
-    }
-
-    handler_class = service_handlers.get(service_type)
+    handler_class = SERVICE_HANDLERS.get(service_type)
 
     if handler_class:
         handler = handler_class(ssh, server_id)
@@ -317,13 +310,7 @@ async def perform_action(
 
     ssh = get_ssh_manager()
 
-    service_handlers = {
-        "dhcp": DHCPService,
-        "dns": DNSService,
-        "radius": RADIUSService,
-    }
-
-    handler_class = service_handlers.get(request.service_type)
+    handler_class = SERVICE_HANDLERS.get(request.service_type)
 
     if not handler_class:
         raise HTTPException(
@@ -407,13 +394,7 @@ async def run_diagnostic(
 
     ssh = get_ssh_manager()
 
-    service_handlers = {
-        "dhcp": DHCPService,
-        "dns": DNSService,
-        "radius": RADIUSService,
-    }
-
-    handler_class = service_handlers.get(service_type)
+    handler_class = SERVICE_HANDLERS.get(service_type)
 
     if not handler_class:
         raise HTTPException(
@@ -430,6 +411,7 @@ async def run_diagnostic(
         "output": result.output,
         "error": result.error
     }
+
 
 @router.get("/servers/{server_id}/info")
 async def get_server_full_info(
@@ -461,23 +443,20 @@ async def get_server_full_info(
 
     return report_to_dict(report)
 
-@router.post("/service/restart")
-async def restart_service(http_request: Request, user: UserInfo = Depends(get_current_user)):
-    """Restart mcp-monitor service. Superadmin only."""
-    if user.role != "superadmin":
-        raise HTTPException(status_code=403, detail="Superadmin access required")
 
+@router.post("/service/restart")
+async def restart_service(http_request: Request, user: UserInfo = Depends(require_superadmin)):
+    """Restart the mcp-monitor service itself."""
     from src.web.audit import get_audit_logger
     client_ip = http_request.client.host if http_request.client else None
     try:
-        import subprocess
-        result = subprocess.run(
-            ["sudo", "systemctl", "restart", "mcp-monitor"],
-            capture_output=True,
-            text=True,
-            timeout=30
+        proc = await asyncio.create_subprocess_exec(
+            "sudo", "systemctl", "restart", "mcp-monitor",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
-        ok = result.returncode == 0
+        _, stderr = await asyncio.wait_for(proc.communicate(), timeout=30)
+        ok = proc.returncode == 0
         get_audit_logger().log(
             action="app_restart",
             username=user.username,
@@ -489,7 +468,7 @@ async def restart_service(http_request: Request, user: UserInfo = Depends(get_cu
         if ok:
             return {"success": True, "message": "Service restart initiated"}
         else:
-            return {"success": False, "message": f"Error: {result.stderr}"}
+            return {"success": False, "message": f"Error: {stderr.decode(errors='replace')}"}
     except Exception as e:
         logger.error(f"Service restart error: {e}")
         get_audit_logger().log(

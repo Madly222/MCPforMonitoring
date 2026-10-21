@@ -95,7 +95,12 @@ Host/port come from `secrets.yaml > mcp_server`.
 | File | Role |
 |------|------|
 | `app.py` | FastAPI factory, CORS, router mounting (incl. `admin_router` at `/api/admin`), lifespan. |
-| `api.py` | Main REST API: status, servers, actions, `/execute`, `/console/exec` (raw SSH), `/claude/health`, monitoring, ONU, utilities, invoicing. Audits commands/actions. |
+| `api.py` | Combines the routers in `routes/` into the `/api` router. |
+| `routes/servers.py` | Status, server details, service actions and diagnostics, full host info, app restart (superadmin). |
+| `routes/commands.py` | `/execute` (resolver → risk policy → confirmation), `/execute/confirm`, `/console/exec` (raw SSH). Audits commands. |
+| `routes/monitoring.py` | Watcher state, detected errors and fixes, health reports, liveness, `/claude/health`. |
+| `routes/onu.py`, `routes/utilities.py` | GPON/ONU status; water and power outage monitors. |
+| `routes/models.py` | Request/response models shared by the routers. |
 | `api_netbox.py` | NetBox auto-fill endpoints. |
 | `auth.py` | bcrypt auth via user store, sessions, `get_current_user`, `require_admin` (admin+superadmin), `require_superadmin`, login/logout audit. |
 | **`users.py`** | Runtime user store (`sessions/users.json`), seeded from secrets. `get_user_store()`, verify/add/delete/set_role/set_password. Roles in `VALID_ROLES`. |
@@ -104,8 +109,8 @@ Host/port come from `secrets.yaml > mcp_server`.
 | **`runtime_config.py`** | Writable runtime store: notification configs (live), ACC pattern, electric addresses, server & OLT stores (seed-and-own). |
 
 ### Services (`src/services/`)
-`base.py` (`BaseService` ABC), `dhcp.py`, `dns.py`, `radius.py`. Registered in the
-`service_handlers` map in `api.py`.
+`base.py` (`BaseService` ABC), `dhcp.py`, `dns.py`, `radius.py`. Registered in
+`SERVICE_HANDLERS` in `registry.py` (and `VALID_SERVICE_TYPES` in `config.py`).
 
 ### Monitoring & automation (`src/monitoring/`)
 `log_watcher`, `error_detector`, `health_checker`, `onu_monitor`
@@ -133,8 +138,9 @@ Settings, Servers, OLTs, Users, Audit), `login.js`.
 | App restart (`/api/service/restart`) | | | ✅ **only** |
 | Admin panel: users, audit, settings, servers, OLTs (`/api/admin/*`) | | | ✅ |
 
-Dependencies: `require_admin` (admin+superadmin), `require_superadmin`. App restart
-uses an inline exclusive check in `api.py`. Frontend hides buttons by role
+Dependencies: `require_admin` (admin+superadmin), `require_superadmin`. Every route's
+required role is listed in `tests/test_route_roles.py`; a new route fails that test
+until it is added there. Frontend hides buttons by role
 (see the script block in `index.html` and role checks in `app.js`).
 
 ---
@@ -171,7 +177,7 @@ Before a resolved command runs, `src/actions/policy.py` classifies it against
 `config/safe_actions.yaml`. Read-only commands and restarts of listed services run
 at once; anything else is parked in `src/actions/pending.py` and returned with a
 `confirmation` block, and only `POST /api/execute/confirm` by the same user runs it.
-Offline test: `python scripts/check_resolver.py` (no live server / key needed).
+Tests: `tests/test_command_resolver.py` (no live server / key needed).
 
 ---
 
@@ -200,10 +206,10 @@ Offline test: `python scripts/check_resolver.py` (no live server / key needed).
 |------|-----------|
 | Add/edit a monitored server | Web UI (Admin → Servers) → `runtime_config` + `secrets.yaml` seed |
 | Add/edit an OLT | Web UI (Admin → OLTs) |
-| Add a new service type | `src/services/<name>.py` + `config/services/<name>.yaml` + `service_handlers` in `api.py` |
+| Add a new service type | `src/services/<name>.py` + `config/services/<name>.yaml` + `SERVICE_HANDLERS` in `src/services/registry.py` + `VALID_SERVICE_TYPES` |
 | Add an admin endpoint | `src/web/admin.py` (superadmin) |
 | Add an audited action | `get_audit_logger().log(...)` in the endpoint |
-| Change roles/permissions | `src/web/auth.py` + inline checks in `api.py` + frontend visibility |
+| Change roles/permissions | the route's `Depends(...)` + `tests/test_route_roles.py` + frontend visibility |
 | Edit outage email/addresses/pattern | Web UI (Admin → Settings) → `runtime_config` |
 | Fix Claude not working | `scripts/check_claude.py`; update `secrets.yaml > claude.model` |
 | Add a config field | Pydantic model in `src/core/config.py` |

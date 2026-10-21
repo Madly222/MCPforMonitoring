@@ -14,9 +14,7 @@ from loguru import logger
 
 from src.core.config import get_config
 from src.core.ssh_manager import get_ssh_manager, SSHManager
-from src.services.dhcp import DHCPService
-from src.services.dns import DNSService
-from src.services.radius import RADIUSService
+from src.services.registry import SERVICE_HANDLERS
 from src.services.base import HealthStatus, ServiceState
 
 
@@ -41,12 +39,6 @@ class ServerHealthReport:
 
 HealthReportHandler = Callable[[ServerHealthReport], Awaitable[None]]
 
-
-SERVICE_HANDLERS = {
-    "dhcp": DHCPService,
-    "dns": DNSService,
-    "radius": RADIUSService,
-}
 
 
 class HealthChecker:

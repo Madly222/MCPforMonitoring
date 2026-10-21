@@ -88,7 +88,7 @@ flowchart TB
 
     subgraph App["FastAPI Application (port 4455)"]
         AUTH[Auth & Sessions<br/>bcrypt + cookies<br/>superadmin / admin / operator]
-        API[REST API<br/>api.py / api_netbox.py]
+        API[REST API<br/>routes/* / api_netbox.py]
         ADMIN[Superadmin console<br/>admin.py: users, servers,<br/>OLTs, settings, audit]
         LIFESPAN[Lifespan<br/>starts background monitors]
     end
@@ -250,7 +250,8 @@ ServersMonitoringMCP/
 │   │   └── mac_port_sync.py    # MAC→leaf port→NetBox interface assignment
 │   └── web/
 │       ├── app.py              # FastAPI app factory + lifespan
-│       ├── api.py              # Main REST API (incl. console/exec, claude/health)
+│       ├── api.py              # Combines the routers below into /api
+│       ├── routes/             # servers, commands, monitoring, onu, utilities, models
 │       ├── api_netbox.py       # NetBox auto-fill API
 │       ├── admin.py            # Superadmin console API (/api/admin/*)
 │       ├── auth.py             # Login, sessions, 3-role model
@@ -281,7 +282,7 @@ ServersMonitoringMCP/
 │   └── js/                     # app.js, api.js, admin.js, onu.js, login.js
 ├── scripts/                    # Test/util scripts + systemd unit/timer files
 │                               #   incl. manage_users.py, check_claude.py, check_electric.py,
-│                               #   check_resolver.py, check_schedule.py, check_outage_filters.py
+│                               #   check_schedule.py, check_outage_filters.py
 ├── tests/                      # Pytest suite (e.g. test_mac_port_sync.py)
 ├── secrets.example.yaml        # Template -> copy to secrets.yaml
 ├── .env.example                # Template -> copy to .env
@@ -598,7 +599,6 @@ python scripts/manage_users.py                 # CLI user management
 
 Offline self-checks (also run by pytest through `tests/test_offline_checks.py`):
 ```bash
-python scripts/check_resolver.py               # command resolver
 python scripts/check_schedule.py               # in-app scheduler
 python scripts/check_outage_filters.py         # outage message filters
 ```
@@ -606,7 +606,7 @@ python scripts/check_outage_filters.py         # outage message filters
 ### Adding a new service handler
 1. Create `src/services/<name>.py` extending `BaseService`.
 2. Add `config/services/<name>.yaml` (detection + parameters).
-3. Register it in the `service_handlers` map in `src/web/api.py`.
+3. Register it in `SERVICE_HANDLERS` in `src/services/registry.py` and in `VALID_SERVICE_TYPES` in `src/core/config.py`.
 
 ### Conventions
 - Async throughout (FastAPI + asyncssh).

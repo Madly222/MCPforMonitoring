@@ -132,6 +132,7 @@ async def get_health_reports(user: UserInfo = Depends(get_current_user)):
         ]
     }
 
+
 @router.get("/health")
 async def health_check():
     return {

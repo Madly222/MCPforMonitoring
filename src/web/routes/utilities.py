@@ -10,7 +10,7 @@ router = APIRouter()
 
 
 @router.get("/acc/status")
-async def get_acc_status():
+async def get_acc_status(user: UserInfo = Depends(get_current_user)):
     """Get ACC.md water disconnection status."""
     try:
         from src.monitoring.acc_monitor import get_status_dict, check_acc_status
@@ -37,7 +37,7 @@ async def check_acc_now(user: UserInfo = Depends(get_current_user)):
 
 
 @router.get("/electric/status")
-async def get_electric_status():
+async def get_electric_status(user: UserInfo = Depends(get_current_user)):
     """Get Premier Energy disconnection status."""
     try:
         from src.monitoring.electric_monitor import get_status_dict, check_electric_status
