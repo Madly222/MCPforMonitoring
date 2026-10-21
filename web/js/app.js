@@ -499,6 +499,25 @@ async function performAction(serverId, serviceType, action) {
     }
 }
 
+// The server held a command back because the risk policy wants a human to approve it.
+// Returns the execution result, or null if the operator cancelled.
+async function confirmRiskyCommand(result, output) {
+    var c = result.confirmation;
+    output.textContent = 'Waiting for confirmation...\n\n$ ' + c.command;
+    var message =
+        'Run this on ' + c.server_id + (c.sudo ? ' as root' : '') + '?\n\n' +
+        '$ ' + c.command + '\n\n' +
+        'Risk ' + c.risk + ' (' + c.action + '): ' + c.why + '.' +
+        (result.source === 'claude' ? '\nThis command was written by Claude.' : '');
+    var ok = await Dialog.confirm(message, 'Confirm command', c.risk >= 2);
+    if (!ok) {
+        output.textContent = 'Cancelled. Nothing was run.\n\n$ ' + c.command;
+        return null;
+    }
+    output.textContent = 'Executing...';
+    return API.commands.confirm(c.id);
+}
+
 async function handleExecute() {
     var input = document.getElementById('commandInput');
     var output = document.getElementById('outputArea');
@@ -533,6 +552,14 @@ async function handleExecute() {
     // Interpret mode (Claude / keyword fallback)
     try {
         var result = await API.commands.execute(command);
+        if (result.confirmation) {
+            result = await confirmRiskyCommand(result, output);
+            if (!result) {
+                addToHistory(command + ' (cancelled)', false);
+                input.value = '';
+                return;
+            }
+        }
         var text = '';
         var icon = result.source === 'claude' ? '[AI]' : '[CMD]';
         if (result.interpretation) text += icon + ' Interpretation: ' + result.interpretation + '\n\n';

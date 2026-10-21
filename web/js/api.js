@@ -158,6 +158,12 @@ const API = {
                 body: JSON.stringify({ command }),
             });
         },
+        confirm(confirmation_id) {
+            return API.request('/execute/confirm', {
+                method: 'POST',
+                body: JSON.stringify({ confirmation_id }),
+            });
+        },
     },
 
     // ----------------------------------------------------------- Raw console

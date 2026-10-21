@@ -50,6 +50,12 @@ class CommandResponse(BaseModel):
     result: Optional[str] = None
     error: Optional[str] = None
     source: str = "local"
+    # Set when the command was not run because the risk policy wants a human to confirm it
+    confirmation: Optional[dict] = None
+
+
+class ConfirmRequest(BaseModel):
+    confirmation_id: str
 
 
 class ActionRequest(BaseModel):
@@ -695,6 +701,59 @@ async def poll_olt(
 # COMMAND EXECUTION
 # ==============================================================================
 
+async def _run_resolved_command(ssh, server_id: str, command: str, sudo: bool,
+                                interpretation: Optional[str], source: str) -> CommandResponse:
+    if sudo:
+        exec_result = await ssh.execute_sudo(server_id, command)
+    else:
+        wrapped = (
+            "export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:"
+            "/usr/bin:/sbin:/bin:$PATH; " + command
+        )
+        exec_result = await ssh.execute(server_id, wrapped)
+
+    return CommandResponse(
+        success=exec_result.success,
+        interpretation=interpretation,
+        commands_executed=[{"command": command, "output": exec_result.output}],
+        result=exec_result.output,
+        error=exec_result.stderr if not exec_result.success else None,
+        source=source,
+    )
+
+
+@router.post("/execute/confirm", response_model=CommandResponse)
+async def confirm_command(
+    request: ConfirmRequest,
+    http_request: Request,
+    user: UserInfo = Depends(require_admin)
+):
+    """Run a command that /execute held back for confirmation."""
+    from src.actions.pending import get_pending_commands
+    from src.web.audit import get_audit_logger
+
+    pending = get_pending_commands().take(request.confirmation_id, user.username)
+    if pending is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Nothing to confirm: the request expired, was already run, or belongs to another user",
+        )
+
+    get_audit_logger().log(
+        action="command_confirmed",
+        username=user.username,
+        role=user.role,
+        target=pending.server_id,
+        detail=f"{pending.command} (risk {pending.classification.risk})",
+        ip=http_request.client.host if http_request.client else None,
+    )
+    logger.info(f"User {user.username} confirmed on {pending.server_id}: {pending.command}")
+    return await _run_resolved_command(
+        get_ssh_manager(), pending.server_id, pending.command, pending.sudo,
+        pending.description, pending.source,
+    )
+
+
 @router.post("/execute", response_model=CommandResponse)
 async def execute_command(
     request: CommandRequest,
@@ -744,22 +803,41 @@ async def execute_command(
         )
 
         if resolved and not managed_lifecycle:
-            if resolved.sudo:
-                exec_result = await ssh.execute_sudo(resolved.server_id, resolved.command)
-            else:
-                wrapped = (
-                    "export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:"
-                    "/usr/bin:/sbin:/bin:$PATH; " + resolved.command
-                )
-                exec_result = await ssh.execute(resolved.server_id, wrapped)
+            from src.actions.policy import get_action_policy
+            from src.actions.pending import get_pending_commands
 
-            return CommandResponse(
-                success=exec_result.success,
-                interpretation=resolved.description or resolved.intent,
-                commands_executed=[{"command": resolved.command, "output": exec_result.output}],
-                result=exec_result.output,
-                error=exec_result.stderr if not exec_result.success else None,
-                source=resolved.source,
+            policy = get_action_policy()
+            classification = policy.classify(resolved.command)
+            allowed, why = policy.auto_allowed(classification)
+            if not allowed:
+                pending = get_pending_commands().add(
+                    username=user.username,
+                    server_id=resolved.server_id,
+                    command=resolved.command,
+                    sudo=resolved.sudo,
+                    classification=classification,
+                    description=resolved.description or resolved.intent or "",
+                    source=resolved.source,
+                )
+                get_audit_logger().log(
+                    action="command_needs_confirmation",
+                    username=user.username,
+                    role=user.role,
+                    target=resolved.server_id,
+                    detail=f"{resolved.command} (risk {classification.risk}: {why})",
+                    ip=http_request.client.host if http_request.client else None,
+                )
+                return CommandResponse(
+                    success=False,
+                    interpretation=resolved.description or resolved.intent,
+                    result=f"Not run yet: {why}. Confirm to run it on {resolved.server_id}.",
+                    source=resolved.source,
+                    confirmation={**pending.to_dict(), "why": why},
+                )
+
+            return await _run_resolved_command(
+                ssh, resolved.server_id, resolved.command, resolved.sudo,
+                resolved.description or resolved.intent, resolved.source,
             )
     except Exception as e:
         logger.warning(f"Command resolver stage failed: {e}, continuing to interpreter")
