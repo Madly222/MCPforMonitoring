@@ -6,6 +6,7 @@ Handles user authentication and session management.
 
 import hashlib
 import json
+import math
 import secrets
 import threading
 from datetime import datetime, timedelta
@@ -61,8 +62,8 @@ def _token_key(session_id: str) -> str:
 class SessionStore:
     """Session storage persisted to disk so restarts do not log everyone out."""
 
-    def __init__(self, path: Path = SESSIONS_FILE):
-        self._path = path
+    def __init__(self, path: Optional[Path] = None):
+        self._path = path or SESSIONS_FILE
         self._lock = threading.Lock()
         self._sessions: dict[str, dict] = {}
         self._config = get_config()
@@ -202,7 +203,7 @@ class LoginThrottle:
             for key in keys:
                 recent = self._recent(key, now)
                 if len(recent) >= self.max_attempts:
-                    wait = max(wait, int((recent[0] + self.lockout - now).total_seconds()) + 1)
+                    wait = max(wait, math.ceil((recent[0] + self.lockout - now).total_seconds()))
             return wait
 
     def record_failure(self, *keys: str) -> None:
