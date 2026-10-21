@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 import src.actions.pending as pending_mod
 import src.core.command_resolver as resolver_mod
 import src.web.api as api
+import src.web.routes.commands as commands
 import src.web.auth as auth
 from src.core.command_resolver import ResolvedCommand
 
@@ -36,8 +37,8 @@ def env(web_env, monkeypatch):
             return state["resolved"]
 
     server_cfg = SimpleNamespace(get_enabled_servers=lambda: [SimpleNamespace(id="dns1")])
-    monkeypatch.setattr(api, "get_ssh_manager", lambda: ssh)
-    monkeypatch.setattr(api, "get_config", lambda: server_cfg)
+    monkeypatch.setattr(commands, "get_ssh_manager", lambda: ssh)
+    monkeypatch.setattr(commands, "get_config", lambda: server_cfg)
     monkeypatch.setattr(resolver_mod, "get_command_resolver", lambda: FakeResolver())
     monkeypatch.setattr(pending_mod, "_pending", None)
 
