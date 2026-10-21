@@ -77,16 +77,20 @@ Each `olts[]` entry:
 |-------|------|---------|-------|
 | `web_host` | string | `0.0.0.0` | Bind address |
 | `web_port` | int | `4455` | Web/API port |
-| `session_secret` | string | — | **Set to a random ≥32-char string** |
 | `session_expire_hours` | int | `24` | Session lifetime |
+| `cors_origins` | list | `[]` | Origins allowed to call the API cross-origin; empty = same-origin only |
+| `cookie_secure` | bool | `false` | Mark the session cookie Secure (set when served over HTTPS) |
+| `login_max_attempts` | int | `5` | Failed logins per username or IP before a lockout |
+| `login_lockout_minutes` | int | `15` | Lockout length and the window failures are counted in |
 
 ### `claude`
 | Field | Type | Default | Notes |
 |-------|------|---------|-------|
 | `api_key` | string | — | Anthropic API key |
-| `model` | string | `claude-sonnet-4-20250514` | Model id |
-| `max_tokens` | int | `1024` | Per-request cap |
-| `timeout_seconds` | int | `30` | Request timeout |
+| `model` | string | `claude-opus-5-5` | Model id |
+| `max_tokens` | int | `16000` | Per-request cap; thinking tokens count against it |
+| `effort` | string or null | `low` | `output_config.effort` sent with each request; `null` omits it |
+| `timeout_seconds` | int | `60` | Request timeout |
 
 ### `email`
 Built-in notification SMTP (separate from the automation channels in `.env`).
@@ -229,7 +233,6 @@ servers:
 mcp_server:
   web_host: "0.0.0.0"
   web_port: 4455
-  session_secret: "<random-32+-chars>"
 
 claude:
   api_key: "sk-ant-..."
@@ -268,5 +271,6 @@ account to `superadmin` before first run to bootstrap (or use
 `docs/AGENTS.md` §5.
 
 ### Claude model
-`secrets.yaml > claude.model` must be a **current** model — the old
-`claude-sonnet-4-20250514` now returns 404. Verify with `scripts/check_claude.py`.
+`secrets.yaml > claude.model` must be a **current** model (default
+`claude-opus-5-5`); retired ids such as `claude-sonnet-4-20250514` return 404.
+Verify with `scripts/check_claude.py`.

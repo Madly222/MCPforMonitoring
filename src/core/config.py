@@ -114,7 +114,8 @@ class ONUMonitoringConfig(BaseModel):
 class MCPServerConfig(BaseModel):
     web_host: str = "0.0.0.0"
     web_port: int = 4455
-    session_secret: str
+    # Unused: sessions are random server-side tokens. Kept so existing secrets.yaml files load.
+    session_secret: str = ""
     session_expire_hours: int = 24
     # Browser origins allowed to call the API cross-origin. Empty = same-origin only.
     cors_origins: list[str] = Field(default_factory=list)
@@ -126,9 +127,12 @@ class MCPServerConfig(BaseModel):
 
 class ClaudeConfig(BaseModel):
     api_key: str
-    model: str = "claude-sonnet-4-20250514"
-    max_tokens: int = 1024
-    timeout_seconds: int = 30
+    model: str = "claude-opus-5-5"
+    # Thinking tokens count against this cap, so keep it well above the answer size.
+    max_tokens: int = 16000
+    # output_config.effort sent with every request; null to omit it (models without effort support).
+    effort: Optional[str] = "low"
+    timeout_seconds: int = 60
 
 
 class EmailConfig(BaseModel):

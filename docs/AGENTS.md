@@ -73,11 +73,11 @@ Host/port come from `secrets.yaml > mcp_server`.
 7. **Config objects are singletons.** Access via `get_*()`; `get_config().reload()`
    to invalidate the cached secrets.
 
-8. **CORS is wide open (`*`).** LAN-only assumption; tighten before exposing.
+8. **CORS is off by default.** Same-origin only unless `mcp_server.cors_origins`
+    lists origins.
 
-9. **Default Claude model `claude-sonnet-4-20250514` is deprecated** (404
-    not_found). Set a current model in `secrets.yaml > claude.model` (e.g.
-    `claude-sonnet-4-6`); run `scripts/check_claude.py` to verify.
+9. **Claude model.** The default is `claude-opus-5-5`; retired ids such as
+    `claude-sonnet-4-20250514` return 404. Run `scripts/check_claude.py` to verify.
 
 ---
 
@@ -213,6 +213,6 @@ Offline test: `python scripts/check_resolver.py` (no live server / key needed).
 
 ## 10. Versions & defaults
 - App version `1.0.0`; web port `4455`; Python `3.10+`.
-- `secrets.yaml > claude.model` — set a **current** model (the old
-  `claude-sonnet-4-20250514` returns 404).
+- `secrets.yaml > claude.model` — a **current** model (default `claude-opus-5-5`;
+  retired ids such as `claude-sonnet-4-20250514` return 404).
 - Roles: `operator` < `admin` < `superadmin`.

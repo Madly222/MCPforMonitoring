@@ -22,22 +22,10 @@ async def main():
     print(f"\nCommand: {command}")
     print("-" * 50)
 
-    from anthropic import Anthropic
-
-    secrets = config.load_secrets()
-    client = Anthropic(api_key=secrets.claude.api_key)
-
     system_prompt = claude.SYSTEM_PROMPT_COMMAND.format(servers=", ".join(servers))
 
-    response = client.messages.create(
-        model=secrets.claude.model,
-        max_tokens=512,
-        system=system_prompt,
-        messages=[{"role": "user", "content": command}]
-    )
-
     print("Raw response:")
-    print(response.content[0].text)
+    print(await claude._ask(system_prompt, command))
     print("-" * 50)
 
     result = await claude.interpret_command(command, servers)

@@ -558,13 +558,16 @@ Auto-remediation is gated by **`config/safe_actions.yaml`**, which classifies ac
 
 - Secrets live in `secrets.yaml` and `.env`, both gitignored — never commit them.
 - SSH private keys live in `keys/` (chmod `600`), gitignored.
-- Web passwords are bcrypt-hashed; sessions are signed cookies with configurable expiry.
+- Web passwords are bcrypt-hashed (minimum 10 characters). Sessions are random 256-bit tokens in an HttpOnly, SameSite=Lax cookie (Secure when `cookie_secure` is set); the server stores only their SHA-256 hash in `sessions/web_sessions.json`, so restarts keep users logged in.
+- Roles are re-read on every request, so demoting or deleting a user takes effect at once; password changes end that user's other sessions.
+- Repeated failed logins lock the username and the client IP out for `login_lockout_minutes` (HTTP 429).
+- Values interpolated into remote shell commands (paths, patterns, service names) are quoted or validated, and sudo wraps the whole command.
 - The runtime store (`sessions/users.json`, `sessions/runtime_settings.json`) and audit log (`logs/audit.jsonl`) live under gitignored directories — never commit them.
 - Privileged actions are role-gated: the admin console requires `superadmin`, and the SSH command console (`POST /api/console/exec`) requires at least `admin`. Every such action is written to the audit log.
 - Auto-remediation is constrained by an explicit risk policy (`safe_actions.yaml`).
-- Rotate the `session_secret` and all credentials before any production deployment.
+- Rotate all credentials before any production deployment.
 
-> **CORS note:** the app currently allows all origins (`*`). Restrict this for internet-facing deployments.
+> **CORS:** off by default (same-origin only). List trusted origins in `mcp_server.cors_origins` only if another site must call the API.
 
 ---
 

@@ -14,7 +14,7 @@ from typing import Optional, Any
 from datetime import datetime, timedelta
 from dataclasses import dataclass, field
 
-from anthropic import Anthropic
+from anthropic import AsyncAnthropic
 from loguru import logger
 
 from src.core.config import get_config
@@ -106,16 +106,39 @@ Rules:
 
     def __init__(self):
         self.config = get_config()
-        self._client: Optional[Anthropic] = None
+        self._client: Optional[AsyncAnthropic] = None
         self._cache: dict[str, CacheEntry] = {}
         self._request_times: list[datetime] = []
 
     @property
-    def client(self) -> Anthropic:
+    def client(self) -> AsyncAnthropic:
         if self._client is None:
-            secrets = self.config.load_secrets()
-            self._client = Anthropic(api_key=secrets.claude.api_key)
+            claude = self.config.load_secrets().claude
+            self._client = AsyncAnthropic(api_key=claude.api_key, timeout=float(claude.timeout_seconds))
         return self._client
+
+    async def _ask(self, system: str, user_content: str, max_tokens: Optional[int] = None) -> str:
+        """Send one request and return the text of the answer.
+
+        Thinking blocks come before the text on current models, so the text is
+        collected from the text blocks rather than read from content[0].
+        """
+        claude = self.config.load_secrets().claude
+        kwargs: dict[str, Any] = {}
+        if claude.effort:
+            kwargs["output_config"] = {"effort": claude.effort}
+        response = await self.client.messages.create(
+            model=claude.model,
+            max_tokens=max_tokens or claude.max_tokens,
+            system=system,
+            messages=[{"role": "user", "content": user_content}],
+            **kwargs,
+        )
+        if response.stop_reason == "refusal":
+            raise RuntimeError("Claude declined the request")
+        if response.stop_reason == "max_tokens":
+            raise RuntimeError("Claude hit max_tokens before answering; raise claude.max_tokens")
+        return "".join(block.text for block in response.content if block.type == "text")
 
     def _get_cache_key(self, prompt: str) -> str:
         return hashlib.md5(prompt.encode()).hexdigest()
@@ -217,20 +240,8 @@ Context:
             )
 
         try:
-            secrets = self.config.load_secrets()
-
             self._record_request()
-
-            response = self.client.messages.create(
-                model=secrets.claude.model,
-                max_tokens=secrets.claude.max_tokens,
-                system=self.SYSTEM_PROMPT_ANALYSIS,
-                messages=[
-                    {"role": "user", "content": prompt}
-                ]
-            )
-
-            content = response.content[0].text
+            content = await self._ask(self.SYSTEM_PROMPT_ANALYSIS, prompt)
 
             try:
                 # Handle potential markdown code blocks and extract JSON
@@ -342,20 +353,8 @@ Context:
             )
 
         try:
-            secrets = self.config.load_secrets()
-
             self._record_request()
-
-            response = self.client.messages.create(
-                model=secrets.claude.model,
-                max_tokens=512,
-                system=system_prompt,
-                messages=[
-                    {"role": "user", "content": command}
-                ]
-            )
-
-            content = response.content[0].text
+            content = await self._ask(system_prompt, command)
 
             try:
                 if "```json" in content:
@@ -439,15 +438,8 @@ Context:
             return None
 
         try:
-            secrets = self.config.load_secrets()
             self._record_request()
-            response = self.client.messages.create(
-                model=secrets.claude.model,
-                max_tokens=256,
-                system=system_prompt,
-                messages=[{"role": "user", "content": user_prompt}],
-            )
-            content = response.content[0].text.strip()
+            content = (await self._ask(system_prompt, user_prompt)).strip()
             if "```json" in content:
                 content = content.split("```json")[1].split("```")[0]
             elif "```" in content:

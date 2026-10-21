@@ -38,12 +38,17 @@ def main():
     try:
         from anthropic import Anthropic
         client = Anthropic(api_key=api_key)
+        extra = {"output_config": {"effort": secrets.claude.effort}} if secrets.claude.effort else {}
         resp = client.messages.create(
             model=model,
-            max_tokens=10,
+            max_tokens=secrets.claude.max_tokens,
             messages=[{"role": "user", "content": "Reply with the single word: ok"}],
+            **extra,
         )
-        text = "".join(getattr(b, "text", "") for b in resp.content)
+        text = "".join(b.text for b in resp.content if b.type == "text")
+        if not text.strip():
+            print(f"RESULT: FAIL — no text in the reply (stop_reason={resp.stop_reason})")
+            sys.exit(1)
         print(f"RESULT: SUCCESS — Claude replied: {text.strip()!r}")
         print(f"Tokens: in={resp.usage.input_tokens} out={resp.usage.output_tokens}")
     except Exception as e:

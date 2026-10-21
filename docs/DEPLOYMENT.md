@@ -46,9 +46,8 @@ chmod 600 keys/*
 ```
 
 Before going live:
-- Set `mcp_server.session_secret` to a random ≥32-char string.
-- Change all default passwords in `web_users`.
-- Restrict CORS (see [Hardening](#7-hardening)).
+- Change all default passwords in `web_users` (at least 10 characters).
+- Behind HTTPS, set `mcp_server.cookie_secure: true` (see [Hardening](#7-hardening)).
 
 Smoke-test before installing the service:
 ```bash
@@ -166,14 +165,15 @@ If timer unit files changed, re-copy them and `sudo systemctl daemon-reload`.
 
 - **Reverse proxy + TLS.** Put nginx/Caddy in front and terminate HTTPS; don't
   expose `:4455` directly.
-- **CORS.** The app currently allows all origins. Restrict
-  `allow_origins` in `src/web/app.py` for internet-facing deployments.
+- **Secure cookie.** Behind HTTPS set `mcp_server.cookie_secure: true`.
+- **CORS.** Off by default; add origins to `mcp_server.cors_origins` only if
+  another site must call the API.
 - **Firewall.** Limit `:4455` to trusted networks.
 - **Secrets.** `secrets.yaml`, `.env`, and `keys/` are gitignored — keep file
   permissions tight (`chmod 600` on keys; restrict the project dir).
 - **Least privilege.** Give the monitoring SSH user only the sudo rights it needs
   for service control; prefer `NOPASSWD` scoped to specific commands.
-- **Session secret.** Rotate `session_secret`; rotation invalidates sessions.
+- **Sessions.** Delete `sessions/web_sessions.json` and restart to log everyone out.
 
 ---
 

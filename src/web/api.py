@@ -1409,12 +1409,8 @@ async def claude_health(user: UserInfo = Depends(get_current_user)):
         model = secrets.claude.model
         if not secrets.claude.api_key:
             return {"ok": False, "model": model, "error": "No API key configured"}
-        claude = get_claude_client()
-        claude.client.messages.create(
-            model=model,
-            max_tokens=5,
-            messages=[{"role": "user", "content": "ping"}],
-        )
+        # Looking the model up checks the key and the model id without generating tokens
+        await get_claude_client().client.models.retrieve(model)
         return {"ok": True, "model": model}
     except Exception as e:
         return {"ok": False, "model": model, "error": str(e)}
