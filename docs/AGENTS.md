@@ -40,7 +40,7 @@ Host/port come from `secrets.yaml > mcp_server`.
 
 1. **Three config layers now.**
    - `secrets.yaml` → infrastructure (servers, SSH, Claude, web users, OLTs). Pydantic-loaded in `src/core/config.py`.
-   - `.env` → automation defaults (SMTP, FTP, billing DB, NetBox). Read via `python-dotenv` in monitoring modules.
+   - `.env` → automation settings (SMTP, NetBox, DHCP database, switch credentials, branding). Read via `python-dotenv` in monitoring modules.
    - `sessions/runtime_settings.json` → **web-edited overrides** (see #2). Gitignored.
 
 2. **Seed-and-own runtime stores.** On first run, users, servers and OLTs are
@@ -122,10 +122,11 @@ Host/port come from `secrets.yaml > mcp_server`.
 diagnostic), plus test scripts and systemd units.
 
 ### Frontend (`web/`)
-Plain HTML/CSS/JS, no build. `index.html` (dashboard + console + 🤖 Claude health
-indicator + header buttons), `netbox.html`, `login.html`. JS: `app.js`, `api.js`
-(`API.admin.*`, `API.console.*`, `API.claude.*`), `onu.js`, `admin.js` (Admin tab:
-Settings, Servers, OLTs, Users, Audit), `login.js`.
+Plain HTML/CSS/JS, no build. One page, `index.html`: login view, dashboard with
+terminal, Incidents card and header indicators, ONU, NetBox and Admin tabs. JS:
+`app.js` (dashboard, terminal, confirmations, incidents), `api.js` (REST client),
+`router.js` (tabs), `onu.js`, `netbox.js`, `admin.js` (Admin tab: settings,
+servers, OLTs, users, audit).
 
 ---
 
@@ -223,7 +224,7 @@ Tests: `tests/test_command_resolver.py` (no live server / key needed).
 ---
 
 ## 10. Versions & defaults
-- App version `1.0.0`; web port `4455`; Python `3.10+`.
+- App version `1.1.0`; web port `4455`; Python `3.10+`.
 - `secrets.yaml > claude.model` — a **current** model (default `claude-opus-5-5`;
   retired ids such as `claude-sonnet-4-20250514` return 404).
 - Roles: `operator` < `admin` < `superadmin`.

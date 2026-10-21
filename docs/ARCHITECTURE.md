@@ -1,6 +1,6 @@
 # Architecture
 
-This document explains how MCP Server Monitor is put together: the layers, the
+This document explains how NetOps Control Plane is put together: the layers, the
 runtime model, and the main data flows. For a quick module map see
 [`AGENTS.md`](AGENTS.md); for the high-level picture see the
 [README](../README.md).

@@ -58,8 +58,8 @@ MONITOR_URL=http://127.0.0.1:4455 MONITOR_USER=mcp MONITOR_PASSWORD='<strong-pas
 {
   "mcpServers": {
     "network-monitor": {
-      "command": "/home/user/ServersMonitoringMCP/mcp_server/.venv/bin/python",
-      "args": ["/home/user/ServersMonitoringMCP/mcp_server/server.py"],
+      "command": "/home/user/netops-control-plane/mcp_server/.venv/bin/python",
+      "args": ["/home/user/netops-control-plane/mcp_server/server.py"],
       "env": {
         "MONITOR_URL": "http://127.0.0.1:4455",
         "MONITOR_USER": "mcp",

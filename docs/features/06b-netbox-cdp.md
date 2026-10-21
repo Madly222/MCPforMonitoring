@@ -1,87 +1,87 @@
-[← Синхронизация MAC](06a-netbox-mac-sync.md) · **6b** · [Карта](README.md) · [Дальше: Отключения света и воды →](07-outages.md)
+[← MAC sync](06a-netbox-mac-sync.md) · **6b** · [Map](README.md) · [Next: Power and water outages →](07-outages.md)
 
-# 🔗 NetBox: CDP и автозаполнение со свитчей и роутеров
+# 🔗 NetBox: CDP and auto-fill from switches and routers
 
-Режим **Single Device** (и **Batch Mode**) на вкладке **NetBox**. Панель заходит на Cisco по SSH, читает настройки портов и соседей по **CDP** и переносит это в NetBox: режимы портов, VLAN, описания, IP и **кабели между устройствами**.
+**Single Device** mode (and **Batch Mode**) on the **NetBox** tab. The panel signs in to a Cisco device over SSH, reads the port settings and the **CDP** neighbours, and carries them over to NetBox: port modes, VLANs, descriptions, IPs and **cables between devices**.
 
-**CDP** (Cisco Discovery Protocol) — каждое Cisco-устройство сообщает соседям своё имя и порт. Поэтому свитч знает: «на моём Gi0/1 сидит SW122, его порт Gi1/31». По этим данным панель и прокладывает кабели в NetBox.
+**CDP** (Cisco Discovery Protocol): every Cisco device tells its neighbours its name and port. So a switch knows "on my Gi0/1 sits SW122, on its port Gi1/31". The panel lays the cables in NetBox from exactly this data.
 
-## Работа в два шага
+## Two steps
 
 ```mermaid
 %%{init: {"flowchart": {"nodeSpacing": 14, "rankSpacing": 45, "curve": "basis", "padding": 8, "wrappingWidth": 260}}}%%
 flowchart LR
-    A["🔍 Scan<br/>читает с устройства"]:::admin --> B["📋 Таблица портов<br/>с галочками"]:::admin
-    B --> C["✅ Apply<br/>пишет в NetBox<br/>только отмеченные порты"]:::admin
-    D["🚀 Batch Mode"]:::admin -. "Scan + Apply сразу,<br/>все порты, без таблицы" .-> C
+    A["🔍 Scan<br/>reads the device"]:::admin --> B["📋 Port table<br/>with checkboxes"]:::admin
+    B --> C["✅ Apply<br/>writes to NetBox<br/>only the ticked ports"]:::admin
+    D["🚀 Batch Mode"]:::admin -. "Scan + Apply at once,<br/>all ports, no table" .-> C
 
     classDef admin fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
 ```
 
 ---
 
-## 🔀 Свитч: что читается при Scan
+## 🔀 Switch: what Scan reads
 
 ```mermaid
 %%{init: {"flowchart": {"nodeSpacing": 14, "rankSpacing": 45, "curve": "basis", "padding": 8, "wrappingWidth": 260}}}%%
 flowchart LR
-    ROOT(["🔍 Scan свитча"]):::root
+    ROOT(["🔍 Switch scan"]):::root
 
-    ROOT --> CON["🔌 Подключение"]:::group
-    CON --> C1["Устройство ищется в NetBox<br/>по IP"]:::auto
-    CON --> C2["SSH, поддержка<br/>старых IOS"]:::auto
-    CON --> C3["Имя берётся<br/>из приглашения CLI"]:::auto
+    ROOT --> CON["🔌 Connection"]:::group
+    CON --> C1["The device is looked up<br/>in NetBox by IP"]:::auto
+    CON --> C2["SSH, old IOS<br/>supported"]:::auto
+    CON --> C3["The name comes from<br/>the CLI prompt"]:::auto
 
-    ROOT --> PORTS["📡 Порты"]:::group
-    PORTS --> P1["show interfaces status —<br/>только connected"]:::auto
-    PORTS --> P2["show running-config interface —<br/>описание, access / trunk"]:::auto
-    PORTS --> P3["VLAN: access, native,<br/>allowed — диапазоны раскрываются"]:::auto
+    ROOT --> PORTS["📡 Ports"]:::group
+    PORTS --> P1["show interfaces status:<br/>connected only"]:::auto
+    PORTS --> P2["show running-config interface:<br/>description, access / trunk"]:::auto
+    PORTS --> P3["VLANs: access, native,<br/>allowed, ranges expanded"]:::auto
 
     ROOT --> CDP["🔗 CDP"]:::group
     CDP --> D1["show cdp neighbors detail"]:::auto
-    CDP --> D2["Имя соседа без домена<br/>+ его порт + платформа"]:::auto
+    CDP --> D2["Neighbour name without the domain<br/>+ its port + platform"]:::auto
 
-    ROOT --> MATCH["🧩 Сопоставление с NetBox"]:::group
-    MATCH --> M1["Свой интерфейс —<br/>по вариантам имени"]:::auto
-    MATCH --> M2["Есть ли уже кабель"]:::auto
-    MATCH --> M3["Сосед и его интерфейс"]:::auto
+    ROOT --> MATCH["🧩 Matching against NetBox"]:::group
+    MATCH --> M1["Own interface:<br/>by name variants"]:::auto
+    MATCH --> M2["Is there already a cable"]:::auto
+    MATCH --> M3["The neighbour and its interface"]:::auto
 
     classDef root  fill:#1f2937,stroke:#111827,color:#ffffff,font-weight:bold
     classDef group fill:#e0e7ff,stroke:#6366f1,color:#1e1b4b,font-weight:bold
     classDef auto  fill:#fef3c7,stroke:#d97706,color:#78350f
 ```
 
-### Как находится сосед в NetBox
+### How the neighbour is found in NetBox
 
-Имя из CDP и имя в NetBox часто отличаются (например, `CIS-NX3K-SW36-N.TST` против `CIS-NX3K-SW36-ECB`). Поэтому сосед ищется в три попытки:
+The name from CDP and the name in NetBox often differ (for example `CIS-NX3K-SW36-N.TST` versus `CIS-NX3K-SW36-ECB`). So the neighbour is looked up in three attempts:
 
-1. **точное имя** (домен уже отрезан);
-2. **по номеру свитча** `SWnn`; если таких устройств несколько — уточняется по модели (`NX3K`, `4948`, `2950`…);
-3. **по началу имени**, отрезая части с конца — пока не останется ровно одно совпадение.
+1. **the exact name** (domain already stripped);
+2. **by switch number** `SWnn`; if several devices match, the model narrows it down (`NX3K`, `4948`, `2950`…);
+3. **by name prefix**, trimming parts from the end until exactly one match is left.
 
-Имя порта тоже пробуется в разных написаниях: `Gi0/1` ↔ `GigabitEthernet0/1`, `[Gi]1/46`, `Fa1/0/1` ↔ `Fa1/01`, `Eth1/N` и т. д.
+The port name is also tried in different spellings: `Gi0/1` ↔ `GigabitEthernet0/1`, `[Gi]1/46`, `Fa1/0/1` ↔ `Fa1/01`, `Eth1/N` and so on.
 
-## 🔀 Свитч: что пишется при Apply
+## 🔀 Switch: what Apply writes
 
 ```mermaid
 %%{init: {"flowchart": {"nodeSpacing": 14, "rankSpacing": 45, "curve": "basis", "padding": 8, "wrappingWidth": 260}}}%%
 flowchart LR
-    ROOT(["✅ Apply свитча"]):::root
+    ROOT(["✅ Switch apply"]):::root
 
-    ROOT --> S1["1️⃣ Управление"]:::group
-    S1 --> A1["Интерфейс Vlan200,<br/>если VLAN 200 есть в NetBox"]:::admin
-    S1 --> A2["IP устройства /24<br/>на Vlan200"]:::admin
+    ROOT --> S1["1️⃣ Management"]:::group
+    S1 --> A1["Vlan200 interface,<br/>if VLAN 200 exists in NetBox"]:::admin
+    S1 --> A2["Device IP /24<br/>on Vlan200"]:::admin
 
-    ROOT --> S2["2️⃣ Каждый отмеченный порт"]:::group
-    S2 --> B1["trunk → tagged<br/>+ список VLAN"]:::admin
+    ROOT --> S2["2️⃣ Each ticked port"]:::group
+    S2 --> B1["trunk → tagged<br/>+ VLAN list"]:::admin
     S2 --> B2["access → access<br/>+ untagged VLAN"]:::admin
-    S2 --> B3["Описание порта"]:::admin
-    S2 --> B4["Порта нет в NetBox —<br/>пропуск, не создаётся"]:::auto
+    S2 --> B3["Port description"]:::admin
+    S2 --> B4["Port missing in NetBox:<br/>skipped, not created"]:::auto
 
-    ROOT --> S3["3️⃣ Кабель по CDP"]:::group
-    S3 --> C1["Оба конца найдены —<br/>старые кабели на обоих<br/>концах удаляются"]:::admin
-    S3 --> C2["Создаётся кабель<br/>CAT6, connected"]:::admin
-    S3 --> C3["Сосед не найден —<br/>кабель пропускается"]:::auto
+    ROOT --> S3["3️⃣ Cable from CDP"]:::group
+    S3 --> C1["Both ends found:<br/>old cables on both<br/>ends are deleted"]:::admin
+    S3 --> C2["A CAT6 cable is created,<br/>status connected"]:::admin
+    S3 --> C3["Neighbour not found:<br/>cable skipped"]:::auto
 
     classDef root  fill:#1f2937,stroke:#111827,color:#ffffff,font-weight:bold
     classDef group fill:#e0e7ff,stroke:#6366f1,color:#1e1b4b,font-weight:bold
@@ -89,15 +89,15 @@ flowchart LR
     classDef auto  fill:#fef3c7,stroke:#d97706,color:#78350f
 ```
 
-### Пример: из CDP в кабель NetBox
+### Example: from CDP to a NetBox cable
 
 ```mermaid
 %%{init: {"flowchart": {"nodeSpacing": 14, "rankSpacing": 45, "curve": "basis", "padding": 8, "wrappingWidth": 260}}}%%
 flowchart TB
-    CLI["🖥️ SW36 говорит по CDP:<br/>«на Gi0/1 сосед<br/>CIS-4948-SW122.corp.local,<br/>его порт Gi1/31»"]:::auto
+    CLI["🖥️ SW36 says over CDP:<br/>'on Gi0/1 my neighbour is<br/>CIS-4948-SW122.corp.local,<br/>its port Gi1/31'"]:::auto
     CLI --> N1["NetBox: SW36 / Gi0/1 ✅"]:::nb
     CLI --> N2["NetBox: SW122 / Gi1/31 ✅"]:::nb
-    N1 --> CAB["🔗 Кабель CAT6<br/>SW36 Gi0/1 ↔ SW122 Gi1/31"]:::nb
+    N1 --> CAB["🔗 CAT6 cable<br/>SW36 Gi0/1 ↔ SW122 Gi1/31"]:::nb
     N2 --> CAB
 
     classDef auto fill:#fef3c7,stroke:#d97706,color:#78350f
@@ -106,29 +106,29 @@ flowchart TB
 
 ---
 
-## 🌐 Роутер: Scan и Apply
+## 🌐 Router: Scan and Apply
 
 ```mermaid
 %%{init: {"flowchart": {"nodeSpacing": 14, "rankSpacing": 45, "curve": "basis", "padding": 8, "wrappingWidth": 260}}}%%
 flowchart LR
-    ROOT(["🌐 Роутер Cisco"]):::root
+    ROOT(["🌐 Cisco router"]):::root
 
-    ROOT --> SCAN["🔍 Scan читает"]:::group
-    SCAN --> R1["show ip interface brief —<br/>интерфейсы, IP, статус"]:::auto
-    SCAN --> R2["Описания интерфейсов,<br/>ip mtu у туннелей"]:::auto
-    SCAN --> R3["show ip route connected —<br/>только для просмотра"]:::auto
+    ROOT --> SCAN["🔍 Scan reads"]:::group
+    SCAN --> R1["show ip interface brief:<br/>interfaces, IPs, status"]:::auto
+    SCAN --> R2["Interface descriptions,<br/>ip mtu on tunnels"]:::auto
+    SCAN --> R3["show ip route connected:<br/>display only"]:::auto
     SCAN --> R4["show cdp neighbors detail"]:::auto
-    SCAN --> R5["show version — модель,<br/>серийник, IOS, uptime"]:::auto
+    SCAN --> R5["show version: model,<br/>serial, IOS, uptime"]:::auto
 
-    ROOT --> DEV["🖥️ Устройство в NetBox"]:::group
-    DEV --> D1["Ищется по имени,<br/>потом по IP"]:::admin
-    DEV --> D2["Не найдено —<br/>создаётся с моделью и серийником"]:::admin
+    ROOT --> DEV["🖥️ Device in NetBox"]:::group
+    DEV --> D1["Looked up by name,<br/>then by IP"]:::admin
+    DEV --> D2["Not found:<br/>created with model and serial"]:::admin
 
-    ROOT --> APPLY["✅ Apply пишет"]:::group
-    APPLY --> A1["Интерфейс — создаётся,<br/>если его нет"]:::admin
-    APPLY --> A2["Описание и MTU"]:::admin
-    APPLY --> A3["IP /24 — пересоздаётся<br/>на этом интерфейсе"]:::admin
-    APPLY --> A4["Кабели по CDP —<br/>как у свитча"]:::admin
+    ROOT --> APPLY["✅ Apply writes"]:::group
+    APPLY --> A1["Interface: created<br/>if missing"]:::admin
+    APPLY --> A2["Description and MTU"]:::admin
+    APPLY --> A3["IP /24: recreated<br/>on that interface"]:::admin
+    APPLY --> A4["Cables from CDP:<br/>as for a switch"]:::admin
 
     classDef root  fill:#1f2937,stroke:#111827,color:#ffffff,font-weight:bold
     classDef group fill:#e0e7ff,stroke:#6366f1,color:#1e1b4b,font-weight:bold
@@ -136,39 +136,39 @@ flowchart LR
     classDef auto  fill:#fef3c7,stroke:#d97706,color:#78350f
 ```
 
-## Свитч и роутер: в чём разница
+## Switch versus router
 
-| | 🔀 Свитч | 🌐 Роутер |
+| | 🔀 Switch | 🌐 Router |
 |---|---|---|
-| Какие порты берутся | только `connected` | все из `show ip interface brief` |
-| Нет устройства в NetBox | Scan предупреждает, Apply ничего не запишет | создаётся новое устройство |
-| Нет интерфейса в NetBox | порт пропускается | интерфейс создаётся |
-| VLAN | режим и VLAN пишутся | не пишутся |
-| IP | только управляющий IP на Vlan200 | IP каждого интерфейса |
-| Кабели по CDP | да, CAT6 | да, CAT6 |
-| Batch Mode | есть | нет |
+| Ports taken | `connected` only | everything in `show ip interface brief` |
+| Device missing in NetBox | Scan warns, Apply writes nothing | a new device is created |
+| Interface missing in NetBox | the port is skipped | the interface is created |
+| VLANs | mode and VLANs are written | not written |
+| IPs | only the management IP on Vlan200 | the IP of every interface |
+| Cables from CDP | yes, CAT6 | yes, CAT6 |
+| Batch Mode | yes | no |
 
-## ⚠️ Что важно знать перед Apply
+## ⚠️ What to know before Apply
 
-| Поведение | Почему важно |
-|-----------|-------------|
-| **Scan уже меняет NetBox:** если имя устройства в NetBox не совпадает с hostname из CLI, устройство переименовывается сразу при сканировании, ещё до Apply | Scan — не «только чтение» |
-| **Кабели перезаписываются:** перед созданием нового кабеля старые кабели на **обоих** концах удаляются | ручные правки кабелей на этих портах пропадут |
-| **Тип кабеля всегда CAT6**, даже если это оптика | тип придётся поправить руками |
-| **Маска всегда /24:** и для Vlan200 у свитча, и для IP у роутера | для других масок IP будет записан неверно |
-| **IP роутера пересоздаётся:** существующие записи с этим адресом удаляются и создаются заново | пропадают custom-поля этого IP, в том числе `MAC` из [Sync MAC](06a-netbox-mac-sync.md) |
-| **Поиск соседа по `SWnn` нечёткий:** при нескольких похожих именах может выбраться не то устройство | стоит проверить таблицу портов перед Apply |
-| **Batch Mode применяет все порты без просмотра** | для незнакомых устройств лучше Single Device |
+| Behaviour | Why it matters |
+|-----------|----------------|
+| **Scan already changes NetBox:** if the device name in NetBox differs from the CLI hostname, the device is renamed during the scan, before Apply | Scan is not read-only, which is why it needs admin |
+| **Cables are overwritten:** before a new cable is created, the old cables on **both** ends are deleted | manual cable edits on those ports are lost |
+| **The cable type is always CAT6**, even for fibre | the type has to be fixed by hand |
+| **The mask is always /24:** both for the switch's Vlan200 and for router IPs | IPs in other masks are recorded wrongly |
+| **Router IPs are recreated:** existing records with that address are deleted and created again | the IP's custom fields are lost, including the `MAC` from [Sync MAC](06a-netbox-mac-sync.md) |
+| **The `SWnn` neighbour lookup is fuzzy:** with several similar names the wrong device can be picked | check the port table before Apply |
+| **Batch Mode applies every port without a preview** | prefer Single Device for unfamiliar devices |
 
-## Где это в коде
+## Where it is in the code
 
-| Что | Файл |
-|-----|------|
-| SSH к Cisco, разбор CLI и CDP | `services/netbox-autofill/ssh_connector.py` |
-| Scan и Apply свитча | `services/netbox-autofill/orchestrator.py` |
-| Поиск устройств и интерфейсов, кабели | `services/netbox-autofill/netbox_client.py` |
-| Scan и Apply роутера, Batch | `src/web/api_netbox.py` |
-| Вкладка NetBox | `web/js/netbox.js` |
+| What | File |
+|------|------|
+| SSH to Cisco, CLI and CDP parsing | `services/netbox-autofill/ssh_connector.py` |
+| Switch Scan and Apply | `services/netbox-autofill/orchestrator.py` |
+| Device and interface lookup, cables | `services/netbox-autofill/netbox_client.py` |
+| Router Scan and Apply, Batch | `src/web/api_netbox.py` |
+| NetBox tab | `web/js/netbox.js` |
 
 ---
-[← Синхронизация MAC](06a-netbox-mac-sync.md) · [Карта](README.md) · [Дальше: Отключения света и воды →](07-outages.md)
+[← MAC sync](06a-netbox-mac-sync.md) · [Map](README.md) · [Next: Power and water outages →](07-outages.md)

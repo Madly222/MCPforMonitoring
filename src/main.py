@@ -1,5 +1,5 @@
 """
-MCP Server Monitor - Main Entry Point.
+NetOps Control Plane - Main Entry Point.
 
 Usage:
     python -m src.main
@@ -76,7 +76,7 @@ def main():
     setup_logging()
 
     logger.info("=" * 60)
-    logger.info("MCP Server Monitor v1.0.0")
+    logger.info("NetOps Control Plane v1.1.0")
     logger.info("=" * 60)
 
     check_configuration()

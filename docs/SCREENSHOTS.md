@@ -1,6 +1,6 @@
 # Screenshot gallery
 
-Every major screen of MCP Server Monitor, grouped like the [feature map](features/README.md).
+Every major screen of NetOps Control Plane, grouped like the [feature map](features/README.md).
 All data is made up: servers, OLTs, subscribers, MAC and serial numbers are fictional, and IP addresses
 come from the documentation ranges 192.0.2.0/24, 198.51.100.0/24 and 203.0.113.0/24.
 

@@ -1,51 +1,51 @@
-# 🌳 Карта возможностей MCP Server Monitor
+# 🌳 NetOps Control Plane feature map
 
-Приложение большое, поэтому возможности разбиты на **8 отдельных деревьев**.
-Здесь — только верхний уровень. Открывайте нужную ветку, внутри каждой — подробное дерево «что, где и зачем».
+The app does a lot, so its features are split into **8 separate trees**.
+This page is the top level only. Open a branch to see a detailed tree of what it does, where to find it and why it exists.
 
 ```mermaid
 %%{init: {"flowchart": {"nodeSpacing": 14, "rankSpacing": 45, "curve": "basis", "padding": 8, "wrappingWidth": 260}}}%%
 flowchart LR
-    APP(["🛰️ MCP Server Monitor<br/>веб-панель :4455"]):::root
+    APP(["🛰️ NetOps Control Plane<br/>web panel :4455"]):::root
 
-    APP --> A["🔐 Доступ и роли"]:::group
-    APP --> B["🖥️ Серверы и сервисы"]:::group
-    APP --> C["📈 Фоновый мониторинг"]:::group
-    APP --> D["⌨️ Терминал и AI-команды"]:::group
+    APP --> A["🔐 Access and roles"]:::group
+    APP --> B["🖥️ Servers and services"]:::group
+    APP --> C["📈 Background monitoring"]:::group
+    APP --> D["⌨️ Terminal and AI commands"]:::group
     APP --> E["📡 GPON / ONU"]:::group
     APP --> F["🗂️ NetBox"]:::group
-    APP --> G["⚡💧 Отключения света и воды"]:::group
-    APP --> H["👑 Консоль superadmin"]:::group
+    APP --> G["⚡💧 Power and water outages"]:::group
+    APP --> H["👑 Superadmin console"]:::group
 
     classDef root  fill:#1f2937,stroke:#111827,color:#ffffff,font-weight:bold
     classDef group fill:#e0e7ff,stroke:#6366f1,color:#1e1b4b,font-weight:bold
 ```
 
-| # | Дерево | Что внутри | Вкладка в UI |
-|:-:|--------|-----------|--------------|
-| 1 | [🔐 Доступ и роли](01-access.md) | вход, сессии, 3 роли, смена пароля, аудит | экран входа, шапка |
-| 2 | [🖥️ Серверы и сервисы](02-servers.md) | карточки серверов, DHCP / DNS / RADIUS, отчёт о сервере | **Servers** |
-| 3 | [📈 Фоновый мониторинг](03-monitoring.md) | слежение за логами, распознавание ошибок, health-check, индикаторы в шапке | работает само, видно в шапке |
-| 4 | [⌨️ Терминал и AI-команды](04-terminal.md) | команды обычным языком через Claude, прямая SSH-консоль | **Servers → Terminal Interpretation** |
-| 5 | [📡 GPON / ONU](05-onu.md) | OLT ZTE C320, оптический сигнал, регистрация ONU, поиск и фильтры | **ONU** |
-| 6 | [🗂️ NetBox](06-netbox.md) | автозаполнение NetBox со свитчей и роутеров, синхронизация MAC и портов | **NetBox** |
-| 6a | ↳ [🔄 Синхронизация MAC и портов](06a-netbox-mac-sync.md) | phpDHCPAdmin → MAC → порт абонента, разбор отчёта | **NetBox → Sync MAC / Sync Ports** |
-| 6b | ↳ [🔗 CDP и автозаполнение](06b-netbox-cdp.md) | что читается с Cisco, как строятся кабели, что пишется в NetBox | **NetBox → Single Device / Batch** |
-| 7 | [⚡💧 Отключения света и воды](07-outages.md) | Premier Energy, acc.md, расписание проверок, письма | шапка ⚡ 💧, **Admin → Settings** |
-| 8 | [👑 Консоль superadmin](08-admin.md) | пользователи, серверы, OLT, настройки, `.env`, журнал аудита | **Admin** |
+| # | Tree | What's inside | Where in the UI |
+|:-:|------|---------------|-----------------|
+| 1 | [🔐 Access and roles](01-access.md) | sign-in, sessions, 3 roles, password change, audit | sign-in screen, header |
+| 2 | [🖥️ Servers and services](02-servers.md) | server cards, DHCP / DNS / RADIUS, server report | **Servers** |
+| 3 | [📈 Background monitoring](03-monitoring.md) | log watching, error recognition, incidents and fixes, health checks, header indicators | runs on its own; **Servers → Incidents**, header |
+| 4 | [⌨️ Terminal and AI commands](04-terminal.md) | plain-language commands via Claude, risk policy and confirmation, raw SSH console | **Servers → Terminal Interpretation** |
+| 5 | [📡 GPON / ONU](05-onu.md) | ZTE C320 OLTs, optical signal, ONU registration, search and filters | **ONU** |
+| 6 | [🗂️ NetBox](06-netbox.md) | NetBox auto-fill from switches and routers, MAC and port sync | **NetBox** |
+| 6a | ↳ [🔄 MAC and port sync](06a-netbox-mac-sync.md) | phpDHCPAdmin → MAC → subscriber port, reading the report | **NetBox → Sync MAC / Sync Ports** |
+| 6b | ↳ [🔗 CDP and auto-fill](06b-netbox-cdp.md) | what is read from Cisco, how cables are built, what is written to NetBox | **NetBox → Single Device / Batch** |
+| 7 | [⚡💧 Power and water outages](07-outages.md) | Premier Energy, acc.md, check schedule, e-mails | header ⚡ 💧, **Admin → Settings** |
+| 8 | [👑 Superadmin console](08-admin.md) | users, servers, OLTs, settings, `.env`, audit log | **Admin** |
 
-## 🎨 Как читать деревья
+## 🎨 How to read the trees
 
-Во всех деревьях цвет листа показывает, **кому доступна функция**:
+In every tree the colour of a leaf shows **who can use the feature**:
 
 ```mermaid
 %%{init: {"flowchart": {"nodeSpacing": 14, "rankSpacing": 45, "curve": "basis", "padding": 8, "wrappingWidth": 260}}}%%
 flowchart LR
-    L1["👁 Все роли<br/>(operator и выше)"]:::all
-    L2["🛠 admin и выше"]:::admin
-    L3["👑 Только superadmin"]:::super
-    L4["⚙️ Работает автоматически"]:::auto
-    L5["🚧 Запланировано,<br/>ещё не включено"]:::plan
+    L1["👁 Every role<br/>(operator and up)"]:::all
+    L2["🛠 admin and up"]:::admin
+    L3["👑 superadmin only"]:::super
+    L4["⚙️ Runs automatically"]:::auto
+    L5["🚧 Planned,<br/>not enabled yet"]:::plan
 
     classDef all   fill:#dcfce7,stroke:#16a34a,color:#14532d
     classDef admin fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
@@ -54,5 +54,5 @@ flowchart LR
     classDef plan  fill:#f3f4f6,stroke:#9ca3af,color:#6b7280,stroke-dasharray:5 4
 ```
 
-> Архитектура «изнутри» (модули, потоки данных) описана отдельно — в [ARCHITECTURE.md](../ARCHITECTURE.md).
-> Эти деревья — взгляд **пользователя**: что приложение умеет и где это найти.
+> The internals (modules, data flows) are described in [ARCHITECTURE.md](../ARCHITECTURE.md).
+> These trees are the **user's** view: what the app can do and where to find it.

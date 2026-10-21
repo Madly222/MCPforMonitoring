@@ -1,9 +1,9 @@
-[← Отключения света и воды](07-outages.md) · **8 / 8** · [Карта](README.md)
+[← Power and water outages](07-outages.md) · **8 / 8** · [Map](README.md)
 
-# 👑 Консоль superadmin
+# 👑 Superadmin console
 
-Вкладка **Admin** видна только superadmin. Пять подвкладок — всё, что раньше приходилось править в файлах на сервере.
-Изменения применяются **на лету**, без перезапуска (кроме `.env`).
+The **Admin** tab is visible to superadmins only. Five sub-tabs cover everything that used to mean editing files on the server.
+Changes apply **immediately**, without a restart (except `.env`).
 
 ```mermaid
 %%{init: {"flowchart": {"nodeSpacing": 14, "rankSpacing": 45, "curve": "basis", "padding": 8, "wrappingWidth": 260}}}%%
@@ -11,69 +11,69 @@ flowchart LR
     ROOT(["👑 Admin"]):::root
 
     ROOT --> USR["👤 Users"]:::group
-    USR --> U1["Создать / удалить"]:::super
-    USR --> U2["Сменить пароль"]:::super
-    USR --> U3["Сменить роль"]:::super
+    USR --> U1["Create / delete<br/>(sessions end at once)"]:::super
+    USR --> U2["Reset password<br/>(signs the user out)"]:::super
+    USR --> U3["Change role<br/>(applies on the next request)"]:::super
 
     ROOT --> SRV["🖥️ Servers"]:::group
-    SRV --> S1["Добавить / изменить / убрать<br/>сервер и его сервисы"]:::super
-    SRV --> S2["Горячая перезагрузка<br/>без рестарта панели"]:::super
+    SRV --> S1["Add / change / remove<br/>a server and its services"]:::super
+    SRV --> S2["Hot reload<br/>without restarting the panel"]:::super
 
     ROOT --> OLT["📡 OLT Devices"]:::group
-    OLT --> O1["Добавить / изменить / убрать OLT"]:::super
+    OLT --> O1["Add / change / remove an OLT"]:::super
 
-    ROOT --> OUT["⚙️ Settings: отключения"]:::group
-    OUT --> T1["⚡💧 Адреса · шаблон · время"]:::super
+    ROOT --> OUT["⚙️ Settings: outages"]:::group
+    OUT --> T1["⚡💧 Addresses · pattern · time"]:::super
 
-    ROOT --> NET["⚙️ Settings: связь"]:::group
-    NET --> T2["Автопроверка соединений<br/>вкл/выкл + интервал"]:::super
-    NET --> T3["Тайм-аут SSH-подключения"]:::super
-    NET --> T4["Тайм-аут команды в терминале"]:::super
-    NET --> T5["Тестовая DNS-зона<br/>для проверки резолва"]:::super
+    ROOT --> NET["⚙️ Settings: connectivity"]:::group
+    NET --> T2["Automatic connection check<br/>on/off + interval"]:::super
+    NET --> T3["SSH connect timeout"]:::super
+    NET --> T4["Terminal command timeout"]:::super
+    NET --> T5["DNS test zone<br/>for the resolution check"]:::super
 
-    ROOT --> ENV["⚙️ Settings: файлы"]:::group
-    ENV --> T6["📝 Редактор .env<br/>секреты скрыты, нужен перезапуск"]:::super
-    ENV --> T7["↩️ Сброс к secrets.yaml<br/>Servers · OLTs · Users"]:::super
+    ROOT --> ENV["⚙️ Settings: files"]:::group
+    ENV --> T6["📝 .env editor<br/>secrets masked, restart needed"]:::super
+    ENV --> T7["↩️ Reset to secrets.yaml<br/>Servers · OLTs · Users"]:::super
 
     ROOT --> AUD["📋 Log"]:::group
-    AUD --> A1["Журнал аудита:<br/>кто, что, когда, с какого IP"]:::super
+    AUD --> A1["Audit log:<br/>who, what, when, from which IP"]:::super
 
-    ROOT --> RST["🔄 Перезапуск панели<br/>кнопка в шапке"]:::super
+    ROOT --> RST["🔄 Restart the panel<br/>header button"]:::super
 
     classDef root  fill:#1f2937,stroke:#111827,color:#ffffff,font-weight:bold
     classDef group fill:#e0e7ff,stroke:#6366f1,color:#1e1b4b,font-weight:bold
     classDef super fill:#fde2e2,stroke:#dc2626,color:#7f1d1d
 ```
 
-## Откуда панель берёт настройки
+## Where the panel gets its settings
 
 ```mermaid
 %%{init: {"flowchart": {"nodeSpacing": 14, "rankSpacing": 45, "curve": "basis", "padding": 8, "wrappingWidth": 260}}}%%
 flowchart LR
-    Y["📄 secrets.yaml"]:::file -- "первый запуск" --> S[("💾 Хранилище панели<br/>sessions/*.json")]:::store
-    UI["👑 Консоль Admin"]:::super -- "правки на лету" --> S
-    S --> APP["🛰️ Панель работает<br/>с этими данными"]:::store
-    Y -. "↩️ Reload … —<br/>сбросить правки" .-> S
-    E["📄 .env<br/>почта, NetBox"]:::file --> APP
-    UI -- "редактор .env" --> E
+    Y["📄 secrets.yaml"]:::file -- "first start" --> S[("💾 Panel store<br/>sessions/*.json")]:::store
+    UI["👑 Admin console"]:::super -- "live edits" --> S
+    S --> APP["🛰️ The panel runs<br/>on this data"]:::store
+    Y -. "↩️ Reload …<br/>discard the edits" .-> S
+    E["📄 .env<br/>mail, NetBox"]:::file --> APP
+    UI -- ".env editor" --> E
 
     classDef file  fill:#fef3c7,stroke:#d97706,color:#78350f
     classDef store fill:#e0e7ff,stroke:#6366f1,color:#1e1b4b
     classDef super fill:#fde2e2,stroke:#dc2626,color:#7f1d1d
 ```
 
-> ⚠️ После первого запуска главным становится **хранилище панели**, а не `secrets.yaml`.
-> Правка `secrets.yaml` ничего не изменит, пока не нажать **Reload Servers / OLTs / Users**.
+> ⚠️ After the first start the **panel store** is the source of truth, not `secrets.yaml`.
+> Editing `secrets.yaml` changes nothing until you press **Reload Servers / OLTs / Users**.
 
-## Где это в коде
+## Where it is in the code
 
-| Что | Файл |
-|-----|------|
-| Эндпоинты `/api/admin/*` | `src/web/admin.py` |
-| Хранилище настроек, серверов, OLT | `src/web/runtime_config.py` |
-| Безопасная запись `.env` | `src/web/env_config.py` |
-| Журнал аудита | `src/web/audit.py` |
-| Вкладка Admin | `web/js/admin.js` |
+| What | File |
+|------|------|
+| `/api/admin/*` endpoints | `src/web/admin.py` |
+| Store for settings, servers, OLTs | `src/web/runtime_config.py` |
+| Safe `.env` writes | `src/web/env_config.py` |
+| Audit log | `src/web/audit.py` |
+| Admin tab | `web/js/admin.js` |
 
 ---
-[← Отключения света и воды](07-outages.md) · [Карта](README.md)
+[← Power and water outages](07-outages.md) · [Map](README.md)

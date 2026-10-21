@@ -1,31 +1,33 @@
-[← Карта](README.md) · **1 / 8** · [Дальше: Серверы и сервисы →](02-servers.md)
+[← Map](README.md) · **1 / 8** · [Next: Servers and services →](02-servers.md)
 
-# 🔐 Доступ и роли
+# 🔐 Access and roles
 
-Кто может войти в панель, что ему разрешено и как это контролируется.
+Who can sign in to the panel, what they are allowed to do, and how that is enforced.
 
 ```mermaid
 %%{init: {"flowchart": {"nodeSpacing": 14, "rankSpacing": 45, "curve": "basis", "padding": 8, "wrappingWidth": 260}}}%%
 flowchart LR
-    ROOT(["🔐 Доступ и роли"]):::root
+    ROOT(["🔐 Access and roles"]):::root
 
-    ROOT --> LOGIN["🚪 Вход"]:::group
-    LOGIN --> L1["Логин + пароль<br/>пароли хранятся в bcrypt"]:::all
-    LOGIN --> L2["Сессия в подписанной cookie<br/>с ограниченным сроком жизни"]:::auto
-    LOGIN --> L3["Выход — кнопка Sign out"]:::all
+    ROOT --> LOGIN["🚪 Sign-in"]:::group
+    LOGIN --> L1["Username + password<br/>bcrypt hashes, 10+ characters"]:::all
+    LOGIN --> L2["Session: random token in an HttpOnly cookie,<br/>server keeps only its hash; survives restarts"]:::auto
+    LOGIN --> L3["Lockout after repeated failures<br/>per username and per IP"]:::auto
+    LOGIN --> L4["Sign out button"]:::all
 
-    ROOT --> ROLES["🎭 Три роли"]:::group
-    ROLES --> R1["👁 operator<br/>только смотрит"]:::all
-    ROLES --> R2["🛠 admin<br/>+ команды, действия, опрос OLT, NetBox"]:::admin
-    ROLES --> R3["👑 superadmin<br/>+ консоль администратора<br/>+ перезапуск панели"]:::super
+    ROOT --> ROLES["🎭 Three roles"]:::group
+    ROLES --> R1["👁 operator<br/>read-only"]:::all
+    ROLES --> R2["🛠 admin<br/>+ commands, confirmations, fixes,<br/>OLT polling, NetBox writes"]:::admin
+    ROLES --> R3["👑 superadmin<br/>+ admin console<br/>+ restart the panel"]:::super
 
-    ROOT --> SELF["🙋 Самообслуживание"]:::group
-    SELF --> S1["🔑 Смена своего пароля<br/>кнопка в шапке"]:::all
+    ROOT --> SELF["🙋 Self-service"]:::group
+    SELF --> S1["🔑 Change your own password<br/>header button; ends your other sessions"]:::all
 
-    ROOT --> GUARD["🛡️ Защита"]:::group
-    GUARD --> G1["Последнего superadmin<br/>нельзя удалить или понизить"]:::super
-    GUARD --> G2["Каждое привилегированное действие<br/>пишется в журнал аудита"]:::auto
-    GUARD --> G3["Интерфейс прячет лишние кнопки,<br/>а сервер всё равно проверяет роль"]:::auto
+    ROOT --> GUARD["🛡️ Safeguards"]:::group
+    GUARD --> G1["The last superadmin<br/>cannot be deleted or demoted"]:::super
+    GUARD --> G2["Every privileged action<br/>goes to the audit log"]:::auto
+    GUARD --> G3["Role is re-read on every request:<br/>demotion or deletion applies at once"]:::auto
+    GUARD --> G4["The UI hides buttons, and the server<br/>checks the role anyway"]:::auto
 
     classDef root  fill:#1f2937,stroke:#111827,color:#ffffff,font-weight:bold
     classDef group fill:#e0e7ff,stroke:#6366f1,color:#1e1b4b,font-weight:bold
@@ -35,28 +37,31 @@ flowchart LR
     classDef auto  fill:#fef3c7,stroke:#d97706,color:#78350f
 ```
 
-## Кто что может
+## Who can do what
 
-| Возможность | 👁 operator | 🛠 admin | 👑 superadmin |
-|-------------|:-:|:-:|:-:|
-| Смотреть серверы, ONU, индикаторы, отчёты | ✅ | ✅ | ✅ |
-| Сменить свой пароль | ✅ | ✅ | ✅ |
-| Запустить проверку отключений «сейчас» | ✅ | ✅ | ✅ |
-| Терминал: AI-команды и прямая SSH-консоль | — | ✅ | ✅ |
-| Рестарт / reload сервисов на серверах | — | ✅ | ✅ |
-| Опрос OLT «сейчас» | — | ✅ | ✅ |
-| NetBox: сканирование, применение, синхронизации | — | ✅ | ✅ |
-| Консоль администратора (вкладка **Admin**) | — | — | ✅ |
-| 🔄 Перезапуск самой панели (`mcp-monitor`) | — | — | ✅ |
+| Capability | 👁 operator | 🛠 admin | 👑 superadmin |
+|------------|:-:|:-:|:-:|
+| View servers, ONUs, incidents, indicators, reports | ✅ | ✅ | ✅ |
+| Change own password | ✅ | ✅ | ✅ |
+| Run an outage check "now" | ✅ | ✅ | ✅ |
+| Terminal: AI commands and the raw SSH console | — | ✅ | ✅ |
+| Confirm a risky command, apply a suggested fix | — | ✅ | ✅ |
+| Restart / reload services on servers | — | ✅ | ✅ |
+| Poll an OLT "now" | — | ✅ | ✅ |
+| NetBox: scan, apply, sync MACs and ports | — | ✅ | ✅ |
+| Admin console (**Admin** tab) | — | — | ✅ |
+| 🔄 Restart the panel itself (`mcp-monitor`) | — | — | ✅ |
 
-## Где это в коде
+The required role of every API route is listed in `tests/test_route_roles.py`; a new route fails the tests until it is added there.
 
-| Что | Файл |
-|-----|------|
-| Вход, выход, смена пароля, проверка ролей | `src/web/auth.py` |
-| Хранилище пользователей (`sessions/users.json`) | `src/web/users.py` |
-| Журнал аудита (`logs/audit.jsonl`) | `src/web/audit.py` |
-| Управление пользователями из консоли | `scripts/manage_users.py` |
+## Where it is in the code
+
+| What | File |
+|------|------|
+| Sign-in, sessions, lockout, role checks | `src/web/auth.py` |
+| User store (`sessions/users.json`) | `src/web/users.py` |
+| Audit log (`logs/audit.jsonl`) | `src/web/audit.py` |
+| User management from the command line | `scripts/manage_users.py` |
 
 ---
-[← Карта](README.md) · [Дальше: Серверы и сервисы →](02-servers.md)
+[← Map](README.md) · [Next: Servers and services →](02-servers.md)

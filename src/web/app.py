@@ -1,6 +1,6 @@
 """
 FastAPI Web Application.
-Main web application for MCP Server Monitor.
+Main web application for NetOps Control Plane.
 Provides REST API and serves static files.
 """
 import asyncio
@@ -39,7 +39,7 @@ async def handle_log_event(event: LogEvent):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("Starting MCP Server Monitor...")
+    logger.info("Starting NetOps Control Plane...")
 
     config = get_config()
     secrets = config.load_secrets()
@@ -93,7 +93,7 @@ async def lifespan(app: FastAPI):
     yield
 
     # Shutdown
-    logger.info("Shutting down MCP Server Monitor...")
+    logger.info("Shutting down NetOps Control Plane...")
 
     outage_task.cancel()
     try:
@@ -125,9 +125,9 @@ def create_app() -> FastAPI:
     server_cfg = get_config().load_secrets().mcp_server
 
     app = FastAPI(
-        title="MCP Server Monitor",
+        title="NetOps Control Plane",
         description="Intelligent server monitoring and auto-remediation system",
-        version="1.0.0",
+        version="1.1.0",
         lifespan=lifespan
     )
 

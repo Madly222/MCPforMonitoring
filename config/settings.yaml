@@ -1,5 +1,5 @@
 # ==============================================================================
-# MCP Server Monitor - General Settings
+# NetOps Control Plane - General Settings
 # ==============================================================================
 # Non-sensitive configuration options
 # Sensitive data (passwords, keys, IPs) should be in secrets.yaml

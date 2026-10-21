@@ -1,6 +1,6 @@
 # Configuration Reference
 
-MCP Server Monitor reads configuration from several files. This document
+NetOps Control Plane reads configuration from several files. This document
 describes every field. There are **two secret layers** plus runtime settings:
 
 | File | Layer | Loaded by | Committed? |
@@ -16,8 +16,8 @@ Templates `secrets.example.yaml` and `.env.example` ship in the repo — copy an
 edit them.
 
 > **Why two secret files (and why `secrets.yaml` is not merged into `.env`)?**
-> `.env` is a flat `KEY=value` format suited to simple scalars (SMTP host, FTP
-> password, API tokens) — which is exactly what the automation modules need.
+> `.env` is a flat `KEY=value` format suited to simple scalars (SMTP host,
+> passwords, API tokens) — which is exactly what the automation modules need.
 > `secrets.yaml` holds **structured** data: lists of servers with nested fields,
 > a list of OLTs with SNMPv3 sub-fields, and web users with roles. That shape
 > does not fit a flat `.env` without awkward `SERVER_1_HOST=…` conventions, and
@@ -144,7 +144,7 @@ Read directly by the automation modules. Full annotated template:
 **Cisco/NetBox auto-fill** (`services/netbox-autofill`): `SSH_USERNAME`,
 `SSH_PASSWORD`.
 
-> Many keys have code defaults (e.g. SMTP server, FTP host). Always set them
+> Many keys have code defaults (e.g. SMTP server, NetBox URL). Always set them
 > explicitly in production rather than relying on defaults baked into the source.
 
 ---

@@ -1,1 +1,1 @@
-"""Core modules for MCP Server Monitor."""
+"""Core modules for NetOps Control Plane."""

@@ -1,20 +1,20 @@
-[← NetBox: обзор](06-netbox.md) · **6a** · [Карта](README.md) · [Дальше: CDP и автозаполнение →](06b-netbox-cdp.md)
+[← NetBox overview](06-netbox.md) · **6a** · [Map](README.md) · [Next: CDP and auto-fill →](06b-netbox-cdp.md)
 
-# 🔄 NetBox: синхронизация MAC и портов
+# 🔄 NetBox: MAC and port sync
 
-Две кнопки на вкладке **NetBox**, которые работают **по цепочке**:
+Two buttons on the **NetBox** tab that work **as a chain** (both need admin):
 
-1. **🔄 Sync MAC** — берёт пары «IP ↔ MAC» из phpDHCPAdmin и записывает MAC в NetBox.
-2. **🔗 Sync Ports** — по этим MAC находит, в каком порту какого устройства сидит абонент, и привязывает его IP к этому интерфейсу в NetBox.
+1. **🔄 Sync MAC** takes "IP ↔ MAC" pairs from phpDHCPAdmin and writes the MAC into NetBox.
+2. **🔗 Sync Ports** uses those MACs to find which port of which device the subscriber is on, and assigns their IP to that interface in NetBox.
 
-Порядок важен: без шага 1 у IP в NetBox нет MAC, и шагу 2 нечего искать.
+Order matters: without step 1 the IPs in NetBox have no MAC, and step 2 has nothing to look for.
 
 ```mermaid
 %%{init: {"flowchart": {"nodeSpacing": 14, "rankSpacing": 45, "curve": "basis", "padding": 8, "wrappingWidth": 260}}}%%
 flowchart TB
-    DB[("🗄️ phpDHCPAdmin<br/>MySQL")]:::src -- "1. 🔄 Sync MAC" --> IP["NetBox: IP-адрес<br/>+ поле MAC"]:::nb
-    IP -- "2. 🔗 Sync Ports" --> NET["🔀 Свитчи · 📡 OLT<br/>MAC-таблицы"]:::src
-    NET --> ASSIGN["NetBox: IP привязан<br/>к порту абонента"]:::nb
+    DB[("🗄️ phpDHCPAdmin<br/>MySQL")]:::src -- "1. 🔄 Sync MAC" --> IP["NetBox: IP address<br/>+ MAC field"]:::nb
+    IP -- "2. 🔗 Sync Ports" --> NET["🔀 Switches · 📡 OLTs<br/>MAC tables"]:::src
+    NET --> ASSIGN["NetBox: IP assigned<br/>to the subscriber port"]:::nb
 
     classDef src fill:#fef3c7,stroke:#d97706,color:#78350f
     classDef nb  fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
@@ -22,31 +22,31 @@ flowchart TB
 
 ---
 
-## 1. 🔄 Sync MAC — phpDHCPAdmin → NetBox
+## 1. 🔄 Sync MAC: phpDHCPAdmin → NetBox
 
 ```mermaid
 %%{init: {"flowchart": {"nodeSpacing": 14, "rankSpacing": 45, "curve": "basis", "padding": 8, "wrappingWidth": 260}}}%%
 flowchart LR
     ROOT(["🔄 Sync MAC"]):::root
 
-    ROOT --> SRC["📥 Откуда берёт"]:::group
-    SRC --> S1["SSH на DHCP-сервер"]:::auto
-    SRC --> S2["MySQL phpDHCPAdmin,<br/>таблица conf_hosts:<br/>ip-address + mac-address"]:::auto
+    ROOT --> SRC["📥 Source"]:::group
+    SRC --> S1["SSH to the DHCP server"]:::auto
+    SRC --> S2["phpDHCPAdmin MySQL,<br/>table conf_hosts:<br/>ip-address + mac-address"]:::auto
 
-    ROOT --> CLEAN["🧹 Чистка"]:::group
-    CLEAN --> C1["MAC приводится к виду<br/>AA:BB:CC:DD:EE:FF"]:::auto
-    CLEAN --> C2["Битые IP и MAC<br/>отбрасываются"]:::auto
+    ROOT --> CLEAN["🧹 Cleaning"]:::group
+    CLEAN --> C1["MAC normalised to<br/>AA:BB:CC:DD:EE:FF"]:::auto
+    CLEAN --> C2["Malformed IPs and MACs<br/>are dropped"]:::auto
 
-    ROOT --> FIND["🔍 Поиск в NetBox"]:::group
-    FIND --> F1["IP-адрес ищется<br/>сначала точно, потом поиском"]:::auto
+    ROOT --> FIND["🔍 Lookup in NetBox"]:::group
+    FIND --> F1["The IP is looked up<br/>exactly first, then by search"]:::auto
 
-    ROOT --> WRITE["✍️ Что записывает"]:::group
-    WRITE --> W1["Только поле MAC<br/>у IP-адреса"]:::admin
-    WRITE --> W2["Если MAC уже такой же —<br/>пропуск"]:::auto
+    ROOT --> WRITE["✍️ What it writes"]:::group
+    WRITE --> W1["Only the MAC field<br/>of the IP address"]:::admin
+    WRITE --> W2["Same MAC already there:<br/>skipped"]:::auto
 
-    ROOT --> NOT["🚫 Чего НЕ делает"]:::group
-    NOT --> N1["Не создаёт IP,<br/>которых нет в NetBox"]:::all
-    NOT --> N2["Не трогает другие поля"]:::all
+    ROOT --> NOT["🚫 What it does NOT do"]:::group
+    NOT --> N1["Create IPs that<br/>are not in NetBox"]:::all
+    NOT --> N2["Touch any other field"]:::all
 
     classDef root  fill:#1f2937,stroke:#111827,color:#ffffff,font-weight:bold
     classDef group fill:#e0e7ff,stroke:#6366f1,color:#1e1b4b,font-weight:bold
@@ -55,51 +55,51 @@ flowchart LR
     classDef auto  fill:#fef3c7,stroke:#d97706,color:#78350f
 ```
 
-### Как читать итог
+### Reading the summary
 
-После синхронизации появляется окно с четырьмя числами:
+After the sync a window shows four numbers:
 
-| Число | Что значит | Что делать |
-|-------|-----------|-----------|
-| **Updated** | MAC записан или исправлен | ничего |
-| **Skipped** | в NetBox уже стоял тот же MAC | ничего |
-| **Not found** | IP есть в DHCP, но в NetBox такого IP-адреса нет | завести IP в NetBox, если он нужен |
-| **Errors** | NetBox не принял запись | смотреть лог сервиса |
+| Number | Meaning | What to do |
+|--------|---------|------------|
+| **Updated** | The MAC was written or corrected | nothing |
+| **Skipped** | NetBox already had the same MAC | nothing |
+| **Not found** | The IP is in DHCP, but NetBox has no such IP address | add the IP to NetBox if it is needed |
+| **Errors** | NetBox rejected the write | check the service log |
 
 ---
 
-## 2. 🔗 Sync Ports — MAC → порт абонента → NetBox
+## 2. 🔗 Sync Ports: MAC → subscriber port → NetBox
 
 ```mermaid
 %%{init: {"flowchart": {"nodeSpacing": 14, "rankSpacing": 45, "curve": "basis", "padding": 8, "wrappingWidth": 260}}}%%
 flowchart LR
     ROOT(["🔗 Sync Ports"]):::root
 
-    ROOT --> WHO["🗺️ Какие устройства обходит"]:::group
-    WHO --> D1["📡 OLT из настроек панели"]:::auto
-    WHO --> D2["Устройства NetBox с IP<br/>в mgmt-сети 198.51.100.0/24"]:::auto
-    WHO --> D3["Устройства NetBox<br/>с primary IP"]:::auto
-    WHO --> D4["Доп. список<br/>config/scan_devices.txt"]:::auto
+    ROOT --> WHO["🗺️ Devices it visits"]:::group
+    WHO --> D1["📡 OLTs from the panel settings"]:::auto
+    WHO --> D2["NetBox devices with an IP<br/>in the management network"]:::auto
+    WHO --> D3["NetBox devices<br/>with a primary IP"]:::auto
+    WHO --> D4["Extra list in<br/>config/scan_devices.txt"]:::auto
 
-    ROOT --> VEND["🏷️ Вендор и команда"]:::group
+    ROOT --> VEND["🏷️ Vendor and command"]:::group
     VEND --> V1["Cisco IOS · Cisco SG<br/>TP-Link · D-Link<br/>show mac address-table"]:::auto
     VEND --> V2["MikroTik<br/>/interface bridge host print"]:::auto
     VEND --> V3["ZTE C320<br/>show mac gpon olt 1/1/1…16"]:::auto
-    VEND --> V4["Вендор не опознан —<br/>устройство пропускается"]:::auto
+    VEND --> V4["Unknown vendor:<br/>device skipped"]:::auto
 
-    ROOT --> CRED["🔑 Учётные данные"]:::group
-    CRED --> K1["Сначала RADIUS,<br/>потом SSH — из полей вкладки"]:::admin
-    CRED --> K2["Поля пустые —<br/>берутся из .env"]:::auto
+    ROOT --> CRED["🔑 Credentials"]:::group
+    CRED --> K1["RADIUS first,<br/>then SSH, from the tab's fields"]:::admin
+    CRED --> K2["Fields empty:<br/>taken from .env"]:::auto
 
-    ROOT --> LEAF["🎯 Поиск порта абонента"]:::group
-    LEAF --> L1["Порт, где ≤ 3 MAC —<br/>абонентский"]:::auto
-    LEAF --> L2["Где MAC много —<br/>аплинк, пропуск"]:::auto
-    LEAF --> L3["При равенстве<br/>выигрывает gpon-onu"]:::auto
+    ROOT --> LEAF["🎯 Finding the subscriber port"]:::group
+    LEAF --> L1["A port with ≤ 3 MACs<br/>is a subscriber port"]:::auto
+    LEAF --> L2["Many MACs:<br/>an uplink, skipped"]:::auto
+    LEAF --> L3["On a tie<br/>gpon-onu wins"]:::auto
 
-    ROOT --> WR["✍️ Что записывает"]:::group
-    WR --> R1["IP привязывается<br/>к интерфейсу устройства"]:::admin
-    WR --> R2["Поле MAC у IP<br/>сохраняется"]:::auto
-    WR --> R3["Интерфейса нет —<br/>только в отчёт"]:::auto
+    ROOT --> WR["✍️ What it writes"]:::group
+    WR --> R1["The IP is assigned<br/>to the device interface"]:::admin
+    WR --> R2["The IP's MAC field<br/>is kept"]:::auto
+    WR --> R3["No such interface:<br/>report only"]:::auto
 
     classDef root  fill:#1f2937,stroke:#111827,color:#ffffff,font-weight:bold
     classDef group fill:#e0e7ff,stroke:#6366f1,color:#1e1b4b,font-weight:bold
@@ -107,70 +107,70 @@ flowchart LR
     classDef auto  fill:#fef3c7,stroke:#d97706,color:#78350f
 ```
 
-### Как определяется «порт абонента»
+### How the "subscriber port" is chosen
 
-Один и тот же MAC абонента виден на многих устройствах: на его коммутаторе доступа, на агрегации, на ядре.
-Различаются эти места тем, **сколько всего MAC на порту**. На аплинке их сотни, а на порту абонента один или два (роутер, ТВ-приставка).
+A subscriber's MAC is visible on many devices: their access switch, the aggregation, the core.
+What tells these places apart is **how many MACs there are on the port**. An uplink has hundreds; a subscriber port has one or two (a router, a TV box).
 
 ```mermaid
 %%{init: {"flowchart": {"nodeSpacing": 14, "rankSpacing": 45, "curve": "basis", "padding": 8, "wrappingWidth": 260}}}%%
 flowchart LR
-    MAC["💻 MAC абонента<br/>AA:BB:CC:11:22:33"]:::auto
-    MAC --> P1["Ядро · Te1/1<br/>412 MAC"]:::skip
-    MAC --> P2["Агрегация · Gi0/24<br/>57 MAC"]:::skip
-    MAC --> P3["Доступ SW36 · Fa0/7<br/>2 MAC"]:::win
-    P1 --> X1["❌ аплинк"]:::skip
-    P2 --> X2["❌ аплинк"]:::skip
-    P3 --> OK["✅ порт абонента:<br/>IP → SW36 / Fa0/7"]:::win
+    MAC["💻 Subscriber MAC<br/>AA:BB:CC:11:22:33"]:::auto
+    MAC --> P1["Core · Te1/1<br/>412 MACs"]:::skip
+    MAC --> P2["Aggregation · Gi0/24<br/>57 MACs"]:::skip
+    MAC --> P3["Access SW36 · Fa0/7<br/>2 MACs"]:::win
+    P1 --> X1["❌ uplink"]:::skip
+    P2 --> X2["❌ uplink"]:::skip
+    P3 --> OK["✅ subscriber port:<br/>IP → SW36 / Fa0/7"]:::win
 
     classDef auto fill:#fef3c7,stroke:#d97706,color:#78350f
     classDef skip fill:#f3f4f6,stroke:#9ca3af,color:#6b7280
     classDef win  fill:#dcfce7,stroke:#16a34a,color:#14532d
 ```
 
-Порог в 3 MAC задаётся в `.env` (`MAC_LEAF_THRESHOLD`). Если два порта подходят одинаково, выбирается тот, где MAC меньше, а при полном равенстве — `gpon-onu` (это точно конечная ONU).
+The threshold of 3 MACs is set in `.env` (`MAC_LEAF_THRESHOLD`). If two ports qualify equally, the one with fewer MACs wins, and on a full tie `gpon-onu` wins (it is certainly an end ONU).
 
-### Как читать итог
+### Reading the summary
 
-Короткий итог показывается в окне, подробный — в логе:
+A short summary appears in the window, the full one in the log:
 
-| Статус | Что значит | Что делать |
-|--------|-----------|-----------|
-| **assigned** | IP привязан к новому интерфейсу | ничего |
-| **already_ok** | IP уже был на правильном интерфейсе | ничего |
-| **no_leaf · unseen** | MAC не найден ни на одном опрошенном устройстве | абонент выключен, или его коммутатор не опрашивается |
-| **no_leaf · trunk** | MAC виден только на портах, где больше 3 MAC | за абонентом неуправляемый свитч, или порог мал |
-| **iface_missing** | порт найден, но такого интерфейса нет в NetBox | завести интерфейс в NetBox |
-| **dev_missing** | устройства с таким именем нет в NetBox | проверить имя устройства в NetBox |
-| **failed / skipped** | устройство не опросилось: нет доступа, неверный пароль, неизвестный вендор | список с причинами — в конце лога |
+| Status | Meaning | What to do |
+|--------|---------|------------|
+| **assigned** | The IP was assigned to a new interface | nothing |
+| **already_ok** | The IP was already on the right interface | nothing |
+| **no_leaf · unseen** | The MAC was not found on any polled device | the subscriber is off, or their switch is not polled |
+| **no_leaf · trunk** | The MAC is only seen on ports with more than 3 MACs | an unmanaged switch behind the subscriber, or the threshold is too low |
+| **iface_missing** | The port was found, but NetBox has no such interface | add the interface in NetBox |
+| **dev_missing** | NetBox has no device with that name | check the device name in NetBox |
+| **failed / skipped** | The device could not be polled: unreachable, wrong password, unknown vendor | the list with reasons is at the end of the log |
 
-### Учётные данные
+### Credentials
 
-На вкладке NetBox есть две пары полей: **RADIUS Login/Pass** и **SSH Login/Pass**.
-Для каждого устройства сначала пробуется RADIUS, при ошибке авторизации — SSH. Если устройство просто недоступно, второй вариант не пробуется.
-Если все поля пустые, используются `SSH_USERNAME` / `SSH_PASSWORD` из `.env` (для TP-Link — `TPLINK_SSH_*`).
+The NetBox tab has two pairs of fields: **RADIUS Login/Pass** and **SSH Login/Pass**.
+For each device RADIUS is tried first, then SSH if authentication fails. If the device is simply unreachable, the second option is not tried.
+If all fields are empty, `SSH_USERNAME` / `SSH_PASSWORD` from `.env` are used (`TPLINK_SSH_*` for TP-Link).
 
-### Настройки в `.env`
+### Settings in `.env`
 
-| Параметр | По умолчанию | Зачем |
-|----------|:-:|-------|
-| `MAC_LEAF_THRESHOLD` | `3` | сколько MAC на порту ещё считается абонентским портом |
-| `MAC_MGMT_PREFIX` | — (задать в `.env`) | из какой сети брать устройства для опроса |
-| `MAC_CREATE_MISSING_IFACE` | `false` | `true` — создавать недостающий интерфейс (с описанием `auto: MAC sync`) вместо записи в отчёт |
-| `MAC_SCAN_DEVICES_FILE` | `config/scan_devices.txt` | доп. устройства: `ip,вендор[,имя]` в строке |
-| `MAC_OLT_MAX_PORT` | `16` | сколько GPON-портов OLT опрашивать |
-| `DHCP_SSH_*`, `DHCP_MYSQL_*` | — | доступ к phpDHCPAdmin для Sync MAC |
+| Setting | Default | Purpose |
+|---------|:-:|---------|
+| `MAC_LEAF_THRESHOLD` | `3` | how many MACs a port may have and still count as a subscriber port |
+| `MAC_MGMT_PREFIX` | none (set it in `.env`) | which network to take devices to poll from |
+| `MAC_CREATE_MISSING_IFACE` | `false` | `true` creates a missing interface (description `auto: MAC sync`) instead of reporting it |
+| `MAC_SCAN_DEVICES_FILE` | `config/scan_devices.txt` | extra devices: `ip,vendor[,name]` per line |
+| `MAC_OLT_MAX_PORT` | `16` | how many GPON ports of an OLT to poll |
+| `DHCP_SSH_*`, `DHCP_MYSQL_*` | none | access to phpDHCPAdmin for Sync MAC |
 
-Всё это можно поменять в **Admin → Settings → .env** (нужен перезапуск панели).
+All of these can be changed in **Admin → Settings → .env** (the panel needs a restart).
 
-## Где это в коде
+## Where it is in the code
 
-| Что | Файл |
-|-----|------|
+| What | File |
+|------|------|
 | Sync MAC | `src/monitoring/dhcp_mac_sync.py` |
 | Sync Ports | `src/monitoring/mac_port_sync.py` |
-| Работа с NetBox | `services/netbox-autofill/netbox_client.py` |
-| Эндпоинты `/api/netbox/sync-mac`, `/sync-interfaces` | `src/web/api_netbox.py` |
+| NetBox access | `services/netbox-autofill/netbox_client.py` |
+| `/api/netbox/sync-mac`, `/sync-interfaces` endpoints | `src/web/api_netbox.py` |
 
 ---
-[← NetBox: обзор](06-netbox.md) · [Карта](README.md) · [Дальше: CDP и автозаполнение →](06b-netbox-cdp.md)
+[← NetBox overview](06-netbox.md) · [Map](README.md) · [Next: CDP and auto-fill →](06b-netbox-cdp.md)

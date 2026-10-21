@@ -1,5 +1,5 @@
 """
-MCP server for MCP Server Monitor.
+MCP server for NetOps Control Plane.
 
 Exposes the monitor's state to MCP clients (Claude Desktop, Claude Code, ...)
 as read-only tools. It is a thin client of the running FastAPI app: it logs in

@@ -1,589 +1,152 @@
-# MCP Server Monitor
+# NetOps Control Plane
 
-> Intelligent server monitoring, auto-remediation, and operations automation with Claude AI integration.
+> A self-hosted operations panel for a small ISP: it watches Linux servers over SSH, GPON OLTs over SNMP and utility outage feeds, turns plain-language requests into shell commands with Claude, and fixes known failures under an explicit risk policy.
 
-![Python](https://img.shields.io/badge/python-3.10%2B-blue)
+[![CI](https://github.com/Madly222/netops-control-plane/actions/workflows/ci.yml/badge.svg)](https://github.com/Madly222/netops-control-plane/actions/workflows/ci.yml)
+![Python](https://img.shields.io/badge/python-3.10%E2%80%933.12-blue)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.109-009688)
-![Status](https://img.shields.io/badge/status-production-success)
-
-A self-hosted control plane that watches a fleet of Linux servers over SSH, detects problems in real time, lets operators run natural-language commands (interpreted by Claude), and automates a set of recurring operational and billing tasks. It exposes a FastAPI backend, a lightweight web dashboard, and a role-gated superadmin console for managing users, servers, OLTs, and runtime settings without editing files by hand.
-
-> 🌳 **Feature map** — what the app can do, split into 8 small visual trees: [docs/features](docs/features/README.md)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 <p align="center">
   <img src="docs/screenshots/01-servers.png" alt="Server monitoring dashboard" width="100%">
 </p>
 
-## Screenshots
-
-| | |
-|---|---|
-| ![Natural-language command interpreted by Claude](docs/screenshots/02-ai-console.png) | ![Server details](docs/screenshots/03-server-details.png) |
-| **AI console:** a plain-language request turned into a shell command, run over SSH and summarised by Claude | **Server details:** OS, hardware, network, firewall and per-service controls |
-| ![OLT overview](docs/screenshots/04-olts.png) | ![NetBox auto-fill](docs/screenshots/06-netbox.png) |
-| **GPON:** ONU status per OLT: online, low signal, offline, registration | **NetBox auto-fill:** switch ports, VLANs and CDP neighbours ready to push to NetBox |
-
-<details>
-<summary>ONU list with optical levels, and the audit log</summary>
-
-![ONU list](docs/screenshots/05-onus.png)
-
-![Audit log](docs/screenshots/07-audit.png)
-
-</details>
-
-**[Full gallery: 26 screens grouped by feature →](docs/SCREENSHOTS.md)** roles, SSH console, ONU filters, router scan, MAC sync, batch mode, outage alerts, superadmin settings.
-
-All screenshots use made-up demo data. Addresses are from the documentation ranges 192.0.2.0/24 and 198.51.100.0/24.
-
-### Try it in a minute
+## Try it in a minute
 
 ```bash
 docker compose up
 ```
 
-Open http://localhost:4455 and sign in as `admin` / `demo-password` (`ops` is an admin, `viewer` is read-only). Demo mode runs the real application against simulated infrastructure: three Linux servers and one unreachable host, two GPON OLTs with 32 ONUs, and a planned power outage. Errors start appearing in the logs within a minute, so the Incidents card fills with fix plans; try `restart dhcp on dhcp-01` or `stop dns on dns-01` in the terminal. Nothing outside the container is contacted. With `ANTHROPIC_API_KEY` set, Claude also interprets free-form requests and diagnoses errors no pattern matches.
+Open http://localhost:4455 and sign in as `admin` / `demo-password` (`ops` is an admin, `viewer` is read-only).
 
-Without Docker: `DEMO_MODE=1 python -m src.main`.
+Demo mode runs the real application against simulated infrastructure: three Linux servers plus one unreachable host, two ZTE OLTs with 32 ONUs, and a planned power outage. Within a minute errors start appearing in the server logs and the **Incidents** card fills with fix plans. In the terminal try `restart dhcp on dhcp-01` (runs at once) or `stop dns on dns-01` (asks for confirmation). Nothing outside the container is contacted. Set `ANTHROPIC_API_KEY` to let Claude interpret free-form requests and diagnose errors that match no known pattern.
 
----
-
-## Table of Contents
-
-- [Screenshots](#screenshots)
-- [What it does](#what-it-does)
-- [Architecture](#architecture)
-- [Features](#features)
-- [MCP Server](#mcp-server)
-- [Tech Stack](#tech-stack)
-- [Project Structure](#project-structure)
-- [Requirements](#requirements)
-- [Quick start](#quick-start)
-- [Configuration](#configuration)
-- [Running the Server](#running-the-server)
-- [Web Interface](#web-interface)
-- [REST API](#rest-api)
-- [Monitoring & Automation Modules](#monitoring--automation-modules)
-- [Knowledge Base](#knowledge-base)
-- [Security](#security)
-- [Tests](#tests)
-- [Development](#development)
-- [Documentation](#documentation)
+Without Docker: `pip install -r requirements.txt && DEMO_MODE=1 python -m src.main`.
 
 ---
 
 ## What it does
 
-MCP Server Monitor connects to remote servers over SSH and provides:
+| Area | What the operator gets |
+|------|------------------------|
+| **Servers** | Live status of DHCP (ISC, Kea, dnsmasq), DNS (bind9, Technitium, unbound, PowerDNS) and FreeRADIUS on systemd and SysVinit hosts: health checks, diagnostics, restarts, hardware and network report. |
+| **Logs and incidents** | `tail -F` over SSH, matched against a YAML knowledge base of error patterns. Known errors get a fix plan; unknown ones get a diagnosis from Claude. |
+| **Terminal** | Plain-language requests (*"error logs for today for dns"*, *"restart dhcp on dhcp-01"*) rendered to the right command for each host's init system, with Claude as the fallback for anything new. A raw SSH console for admins. |
+| **GPON** | Per-OLT view of ONUs on ZTE C320: optical levels, low signal, offline reason, registration, MAC and serial. |
+| **NetBox** | Scan a Cisco switch or router over SSH and push interfaces, VLANs, cables and CDP neighbours to NetBox; sync MAC addresses from the DHCP database and assign them to switch ports. |
+| **Outages** | Daily checks of the electricity and water providers' planned-outage pages for the addresses you care about, with e-mail alerts. |
+| **Administration** | Users and roles, live server/OLT configuration, notification settings, `.env` editor, audit log. |
+| **MCP server** | Read-only [Model Context Protocol](https://modelcontextprotocol.io) tools so Claude Desktop or Claude Code can ask about status, errors, ONUs and outages ([mcp_server/](mcp_server/README.md)). |
 
-- **Live observability** — real-time log tailing, error pattern detection, periodic health checks, and update tracking across multiple hosts.
-- **AI-assisted operations** — operators type plain-language commands (e.g. *"restart dhcp on dhcp-primary"*, *"show errors from the last hour"*); Claude interprets intent and the system executes the corresponding action, with a keyword-based fallback if the API is unavailable.
-- **Service management** — first-class handlers for DHCP, DNS, and RADIUS (status, restart/reload, health diagnostics, log inspection). Postfix, Dovecot, Apache, and SpamAssassin are supported at a generic level (status/restart via SSH) without dedicated diagnostic handlers.
-- **Operations automation** — a set of scheduled jobs handling utility-outage alerts and inventory sync (see [Monitoring & Automation Modules](#monitoring--automation-modules)).
-- **GPON visibility** — ONU monitoring for ZTE C320 OLTs via SNMP and the OLT CLI (optical levels, registration status, MAC retrieval).
-- **Administration** — a superadmin console for user/role management, live server & OLT CRUD, editable runtime settings (notifications, outage patterns/addresses), an append-only audit log, an SSH command console, and a Claude API health probe.
-- **MCP server** — read-only MCP tools so Claude Desktop / Claude Code can query status, errors, ONUs and outages in natural language (see [MCP Server](#mcp-server)).
+A visual tour, one tree per area: [docs/features](docs/features/README.md). All 26 screens: [docs/SCREENSHOTS.md](docs/SCREENSHOTS.md).
 
-The application runs as a single ASGI service (Uvicorn + FastAPI) on port **4455** by default, plus optional systemd timer units for the scheduled jobs.
+## How AI commands stay safe
 
----
+The interesting part of the project is letting a language model near production shell access without trusting it.
+
+```mermaid
+flowchart LR
+    REQ["'stop dns on dns-01'"] --> RES{Command resolver}
+    RES -->|known intent| TPL["Template for this host's<br/>init system, 0 tokens"]
+    RES -->|cache hit| CACHE[Per-server cache]
+    RES -->|new request| CLAUDE[Claude]
+    TPL & CACHE & CLAUDE --> POL{"Risk policy<br/>safe_actions.yaml"}
+    POL -->|"read-only, or an<br/>allowed restart"| RUN[Run over SSH]
+    POL -->|"anything else"| ASK["Show the exact command,<br/>its risk and why"] --> OK{Same admin<br/>confirms in 5 min} --> RUN
+    RUN --> AUDIT[(Audit log)]
+```
+
+- **Templates first.** Most requests are status, logs, errors or a restart. The resolver renders those from a per-host capability profile (systemd or SysVinit, journald or log files) without calling Claude, and caches whatever Claude resolves per server.
+- **Risk policy.** Every command the app builds, from a template or from Claude, is classified by `src/actions/policy.py`: read-only programs are risk 0, restarts follow `config/safe_actions.yaml`, `stop` is risk 2, and anything unrecognised, writing to a file or using command substitution is risk 3. Pipes and `||` chains take the risk of their worst part, and quoting is respected. Only risk-0 commands and restarts of listed services run without a human.
+- **Confirmation.** Anything else comes back to the dashboard with the exact command, its risk and the reason. It runs only when the same admin confirms it within five minutes. Both steps go to the audit log.
+- **Remediation.** Known errors carry fix commands. `auto_remediation.mode` is `suggest` by default (a human applies the fix); in `auto` the policy decides what runs, within per-action cooldowns, hourly caps and a backoff after repeated failures. Claude's suggested fixes for unknown errors are shown, never run.
+- **Shell hygiene.** Paths, patterns and service names are quoted or validated before they reach a remote shell, and `sudo` wraps the whole command, not just the first program in a pipe.
 
 ## Architecture
 
 ```mermaid
 flowchart TB
-    subgraph Client
-        UI[Web Dashboard<br/>index.html / netbox.html]
+    subgraph Clients
+        UI[Dashboard<br/>vanilla JS]
+        MCPC[Claude Desktop / Code<br/>via mcp_server]
     end
 
-    subgraph App["FastAPI Application (port 4455)"]
-        AUTH[Auth & Sessions<br/>bcrypt + cookies<br/>superadmin / admin / operator]
-        API[REST API<br/>routes/* / api_netbox.py]
-        ADMIN[Superadmin console<br/>admin.py: users, servers,<br/>OLTs, settings, audit]
-        LIFESPAN[Lifespan<br/>starts background monitors]
+    subgraph App["FastAPI app (one process)"]
+        AUTH[Auth, sessions, roles]
+        ROUTES[routes/: servers, commands,<br/>monitoring, onu, utilities]
+        ADMIN[Admin console API]
+        NBAPI[NetBox API]
+        ACTIONS[actions/: risk policy,<br/>confirmations, remediation]
+        CORE[core/: SSH pool, resolver,<br/>server profiles, Claude client]
+        MON[monitoring/: log watcher, error detector,<br/>health checker, ONU poller, outage scheduler]
     end
 
-    subgraph Core
-        SSH[SSH Manager<br/>asyncssh pool]
-        RESOLVER[Command Resolver<br/>+ ServerProfile<br/>0-token templates + cache]
-        CLAUDE[Claude Client<br/>NL command + error analysis]
-        SYSINFO[System Info Collector]
-        CONFIG[Config Loader<br/>secrets.yaml + settings.yaml]
-    end
-
-    subgraph Services["Service Handlers"]
-        DHCP[DHCP]
-        DNS[DNS]
-        RADIUS[RADIUS]
-    end
-
-    subgraph Monitors["Background Monitors"]
-        LOGW[Log Watcher]
-        ERRD[Error Detector]
-        HEALTH[Health Checker]
-        UPD[Updates Checker]
-        ONU[ONU SNMP Monitor]
-    end
-
-    subgraph Automation["Scheduled Automation"]
-        SCHED[In-app Scheduler<br/>daily, time set in panel]
-        ELEC[Electric Outage]
-        ACC[Water Outage]
-        MACSYNC[DHCP→NetBox MAC Sync]
-        MACPORT[MAC→Port→NetBox<br/>Interface Assignment]
-    end
-
-    KB[(Knowledge Base<br/>known_errors / ignore_patterns)]
-    TARGETS[(Monitored Servers<br/>DHCP / DNS / RADIUS / Mail / Web)]
-    OLT[(ZTE C320 OLT)]
-    NB[(NetBox)]
-    STORE[(Runtime store<br/>sessions/users.json<br/>sessions/runtime_settings.json<br/>sessions/server_profiles.json<br/>logs/audit.jsonl)]
-
-    UI --> AUTH --> API
-    UI --> ADMIN
-    ADMIN --> STORE
-    AUTH --> STORE
-    API --> Core
-    API --> RESOLVER
-    RESOLVER --> STORE
-    API --> Services
-    LIFESPAN --> Monitors
-    LIFESPAN --> SCHED
-    Services --> SSH --> TARGETS
-    Monitors --> SSH
-    LOGW --> ERRD --> KB
-    ERRD --> CLAUDE
-    ONU --> OLT
-    MACSYNC --> NB
-    API --> Automation
+    UI --> AUTH --> ROUTES & ADMIN & NBAPI
+    MCPC -->|REST, operator account| ROUTES
+    ROUTES --> ACTIONS --> CORE
+    MON --> ACTIONS
+    CORE -->|asyncssh| HOSTS[(Linux servers)]
+    MON -->|snmpwalk + SSH| OLT[(ZTE OLTs)]
+    MON -->|HTTP| FEEDS[(Outage pages)]
+    NBAPI -->|netmiko| SW[(Cisco switches)]
+    NBAPI --> NB[(NetBox)]
+    CORE -->|Anthropic API| CL[Claude]
 ```
 
-**Request flow (natural-language command):**
-`Web UI → POST /api/execute → command resolver (templates + per-server cache) → Service handler / SSH → result`. The resolver uses each host's `ServerProfile` to build a correct command with no Claude tokens; only novel requests fall through to Claude (`resolve_shell_command` / `interpret_command`). If Claude confidence ≤ 0.7 or the API errors, the system falls back to keyword parsing (`status` / `restart` / `logs` / `health`).
+Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Every source module with its role and the gotchas: [docs/AGENTS.md](docs/AGENTS.md).
 
----
+## Tech stack
 
-## Features
+- **Backend:** Python 3.10+, FastAPI, Uvicorn, Pydantic, asyncssh, netmiko/paramiko, pynetbox, loguru
+- **AI:** Anthropic SDK (`AsyncAnthropic`), default model `claude-opus-5-5` at low effort; MCP server on the official `mcp` SDK
+- **Frontend:** vanilla HTML/CSS/JS, no build step
+- **Ops:** Docker image with a `/data` volume, systemd units for bare-metal installs, GitHub Actions running ruff, pytest on 3.10–3.12 and a demo-container smoke test
 
-### Infrastructure monitoring
-- Real-time log watching via `tail -F` over SSH with auto-reconnect.
-- Error detection against a YAML knowledge base of regex patterns, with noise filtering.
-- Periodic health checks per server and per service.
-- Daily system-update checks (cached for 24h).
-- Support for both **systemd** and **SysVinit** init systems (auto-detected).
+## Running it for real
 
-### AI integration (Claude)
-- **Capability-aware command resolver** — common intents (status / logs / errors / restart / start / stop) render straight to a profile-correct shell command with **zero Claude tokens**; per-server results are cached, and Claude is only called as a fallback for novel requests.
-- Natural-language command interpretation with confidence scoring.
-- Unknown-error analysis (diagnosis, severity, suggested fixes).
-- Response caching and rate limiting to control API usage.
-
-### Service handlers
-| Service | Status | Restart/Reload | Health diagnostics | Backends |
-|--------|:------:|:--------------:|:------------------:|----------|
-| DHCP | ✅ | ✅ | ✅ | isc-dhcp-server, kea-dhcp4, dnsmasq |
-| DNS | ✅ | ✅ | ✅ | bind9, dnsmasq, unbound, PowerDNS |
-| RADIUS | ✅ | ✅ | ✅ | FreeRADIUS |
-| Postfix / Dovecot / Apache / SpamAssassin | ✅ | ✅ | ➖ generic | via generic SSH service control |
-
-### GPON / ONU
-- SNMP (v2c/v3) monitoring of ZTE C320 OLTs via CLI `snmpwalk`.
-- Signal-level thresholds, ONU status decoding, SSH-based MAC retrieval.
-
-### Operations automation
-- Utility-outage alerting (electricity / water) with email notifications.
-- phpDHCPAdmin → NetBox MAC synchronization.
-- Cisco switch → NetBox interface/VLAN/cable auto-fill.
-
-### Web & API
-- Session-based auth (bcrypt) with three roles: `superadmin` > `admin` > `operator`.
-- Dashboard for servers, services, ONUs, utilities, and NetBox auto-fill.
-- Full REST API (see below).
-
-### Administration (superadmin)
-- **User management** — create/delete users, change passwords and roles from the UI (`manage_users.py` CLI also available). The last remaining superadmin cannot be deleted or demoted.
-- **Live infrastructure config** — add/edit/remove monitored servers and OLTs, then hot-reload without a restart. Seeded once from `secrets.yaml`, after which the runtime store is authoritative.
-- **Editable runtime settings** — notification channels, the water-outage (acc.md) match pattern, and the power-outage address list.
-- **Audit log** — every privileged action (user/role changes, config edits, console commands) is appended to `logs/audit.jsonl` and viewable in the console.
-- **SSH command console** — run raw commands on a monitored server from the browser (admin/superadmin only; every command is audited).
-- **Claude health probe** — one-click check that the configured Claude key and model respond.
-
----
-
-## MCP Server
-
-`mcp_server/` is a [Model Context Protocol](https://modelcontextprotocol.io) server that exposes the monitor to MCP clients such as Claude Desktop and Claude Code as **read-only tools**: overall status, servers, recent log errors, health reports, GPON ONU status and planned power outages. It is a thin client of the REST API (logs in with a dedicated `operator` account), runs in its own virtualenv, and never performs state-changing actions. Setup and the tool list: [mcp_server/README.md](mcp_server/README.md).
-
----
-
-## Tech Stack
-
-- **Language:** Python 3.10+
-- **Web:** FastAPI + Uvicorn (ASGI)
-- **SSH:** asyncssh (core), paramiko + netmiko (automation/Cisco)
-- **AI:** Anthropic Claude API
-- **Config:** Pydantic models over YAML + dotenv
-- **Auth:** bcrypt, itsdangerous sessions
-- **Logging:** loguru
-- **Frontend:** vanilla HTML/CSS/JS (no build step)
-
----
-
-## Project Structure
-
-```
-ServersMonitoringMCP/
-├── src/
-│   ├── main.py                 # Entry point (python -m src.main)
-│   ├── core/
-│   │   ├── config.py           # Pydantic config loader (secrets + settings)
-│   │   ├── ssh_manager.py      # Async SSH pool, command/service execution
-│   │   ├── command_resolver.py # Capability-aware resolver (0-token templates + cache)
-│   │   ├── server_profile.py   # Per-server capability probe (init/distro/tools)
-│   │   ├── claude_client.py    # Claude API: NL interpretation + error analysis
-│   │   └── system_info.py      # Server hardware/OS/network info collector
-│   ├── services/               # Service handlers (extend BaseService)
-│   │   ├── base.py
-│   │   ├── dhcp.py
-│   │   ├── dns.py
-│   │   └── radius.py
-│   ├── actions/                # Risk policy, confirmations, auto-remediation
-│   ├── monitoring/             # Background monitors + automation jobs
-│   │   ├── log_watcher.py
-│   │   ├── error_detector.py
-│   │   ├── health_checker.py
-│   │   ├── onu_monitor.py
-│   │   ├── electric_monitor.py
-│   │   ├── acc_monitor.py
-│   │   ├── outage_scheduler.py # In-app daily scheduler (electric + water)
-│   │   ├── dhcp_mac_sync.py
-│   │   └── mac_port_sync.py    # MAC→leaf port→NetBox interface assignment
-│   └── web/
-│       ├── app.py              # FastAPI app factory + lifespan
-│       ├── api.py              # Combines the routers below into /api
-│       ├── routes/             # servers, commands, monitoring, onu, utilities, models
-│       ├── api_netbox.py       # NetBox auto-fill API
-│       ├── admin.py            # Superadmin console API (/api/admin/*)
-│       ├── auth.py             # Login, sessions, 3-role model
-│       ├── users.py            # JSON-backed runtime user store
-│       ├── runtime_config.py   # Live-editable settings + server/OLT store
-│       └── audit.py            # Append-only audit log (logs/audit.jsonl)
-├── mcp_server/                 # MCP server (read-only tools for Claude Desktop / Claude Code)
-├── services/
-│   └── netbox-autofill/        # Standalone Cisco→NetBox automation
-│       ├── orchestrator.py
-│       ├── netbox_client.py
-│       └── ssh_connector.py
-├── config/
-│   ├── settings.yaml           # Non-sensitive runtime settings
-│   ├── safe_actions.yaml       # Auto-remediation risk policy
-│   ├── services/               # Per-service detection/config (dhcp/dns/radius)
-│   ├── electric_addresses.txt  # Addresses watched for power outages
-│   ├── scan_devices.example.txt # Template: devices for MAC→port scan
-├── knowledge_base/
-│   ├── known_errors.yaml       # Regex error patterns + diagnoses
-│   ├── ignore_patterns.yaml    # Log noise filters
-│   └── learned/                # Runtime-learned patterns
-├── web/                        # Static dashboard
-│   ├── index.html              # Dashboard + superadmin console
-│   ├── login.html
-│   ├── netbox.html
-│   ├── css/style.css
-│   └── js/                     # app.js, api.js, admin.js, onu.js, login.js
-├── scripts/                    # Test/util scripts + systemd unit/timer files
-│                               #   incl. manage_users.py, check_claude.py, check_electric.py,
-│                               #   check_schedule.py, check_outage_filters.py
-├── tests/                      # Pytest suite (e.g. test_mac_port_sync.py)
-├── secrets.example.yaml        # Template -> copy to secrets.yaml
-├── .env.example                # Template -> copy to .env
-├── requirements.txt
-├── docs/server_launch.ru.md    # Quick systemd deployment notes (RU)
-└── README.md
-```
-
-> Runtime-only / gitignored directories (`venv/`, `keys/`, `sessions/`, `logs/`, `secrets.yaml`, `.env`) are not part of the repository.
-
----
-
-## Requirements
-
-**Python:** 3.10 or newer.
-
-**Python packages:** see [`requirements.txt`](requirements.txt).
-
-**System packages** (required by some modules — install via your package manager):
-
-| Package | Needed for |
-|---------|-----------|
-| `openssh-client` | all SSH operations (usually preinstalled) |
-| `snmp` (`snmpwalk`) | ONU / GPON monitoring |
-| `mysql-client` | DHCP→NetBox MAC sync DB queries (CLI-based) |
+**Docker.** Put `secrets.yaml`, `.env` and `keys/` next to `docker-compose.yml`, then:
 
 ```bash
-sudo apt update && sudo apt install -y openssh-client snmp mysql-client
+touch .env
+cp -n config/electric_addresses.example.txt config/electric_addresses.txt
+docker compose --profile prod up -d monitor
 ```
 
-**Access requirements:**
-- SSH access (key or password) to each monitored server; sudo for service control.
-- A Claude API key for AI features (optional — keyword fallback works without it).
-- SMTP / FTP / billing-DB credentials only if you enable the automation modules.
-
----
-
-## Quick start
-
-For a real deployment with Docker, put `secrets.yaml`, `.env` and `keys/` next to `docker-compose.yml` and run `docker compose --profile prod up -d monitor` (details in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)). Without Docker:
+**Bare metal.**
 
 ```bash
-# 1. Get the code
-git clone https://github.com/Madly222/MCPforMonitoring.git ServersMonitoringMCP
-cd ServersMonitoringMCP
-
-# 2. Create and activate a virtualenv
-python3 -m venv venv
-source venv/bin/activate
-
-# 3. Install dependencies
+git clone https://github.com/Madly222/netops-control-plane.git
+cd netops-control-plane
+python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
-
-# 4. Create config from templates
-cp secrets.example.yaml secrets.yaml
-cp .env.example .env            # only needed for automation modules
-
-# 5. Edit configuration (see below)
-nano secrets.yaml
-nano .env
-
-# 6. Add SSH keys (if using key auth)
-mkdir -p keys
-cp /path/to/server.key keys/
-chmod 600 keys/*
-
-# 7. Run
-python -m src.main
+cp secrets.example.yaml secrets.yaml   # servers, SSH credentials, Claude key, users, OLTs
+cp .env.example .env                   # SMTP, NetBox, outage jobs (optional)
+python -m src.main                     # http://localhost:4455
 ```
 
-Then open **http://localhost:4455**.
-
----
+System packages: `openssh-client`, `snmp` (GPON) and `mysql-client` (DHCP→NetBox MAC sync). The systemd unit, timers and hardening checklist are in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ## Configuration
 
-The project uses **two** configuration layers plus runtime settings:
+| File | Holds |
+|------|-------|
+| `secrets.yaml` | Servers and SSH credentials, OLTs, Claude key and model, web users, session and login-lockout settings. Seeds the runtime store on first start; after that, users, servers and OLTs are edited in the admin console. |
+| `.env` | SMTP, NetBox, DHCP database and switch credentials for the automation jobs; editable from the console. |
+| `config/settings.yaml` | Intervals, dedup window, Claude cache and rate limit, `auto_remediation` mode. |
+| `config/safe_actions.yaml` | The risk policy: what may run without a human, cooldowns, limits. |
+| `knowledge_base/*.yaml` | Known error patterns with diagnoses and fixes; noise filters. |
 
-### 1. `secrets.yaml` — infrastructure secrets
-Defines monitored servers, SSH/sudo credentials, Claude API key, web users, email, and ONU/OLT devices. Copy from `secrets.example.yaml`. Key sections:
+Environment variables `MONITOR_DATA_DIR`, `MONITOR_SECRETS_FILE`, `DEMO_MODE` and `ANTHROPIC_API_KEY` are described with every other field in [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
 
-- `servers[]` — `id`, `host`, `port`, `user`, `auth_type` (`key`/`password`), `auth_value`, optional `sudo_password`, `distro`, `services[]`, `enabled`.
-- `onu_monitoring` — OLT devices (SNMP v2c/v3 + SSH for MAC).
-- `mcp_server` — web host/port, session secret, session expiry.
-- `claude` — API key, model, token limit, timeout.
-- `email` — SMTP for built-in notifications.
-- `web_users[]` — dashboard logins (`superadmin` / `admin` / `operator`); plaintext passwords are hashed on first run.
+## Security model
 
-> **Runtime store — read this.** On first run, `web_users`, `servers`, and `onu_monitoring` seed a JSON-backed runtime store (`sessions/users.json`, `sessions/runtime_settings.json`; server capability profiles are auto-detected into `sessions/server_profiles.json`). **After seeding, that store — not `secrets.yaml` — is the source of truth** for users, servers, and OLTs, so later edits are done through the superadmin console (or `scripts/manage_users.py`). Editing `secrets.yaml` after the first run has no effect unless you clear the corresponding store file. Claude/email/session secrets are still read from `secrets.yaml`.
+- Three roles: `operator` reads, `admin` runs commands, confirms risky ones and writes to NetBox, `superadmin` also manages users and configuration. [`tests/test_route_roles.py`](tests/test_route_roles.py) pins the required role of each of the 75 routes, so a new endpoint fails CI until someone decides who may call it.
+- Passwords are bcrypt-hashed, at least 10 characters. Sessions are random 256-bit tokens in an HttpOnly, SameSite=Lax cookie (`Secure` behind HTTPS); the server stores only their SHA-256. Roles are re-read on every request, so demotions and deletions apply at once, and password changes end the user's other sessions.
+- Repeated failed logins lock the username and the client IP out (HTTP 429).
+- CORS is off unless origins are listed. Secrets, keys and runtime data are gitignored and live outside the image.
+- Every privileged action, including each command and its confirmation, is written to an append-only audit log.
 
-### 2. `.env` — automation secrets
-Read by the business-automation modules (electric/water outage, MAC sync). Copy from `.env.example`. Covers SMTP, NetBox token, and per-job email recipients. **This layer is separate from `secrets.yaml`** — both are gitignored.
-
-### 3. `config/settings.yaml` — runtime behavior
-Non-sensitive tuning: monitoring intervals, error processing, Claude cache/rate-limit, logging, incidents retention.
-
-### Other config files
-- `config/safe_actions.yaml` — risk policy for auto-remediation (which actions may auto-run).
-- `config/services/*.yaml` — per-service detection commands and parameters.
-- `config/electric_addresses.txt` — addresses to watch for power outages (git-ignored; start from `config/electric_addresses.example.txt`).
-
----
-
-## Running the Server
-
-### Development
-```bash
-source venv/bin/activate
-python -m src.main
-# or:  ./scripts/run.sh
-```
-
-### Production (systemd)
-Create the service unit (see also `docs/server_launch.ru.md`):
-
-```ini
-# /etc/systemd/system/mcp-monitor.service
-[Unit]
-Description=MCP Server Monitor
-After=network.target
-
-[Service]
-Type=simple
-User=user
-WorkingDirectory=/home/user/ServersMonitoringMCP
-Environment="PATH=/home/user/ServersMonitoringMCP/venv/bin:/usr/local/bin:/usr/bin:/bin"
-ExecStart=/home/user/ServersMonitoringMCP/venv/bin/python -m src.main
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-```
-
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now mcp-monitor
-sudo systemctl status mcp-monitor
-```
-
-### Scheduled automation (timers)
-The `scripts/` directory ships systemd `.service` + `.timer` units for the periodic jobs (e.g. `electric-monitor`, `acc-monitor`). Install them the same way and enable the timers:
-
-```bash
-sudo systemctl enable --now electric-monitor.timer
-sudo systemctl enable --now acc-monitor.timer
-```
-
-> **In-app scheduler alternative.** The web service also runs an in-process daily scheduler (`outage_scheduler`) for the electric/water checks, with the run time editable from the superadmin panel (`/api/admin/config/schedule/{channel}`). It persists last-run state and de-duplicates emails by content, so you can use it *instead of* the systemd timers if you prefer to manage timing from the UI — don't enable both for the same channel.
-
----
-
-## Web Interface
-
-- **Login** at `/login.html`; credentials come from the runtime user store (seeded from `secrets.yaml` on first run).
-- **Dashboard** (`/`): server cards with live status, service controls, recent errors/health, utility (electric/water) indicators, ONU overview, and a natural-language command box.
-- **Superadmin console** (in the dashboard, superadmin only): user & role management, live server/OLT CRUD, editable notification/outage settings, the audit-log viewer, an SSH command console, and the Claude health check.
-- **NetBox** (`/netbox.html`): scan a Cisco switch and apply interface/VLAN/cable updates to NetBox.
-
-Roles: `superadmin` has full control including the admin console; `admin` can execute commands and trigger actions; `operator` is read-only.
-
----
-
-## REST API
-
-All endpoints are under `/api`. Authentication is session-based; most require a logged-in user, command/action endpoints require `admin`.
-
-### Status & servers
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/status` | Overall fleet status |
-| GET | `/api/servers` | List configured servers |
-| GET | `/api/servers/{id}` | Server detail + services |
-| GET | `/api/servers/{id}/info` | Full hardware/OS/network report |
-| POST | `/api/servers/{id}/action` | Service action (restart/reload/…) |
-| GET | `/api/servers/{id}/services/{type}/diagnostics/{name}` | Run a service diagnostic |
-
-### Commands & monitoring
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/api/execute` | Natural-language command (Claude + fallback); risky commands come back for confirmation |
-| POST | `/api/execute/confirm` | Run a command `/api/execute` held back (same user, 5 min) |
-| POST | `/api/service/restart` | Restart a service |
-| POST | `/api/console/exec` | Run a raw command on a server (admin, audited) |
-| GET | `/api/claude/health` | Verify Claude key/model are reachable |
-| GET | `/api/monitoring/status` | Monitor subsystem status |
-| GET | `/api/monitoring/errors` | Recent detected errors with fix plans and Claude diagnoses |
-| POST | `/api/monitoring/errors/{hash}/fix` | Apply a known error's fix (admin, audited) |
-| GET | `/api/monitoring/health` | Latest health reports |
-| GET | `/api/health` | App liveness probe |
-
-### ONU / GPON
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/onu/status` | Aggregated ONU status |
-| GET | `/api/onu/olts` | List OLTs |
-| GET | `/api/onu/olt/{id}` | ONUs on an OLT |
-| POST | `/api/onu/olt/{id}/poll` | Poll an OLT now |
-
-### Utilities & invoicing
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/electric/status` · POST `/api/electric/check` | Power-outage status / check now |
-| GET | `/api/acc/status` · POST `/api/acc/check` | Water-outage status / check now |
-
-### Auth
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/api/auth/login` · `/api/auth/logout` | Session login/logout |
-| GET | `/api/auth/me` · `/api/auth/check` | Current user / auth check |
-
-### Admin console (superadmin only)
-All endpoints are under `/api/admin` and require the `superadmin` role.
-
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/admin/users` | List users + valid roles |
-| POST | `/api/admin/users` | Create a user |
-| DELETE | `/api/admin/users/{username}` | Delete a user (not the last superadmin) |
-| PUT | `/api/admin/users/{username}/password` | Change a user's password |
-| PUT | `/api/admin/users/{username}/role` | Change a user's role (not the last superadmin) |
-| GET | `/api/admin/audit` | Read the audit log |
-| GET/PUT | `/api/admin/config/notifications/{channel}` | Get/set a notification channel |
-| GET/PUT | `/api/admin/config/acc-pattern` | Get/set the water-outage match pattern |
-| GET/PUT | `/api/admin/config/schedule/{channel}` | Get/set the daily run time for an outage channel |
-| GET/PUT | `/api/admin/config/electric-addresses` | Get/set the power-outage address list |
-| GET/POST | `/api/admin/config/servers` | List / add monitored servers |
-| PUT/DELETE | `/api/admin/config/servers/{id}` | Edit / remove a server |
-| GET/POST | `/api/admin/config/olts` | List / add OLTs |
-| PUT/DELETE | `/api/admin/config/olts/{id}` | Edit / remove an OLT |
-| POST | `/api/admin/config/reload` | Hot-reload config from the runtime store |
-
-### NetBox auto-fill
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/netbox/health` | Connectivity check |
-| POST | `/api/netbox/scan` · `/api/netbox/apply` · `/api/netbox/auto` | Switch scan / apply / one-shot |
-| POST | `/api/netbox/scan-router` · `/api/netbox/apply-router` | Router variants |
-| POST | `/api/netbox/sync-mac` | DHCP→NetBox MAC sync |
-| POST | `/api/netbox/sync-interfaces` | MAC→leaf port→NetBox interface assignment |
-
-> Interactive API docs are available at `/docs` (Swagger UI) when the server is running.
-
----
-
-## Monitoring & Automation Modules
-
-| Module | Purpose | Config source |
-|--------|---------|---------------|
-| `log_watcher` | Real-time SSH log tailing | `settings.yaml`, servers |
-| `error_detector` | Match logs to known patterns | `knowledge_base/` |
-| `health_checker` | Periodic per-service health | `settings.yaml` |
-| `onu_monitor` | ZTE C320 ONU SNMP monitoring | `secrets.yaml` (OLTs) |
-| `electric_monitor` | Premier Energy outage alerts | `.env`, `config/electric_addresses.txt` |
-| `acc_monitor` | acc.md water outage alerts | `.env`, panel (pattern) |
-| `outage_scheduler` | In-app daily runner for electric + water checks | run time set in superadmin panel |
-| `dhcp_mac_sync` | phpDHCPAdmin MySQL → NetBox | `.env` |
-| `mac_port_sync` | MAC→leaf port→NetBox interface assignment | `.env`, `config/scan_devices.example.txt` |
-
----
-
-## Knowledge Base
-
-Error handling is data-driven via YAML:
-
-- **`knowledge_base/known_errors.yaml`** — per-service regex patterns with `severity`, `auto_fix`, `diagnosis`, `suggestions`, optional fix `commands`, and `cooldown`.
-- **`knowledge_base/ignore_patterns.yaml`** — regex filters to suppress log noise.
-- **`knowledge_base/learned/`** — runtime-learned patterns.
-
-Fix commands and every command built from a plain-language request go through **`config/safe_actions.yaml`** (`src/actions/policy.py`), which classifies them by risk level (0–3). `settings.yaml > auto_remediation.mode` decides what happens to known errors: `off`, `suggest` (default: the dashboard shows the fix and an admin applies it) or `auto` (fixes the policy allows run at once, within its cooldowns and hourly limits; everything else stays a suggestion). Errors that match no pattern are sent to Claude for a diagnosis, whose commands are shown but never run on their own.
-
----
-
-## Security
-
-- Secrets live in `secrets.yaml` and `.env`, both gitignored — never commit them.
-- SSH private keys live in `keys/` (chmod `600`), gitignored.
-- Web passwords are bcrypt-hashed (minimum 10 characters). Sessions are random 256-bit tokens in an HttpOnly, SameSite=Lax cookie (Secure when `cookie_secure` is set); the server stores only their SHA-256 hash in `sessions/web_sessions.json`, so restarts keep users logged in.
-- Roles are re-read on every request, so demoting or deleting a user takes effect at once; password changes end that user's other sessions.
-- Repeated failed logins lock the username and the client IP out for `login_lockout_minutes` (HTTP 429).
-- Values interpolated into remote shell commands (paths, patterns, service names) are quoted or validated, and sudo wraps the whole command.
-- The runtime store (`sessions/users.json`, `sessions/runtime_settings.json`) and audit log (`logs/audit.jsonl`) live under gitignored directories — never commit them.
-- Privileged actions are role-gated: the admin console requires `superadmin`, and the SSH command console (`POST /api/console/exec`) requires at least `admin`. Every such action is written to the audit log.
-- Commands the app builds itself (templates, Claude) run without confirmation only when `safe_actions.yaml` classifies them as read-only or as an allowed restart; everything else needs the operator to confirm the exact command.
-- Rotate all credentials before any production deployment.
-
-> **CORS:** off by default (same-origin only). List trusted origins in `mcp_server.cors_origins` only if another site must call the API.
-
----
-
-## Tests
+## Tests and CI
 
 ```bash
 pip install pytest ruff
@@ -591,50 +154,50 @@ ruff check .
 python -m pytest -q
 ```
 
-The pytest suite lives in `tests/` and also runs the offline self-check scripts. CI (GitHub Actions) runs `ruff check .` and the suite on Python 3.10–3.12 for every push and pull request. Live checks against real servers are listed under [Manual check scripts](#manual-check-scripts).
+About 140 tests cover the risk classifier and limiter, the confirmation flow over HTTP, remediation in each mode, the command resolver's templates per init system, sessions, login lockout and role checks, shell quoting, the Claude client against a fake API, and the demo hosts. CI runs them on Python 3.10–3.12, then builds the Docker image, starts the demo and checks that it serves the fleet. Scripts that need live servers are in `scripts/check_*.py`.
 
----
+## Background and design decisions
 
-## Development
+This started as an internal tool for the network team of an ISP and ran against its production fleet before it was cleaned up for publication.
 
-### Manual check scripts
-Live checks against real servers or API keys (not part of the pytest suite):
-```bash
-python scripts/check_ssh.py <server-id>        # SSH connectivity
-python scripts/check_dhcp.py <server-id>       # DHCP handler
-python scripts/check_monitoring.py <server-id> # monitoring pipeline
-python scripts/check_claude.py                 # Claude key/model health
-python scripts/check_claude_commands.py        # Claude command interpretation
-python scripts/check_electric.py               # power-outage checker
-python scripts/manage_users.py                 # CLI user management
+- **Templates before the model.** Status, logs and restarts are most of the traffic. Rendering them from a cached host profile costs no tokens and behaves the same every time; Claude handles the long tail, and its answers are cached per host profile.
+- **Classify commands instead of trusting the model's own "safe" flag.** The prompt asks Claude to refuse destructive requests, but the decision to run something is made by deterministic code reading a policy file the operator controls.
+- **One process, no database.** The fleet is small, so state lives in JSON files written atomically under one data directory. That keeps deployment to a single container or systemd unit; the trade-off is no horizontal scaling.
+- **Vanilla frontend.** No build step means anyone on the team can fix the dashboard on the server with an editor.
+- **A demo that runs the real code.** The simulation sits below the SSH layer, so detection, health checks, the resolver, the policy and remediation all run unchanged against it. Building it surfaced a real bug: service detection treated `"not found"` as found, so every DNS server was detected as Technitium.
+
+## Project layout
+
 ```
-
-Offline self-checks (also run by pytest through `tests/test_offline_checks.py`):
-```bash
-python scripts/check_schedule.py               # in-app scheduler
-python scripts/check_outage_filters.py         # outage message filters
+src/
+├── main.py                 # entry point: python -m src.main
+├── core/                   # config, SSH pool, command resolver, server profiles, Claude client
+├── actions/                # risk policy, pending confirmations, remediation
+├── services/               # DHCP / DNS / RADIUS handlers and their registry
+├── monitoring/             # log watcher, error detector, health checker, ONU poller, outage jobs, NetBox syncs
+├── web/                    # FastAPI app, auth, users, admin console, audit, routes/
+└── demo/                   # simulated hosts, OLTs and outage feeds for DEMO_MODE
+mcp_server/                 # read-only MCP server for Claude Desktop / Claude Code
+services/netbox-autofill/   # Cisco → NetBox scanner (netmiko)
+config/                     # settings.yaml, safe_actions.yaml, services/*.yaml
+knowledge_base/             # known_errors.yaml, ignore_patterns.yaml
+web/                        # dashboard (index.html, css/, js/)
+demo/secrets.yaml           # demo configuration
+tests/                      # pytest suite
+scripts/                    # live check scripts, user management, systemd units
+docs/                       # architecture, API, configuration, deployment, feature map, screenshots
 ```
-
-### Adding a new service handler
-1. Create `src/services/<name>.py` extending `BaseService`.
-2. Add `config/services/<name>.yaml` (detection + parameters).
-3. Register it in `SERVICE_HANDLERS` in `src/services/registry.py` and in `VALID_SERVICE_TYPES` in `src/core/config.py`.
-
-### Conventions
-- Async throughout (FastAPI + asyncssh).
-- Config is centralized in `src/core/config.py` (Pydantic models — extend there).
-- Singletons via `get_*()` accessors (e.g. `get_ssh_manager()`, `get_config()`).
-- Logging via `loguru`.
-
----
 
 ## Documentation
 
-Extended docs live in [`docs/`](docs/):
+- [ARCHITECTURE.md](docs/ARCHITECTURE.md): layers, runtime model, data flows
+- [API.md](docs/API.md): every REST endpoint
+- [CONFIGURATION.md](docs/CONFIGURATION.md): every configuration field and environment variable
+- [DEPLOYMENT.md](docs/DEPLOYMENT.md): Docker, systemd, timers, hardening
+- [AGENTS.md](docs/AGENTS.md): module map and conventions for contributors and coding agents
+- [features/](docs/features/README.md): the feature map
+- [CHANGELOG.md](CHANGELOG.md)
 
-- [`docs/AGENTS.md`](docs/AGENTS.md) — onboarding map for developers and AI assistants (module reference, conventions, gotchas).
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — layers, runtime model, and data flows.
-- [`docs/CONFIGURATION.md`](docs/CONFIGURATION.md) — every config field across `secrets.yaml`, `.env`, and `settings.yaml`.
-- [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — systemd setup for the web service and timer jobs.
-- [`docs/API.md`](docs/API.md) — REST API reference.
-- [`docs/features/`](docs/features/README.md) — feature map: 8 visual trees (access, servers, monitoring, terminal, ONU, NetBox, outages, admin).
+## License
+
+[MIT](LICENSE)

@@ -1,33 +1,33 @@
-[← Доступ и роли](01-access.md) · **2 / 8** · [Карта](README.md) · [Дальше: Фоновый мониторинг →](03-monitoring.md)
+[← Access and roles](01-access.md) · **2 / 8** · [Map](README.md) · [Next: Background monitoring →](03-monitoring.md)
 
-# 🖥️ Серверы и сервисы
+# 🖥️ Servers and services
 
-Вкладка **Servers** — карточки всех серверов, которые панель обслуживает по SSH, и управление их сервисами.
+The **Servers** tab: a card for every server the panel manages over SSH, and control of their services.
 
 ```mermaid
 %%{init: {"flowchart": {"nodeSpacing": 14, "rankSpacing": 45, "curve": "basis", "padding": 8, "wrappingWidth": 260}}}%%
 flowchart LR
-    ROOT(["🖥️ Серверы и сервисы"]):::root
+    ROOT(["🖥️ Servers and services"]):::root
 
-    ROOT --> CARD["🗂️ Карточка сервера"]:::group
-    CARD --> C1["🟢 Онлайн / 🔴 офлайн"]:::all
-    CARD --> C2["Список сервисов и их состояние"]:::all
-    CARD --> C3["🔌 Переподключить SSH"]:::all
-    CARD --> C4["ℹ️ Отчёт: ОС, CPU, RAM, диски, сеть"]:::all
+    ROOT --> CARD["🗂️ Server card"]:::group
+    CARD --> C1["🟢 Online / 🔴 offline<br/>with the reason"]:::all
+    CARD --> C2["Services and their state"]:::all
+    CARD --> C3["🔌 Reconnect SSH"]:::all
+    CARD --> C4["ℹ️ Report: OS, CPU, RAM, disks, network"]:::all
 
-    ROOT --> ACT["🎛️ Управление сервисом"]:::group
+    ROOT --> ACT["🎛️ Service control"]:::group
     ACT --> A1["▶️ start · ⏹ stop · 🔁 restart · ♻️ reload"]:::admin
-    ACT --> A2["🩺 Диагностика: процесс, порт, конфиг"]:::all
+    ACT --> A2["🩺 Diagnostics: process, port, config"]:::all
 
-    ROOT --> SVC["🧩 Поддерживаемые сервисы"]:::group
-    SVC --> S1["DHCP — isc-dhcp · kea · dnsmasq"]:::all
-    SVC --> S2["DNS — bind9 · dnsmasq · unbound · PowerDNS"]:::all
-    SVC --> S3["RADIUS — FreeRADIUS 2.x / 3.x"]:::all
-    SVC --> S4["Почта и веб — Postfix · Dovecot<br/>Apache · SpamAssassin"]:::all
+    ROOT --> SVC["🧩 Supported services"]:::group
+    SVC --> S1["DHCP: isc-dhcp · kea · dnsmasq"]:::all
+    SVC --> S2["DNS: bind9 · Technitium · dnsmasq<br/>unbound · PowerDNS"]:::all
+    SVC --> S3["RADIUS: FreeRADIUS 2.x / 3.x"]:::all
+    SVC --> S4["Mail and web: Postfix · Dovecot<br/>Apache · SpamAssassin"]:::all
 
-    ROOT --> PROF["🧬 Профиль сервера"]:::group
-    PROF --> P1["systemd или SysVinit, дистрибутив"]:::auto
-    PROF --> P2["Определяется один раз и запоминается"]:::auto
+    ROOT --> PROF["🧬 Server profile"]:::group
+    PROF --> P1["systemd or SysVinit, distribution"]:::auto
+    PROF --> P2["Detected once and remembered"]:::auto
 
     classDef root  fill:#1f2937,stroke:#111827,color:#ffffff,font-weight:bold
     classDef group fill:#e0e7ff,stroke:#6366f1,color:#1e1b4b,font-weight:bold
@@ -37,25 +37,26 @@ flowchart LR
     classDef auto  fill:#fef3c7,stroke:#d97706,color:#78350f
 ```
 
-## Зачем это нужно
+## Why it exists
 
-| Ветка | Зачем |
-|-------|-------|
-| 🗂️ Карточка | За секунду видно, какой сервер лежит и какой сервис на нём упал |
-| 🎛️ Управление | Перезапустить DHCP/DNS/RADIUS из браузера, не заходя по SSH |
-| 🧩 Сервисы | Тип сервера определяется автоматически — панель сама находит конфиги, логи и файлы аренд. DHCP показывает аренды и пулы, DNS проверяет резолв тестовой зоны, почта и веб — только статус и рестарт |
-| 🧬 Профиль | Одна и та же кнопка «restart» работает и на systemd, и на старом SysVinit |
+| Branch | Why |
+|--------|-----|
+| 🗂️ Card | See at a glance which server is down and which service failed on it, and why the connection failed |
+| 🎛️ Control | Restart DHCP/DNS/RADIUS from the browser without an SSH session |
+| 🧩 Services | The service variant is detected automatically, so the panel finds configs, logs and lease files on its own. DHCP shows leases and pools, DNS checks that a test zone resolves, mail and web get status and restart only |
+| 🧬 Profile | The same "restart" button works on systemd and on old SysVinit hosts |
 
-> Добавить, изменить или убрать сервер можно во вкладке **Admin → Servers** — см. [👑 Консоль superadmin](08-admin.md).
+> Servers are added, changed or removed in **Admin → Servers**; see [👑 Superadmin console](08-admin.md).
 
-## Где это в коде
+## Where it is in the code
 
-| Что | Файл |
-|-----|------|
-| SSH-подключения, выполнение команд | `src/core/ssh_manager.py` |
-| Отчёт о сервере | `src/core/system_info.py` |
-| Профиль сервера (`sessions/server_profiles.json`) | `src/core/server_profile.py` |
-| DHCP / DNS / RADIUS | `src/services/dhcp.py`, `dns.py`, `radius.py` + `config/services/*.yaml` |
+| What | File |
+|------|------|
+| SSH connections, command execution, quoting | `src/core/ssh_manager.py` |
+| Server report | `src/core/system_info.py` |
+| Server profile (`sessions/server_profiles.json`) | `src/core/server_profile.py` |
+| DHCP / DNS / RADIUS | `src/services/dhcp.py`, `dns.py`, `radius.py`, registered in `src/services/registry.py`, with `config/services/*.yaml` |
+| Endpoints | `src/web/routes/servers.py` |
 
 ---
-[← Доступ и роли](01-access.md) · [Карта](README.md) · [Дальше: Фоновый мониторинг →](03-monitoring.md)
+[← Access and roles](01-access.md) · [Map](README.md) · [Next: Background monitoring →](03-monitoring.md)

@@ -145,7 +145,7 @@ async def test_all_servers() -> dict:
 async def main():
     setup_logging()
 
-    logger.info("MCP Server Monitor - SSH Connection Test")
+    logger.info("NetOps Control Plane - SSH Connection Test")
     logger.info("=" * 50)
 
     if not SECRETS_FILE.exists():

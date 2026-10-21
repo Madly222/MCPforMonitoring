@@ -1,39 +1,39 @@
-[← Терминал и AI-команды](04-terminal.md) · **5 / 8** · [Карта](README.md) · [Дальше: NetBox →](06-netbox.md)
+[← Terminal and AI commands](04-terminal.md) · **5 / 8** · [Map](README.md) · [Next: NetBox →](06-netbox.md)
 
 # 📡 GPON / ONU
 
-Вкладка **ONU** — абонентские терминалы на OLT ZTE C320: есть ли сигнал, какой он, зарегистрирована ли ONU.
+The **ONU** tab: subscriber terminals on ZTE C320 OLTs. Is there a signal, how strong is it, is the ONU registered.
 
 ```mermaid
 %%{init: {"flowchart": {"nodeSpacing": 14, "rankSpacing": 45, "curve": "basis", "padding": 8, "wrappingWidth": 260}}}%%
 flowchart LR
     ROOT(["📡 GPON / ONU"]):::root
 
-    ROOT --> OLT["🏢 OLT ZTE C320"]:::group
-    OLT --> O1["Список ONU<br/>сгруппирован по OLT"]:::all
-    OLT --> O2["Фоновый опрос<br/>по расписанию"]:::auto
-    OLT --> O3["📡 Poll now —<br/>опросить прямо сейчас"]:::admin
+    ROOT --> OLT["🏢 ZTE C320 OLT"]:::group
+    OLT --> O1["ONU list<br/>grouped by OLT"]:::all
+    OLT --> O2["Background polling<br/>on a schedule"]:::auto
+    OLT --> O3["📡 Poll now"]:::admin
 
-    ROOT --> SIG["💡 Оптический статус"]:::group
+    ROOT --> SIG["💡 Optical status"]:::group
     SIG --> S1["🟢 online · 🔴 offline<br/>🟡 low signal"]:::all
-    SIG --> S2["Мощность Rx в dBm<br/>берётся из CLI OLT"]:::auto
-    SIG --> S3["Порог «слабый сигнал»<br/>по умолчанию −25 dBm"]:::auto
+    SIG --> S2["Rx power in dBm<br/>read from the OLT CLI"]:::auto
+    SIG --> S3["Low-signal threshold<br/>−25 dBm by default"]:::auto
 
-    ROOT --> REG["🪪 Регистрация на OLT"]:::group
+    ROOT --> REG["🪪 Registration on the OLT"]:::group
     REG --> R1["registered /<br/>not registered"]:::all
-    REG --> R2["Отдельно от сигнала:<br/>ONU может светить,<br/>но не быть заведённой"]:::all
+    REG --> R2["Separate from the signal:<br/>an ONU can have light<br/>but not be provisioned"]:::all
 
-    ROOT --> INFO["🏷️ Данные ONU"]:::group
-    INFO --> I1["Порт · ID · серийный номер<br/>описание"]:::all
-    INFO --> I2["MAC-адрес<br/>через SSH на OLT"]:::auto
+    ROOT --> INFO["🏷️ ONU details"]:::group
+    INFO --> I1["Port · ID · serial number<br/>description"]:::all
+    INFO --> I2["MAC address<br/>over SSH to the OLT"]:::auto
 
-    ROOT --> FIND["🔍 Работа со списком"]:::group
-    FIND --> F1["Поиск по имени, порту,<br/>MAC, серийнику"]:::all
-    FIND --> F2["Фильтры: All · Online · Offline<br/>Low Signal · Not registered"]:::all
-    FIND --> F3["Сортировка по порту"]:::all
+    ROOT --> FIND["🔍 Working with the list"]:::group
+    FIND --> F1["Search by name, port,<br/>MAC, serial"]:::all
+    FIND --> F2["Filters: All · Online · Offline<br/>Low Signal · Not registered"]:::all
+    FIND --> F3["Sorted by port"]:::all
 
-    ROOT --> CONF["⚙️ Настройка"]:::group
-    CONF --> C1["Добавить / изменить OLT<br/>Admin → OLT Devices"]:::super
+    ROOT --> CONF["⚙️ Setup"]:::group
+    CONF --> C1["Add / change an OLT<br/>Admin → OLT Devices"]:::super
     CONF --> C2["SNMP v2c / v3 + SSH"]:::super
 
     classDef root  fill:#1f2937,stroke:#111827,color:#ffffff,font-weight:bold
@@ -44,24 +44,24 @@ flowchart LR
     classDef auto  fill:#fef3c7,stroke:#d97706,color:#78350f
 ```
 
-## Зачем разделены «сигнал» и «регистрация»
+## Why "signal" and "registration" are separate
 
-| Сигнал | Регистрация | Что это значит на практике |
-|--------|-------------|----------------------------|
-| 🟢 online | registered | Всё в порядке |
-| 🟡 low signal | registered | Абонент работает, но линию пора проверять (грязный коннектор, изгиб) |
-| 🔴 offline | registered | Нет света: ONU выключена или обрыв |
-| 🟢 online | not registered | ONU светит, но не заведена на OLT — нужна регистрация |
+| Signal | Registration | What it means in practice |
+|--------|--------------|---------------------------|
+| 🟢 online | registered | All good |
+| 🟡 low signal | registered | The subscriber works, but the line needs a look (dirty connector, tight bend) |
+| 🔴 offline | registered | No light: the ONU is off or the fibre is cut |
+| 🟢 online | not registered | The ONU has light but is not provisioned on the OLT; it needs registering |
 
-> Фильтр **Not registered** как раз находит четвёртый случай — ONU, которые физически подключены, но не обслуживаются.
+> The **Not registered** filter finds exactly the fourth case: ONUs that are physically connected but not served.
 
-## Где это в коде
+## Where it is in the code
 
-| Что | Файл |
-|-----|------|
-| Опрос OLT, сигнал, регистрация, MAC | `src/monitoring/onu_monitor.py` |
-| Эндпоинты `/api/onu/*` | `src/web/api.py` |
-| Вкладка ONU: поиск, фильтры | `web/js/onu.js` |
+| What | File |
+|------|------|
+| OLT polling, signal, registration, MAC | `src/monitoring/onu_monitor.py` |
+| `/api/onu/*` endpoints | `src/web/routes/onu.py` |
+| ONU tab: search, filters | `web/js/onu.js` |
 
 ---
-[← Терминал и AI-команды](04-terminal.md) · [Карта](README.md) · [Дальше: NetBox →](06-netbox.md)
+[← Terminal and AI commands](04-terminal.md) · [Map](README.md) · [Next: NetBox →](06-netbox.md)

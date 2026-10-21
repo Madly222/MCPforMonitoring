@@ -101,7 +101,7 @@ def send_email_notification(matches: list) -> bool:
 https://www.acc.md/disconnections
 
 --
-MCP Server Monitor
+NetOps Control Plane
 """
 
         msg.attach(MIMEText(body, 'plain', 'utf-8'))

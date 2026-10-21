@@ -1,32 +1,33 @@
-[← Фоновый мониторинг](03-monitoring.md) · **4 / 8** · [Карта](README.md) · [Дальше: GPON / ONU →](05-onu.md)
+[← Background monitoring](03-monitoring.md) · **4 / 8** · [Map](README.md) · [Next: GPON / ONU →](05-onu.md)
 
-# ⌨️ Терминал и AI-команды
+# ⌨️ Terminal and AI commands
 
-Блок **Terminal Interpretation** на вкладке **Servers**. Один ввод — два режима: выбор в выпадающем списке слева решает, кто выполнит команду.
+The **Terminal Interpretation** block on the **Servers** tab. One input, two modes: the drop-down on the left decides who runs the command.
 
 ```mermaid
 %%{init: {"flowchart": {"nodeSpacing": 14, "rankSpacing": 45, "curve": "basis", "padding": 8, "wrappingWidth": 260}}}%%
 flowchart LR
-    ROOT(["⌨️ Терминал"]):::root
+    ROOT(["⌨️ Terminal"]):::root
 
-    ROOT --> AI["🧠 Режим Interpret<br/>сервер не выбран"]:::group
-    AI --> A1["Пишете обычным языком:<br/>«рестартни dhcp на dhcp-93»<br/>«ошибки dns за сегодня»"]:::admin
-    AI --> A2["Сервер сам находится<br/>по имени или по сервису"]:::auto
-    AI --> A3["Частые команды — без Claude<br/>0 токенов"]:::auto
+    ROOT --> AI["🧠 Interpret mode<br/>no server selected"]:::group
+    AI --> A1["Type in plain language:<br/>'restart dhcp on dhcp-01'<br/>'dns errors for today'"]:::admin
+    AI --> A2["The server is found<br/>by name or by service"]:::auto
+    AI --> A3["Common commands skip Claude:<br/>0 tokens"]:::auto
+    AI --> A4["Risky commands wait for<br/>your confirmation"]:::admin
 
-    ROOT --> RAW["🖥️ Прямой режим<br/>сервер выбран"]:::group
-    RAW --> R1["Любая shell-команда<br/>как в обычном SSH"]:::admin
-    RAW --> R2["☑️ sudo одной галочкой"]:::admin
+    ROOT --> RAW["🖥️ Direct mode<br/>server selected"]:::group
+    RAW --> R1["Any shell command,<br/>as in a normal SSH session"]:::admin
+    RAW --> R2["☑️ sudo with one checkbox"]:::admin
     RAW --> R3["stdout · stderr · exit code"]:::admin
 
-    ROOT --> OUT["📋 Результат"]:::group
-    OUT --> O1["Окно Output"]:::admin
-    OUT --> O2["Command History<br/>✅ / ❌ по каждой команде"]:::admin
+    ROOT --> OUT["📋 Result"]:::group
+    OUT --> O1["Output window"]:::admin
+    OUT --> O2["Command History<br/>✅ / ❌ per command"]:::admin
 
-    ROOT --> CTRL["🛡️ Контроль"]:::group
-    CTRL --> K1["Только admin и superadmin"]:::admin
-    CTRL --> K2["Каждая команда —<br/>в журнал аудита"]:::auto
-    CTRL --> K3["Тайм-аут команды<br/>20 с по умолчанию, 5–600"]:::super
+    ROOT --> CTRL["🛡️ Control"]:::group
+    CTRL --> K1["admin and superadmin only"]:::admin
+    CTRL --> K2["Every command and every<br/>confirmation goes to the audit log"]:::auto
+    CTRL --> K3["Command timeout<br/>20 s by default, 5–600"]:::super
 
     classDef root  fill:#1f2937,stroke:#111827,color:#ffffff,font-weight:bold
     classDef group fill:#e0e7ff,stroke:#6366f1,color:#1e1b4b,font-weight:bold
@@ -35,40 +36,45 @@ flowchart LR
     classDef auto  fill:#fef3c7,stroke:#d97706,color:#78350f
 ```
 
-## Как фраза превращается в команду (режим Interpret)
+## How a phrase becomes a command (Interpret mode)
 
-Сначала пробуются бесплатные способы, Claude — только если они не сработали.
+The free ways are tried first; Claude is asked only when they do not work. Whatever command comes out goes through the risk policy before it runs.
 
 ```mermaid
 %%{init: {"flowchart": {"nodeSpacing": 14, "rankSpacing": 45, "curve": "basis", "padding": 8, "wrappingWidth": 260}}}%%
 flowchart LR
-    IN["💬 Фраза оператора"]:::admin --> T{"1. Шаблон?<br/>status · logs · errors<br/>restart · start · stop"}
-    T -- да --> RUN["▶️ Выполнить на сервере"]:::auto
-    T -- нет --> C{"2. Уже решали<br/>такую фразу?"}
-    C -- да --> RUN
-    C -- нет --> CL["3. 🤖 Спросить Claude"]:::auto
-    CL -- "уверенность > 0.7" --> SAVE["💾 Запомнить в кэш"]:::auto --> RUN
-    CL -- "не уверен / API недоступен" --> KW["4. Разбор по ключевым словам"]:::auto --> RUN
+    IN["💬 Operator's phrase"]:::admin --> T{"1. Template?<br/>status · logs · errors<br/>restart · start · stop"}
+    T -- yes --> POL
+    T -- no --> C{"2. Resolved this<br/>phrase before?"}
+    C -- yes --> POL
+    C -- no --> CL["3. 🤖 Ask Claude"]:::auto
+    CL --> SAVE["💾 Save to the cache"]:::auto --> POL
+    CL -- "no answer / API down" --> KW["4. Keyword fallback"]:::auto
+    POL{"🛡️ Risk policy"} -- "read-only or<br/>allowed restart" --> RUN["▶️ Run on the server"]:::auto
+    POL -- "anything else" --> ASK["Dialog: exact command,<br/>risk and reason"]:::admin -- confirmed --> RUN
 
     classDef admin fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
     classDef auto  fill:#fef3c7,stroke:#d97706,color:#78350f
 ```
 
-| Шаг | Стоимость | Пояснение |
-|-----|-----------|-----------|
-| 1. Шаблон | 0 токенов | Команда собирается под профиль сервера (systemd / SysVinit) |
-| 2. Кэш | 0 токенов | Ответ Claude на ту же фразу для того же типа сервера |
-| 3. Claude | токены | Только для новых, нестандартных запросов |
-| 4. Ключевые слова | 0 токенов | Запасной вариант, если Claude не уверен или недоступен |
+| Step | Cost | Notes |
+|------|------|-------|
+| 1. Template | 0 tokens | The command is built for the server's profile (systemd / SysVinit) |
+| 2. Cache | 0 tokens | Claude's earlier answer to the same phrase for the same kind of server |
+| 3. Claude | tokens | Only for new, unusual requests |
+| 4. Keywords | 0 tokens | Fallback when Claude has no answer or is unavailable |
 
-## Где это в коде
+Risk levels come from `config/safe_actions.yaml`: read-only commands are risk 0, restarts of listed services risk 1, `stop` risk 2, anything unrecognised risk 3. Only risk 0 and allowed restarts run without the dialog; a confirmation is valid for the same user for 5 minutes.
 
-| Что | Файл |
-|-----|------|
-| Разбор фраз: шаблоны + кэш | `src/core/command_resolver.py` |
-| Обращение к Claude | `src/core/claude_client.py` |
-| Эндпоинты `/api/execute`, `/api/console/exec` | `src/web/api.py` |
-| Кнопка Execute, история | `web/js/app.js` |
+## Where it is in the code
+
+| What | File |
+|------|------|
+| Phrase parsing: templates + cache | `src/core/command_resolver.py` |
+| Calls to Claude | `src/core/claude_client.py` |
+| Risk classification, pending confirmations | `src/actions/policy.py`, `src/actions/pending.py` |
+| `/api/execute`, `/api/execute/confirm`, `/api/console/exec` | `src/web/routes/commands.py` |
+| Execute button, confirmation dialog, history | `web/js/app.js` |
 
 ---
-[← Фоновый мониторинг](03-monitoring.md) · [Карта](README.md) · [Дальше: GPON / ONU →](05-onu.md)
+[← Background monitoring](03-monitoring.md) · [Map](README.md) · [Next: GPON / ONU →](05-onu.md)

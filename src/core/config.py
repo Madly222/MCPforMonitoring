@@ -1,5 +1,5 @@
 """
-Configuration loader for MCP Server Monitor.
+Configuration loader for NetOps Control Plane.
 
 Loads and validates configuration from YAML files:
 - secrets.yaml: Sensitive data (servers, credentials, API keys)

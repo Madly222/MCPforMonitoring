@@ -1,5 +1,5 @@
 #!/bin/bash
-# MCP Server Monitor - Run Script
+# NetOps Control Plane - Run Script
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
@@ -20,5 +20,5 @@ if [ ! -f "secrets.yaml" ]; then
     exit 1
 fi
 
-echo "Starting MCP Server Monitor..."
+echo "Starting NetOps Control Plane..."
 python -m src.main

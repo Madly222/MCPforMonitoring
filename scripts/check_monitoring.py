@@ -162,7 +162,7 @@ async def test_log_watcher(server_id: str, duration: int = 30):
 async def main():
     setup_logging()
 
-    logger.info("MCP Server Monitor - Monitoring Test")
+    logger.info("NetOps Control Plane - Monitoring Test")
     logger.info("=" * 60)
 
     if len(sys.argv) < 2:

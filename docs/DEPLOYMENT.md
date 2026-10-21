@@ -1,9 +1,9 @@
 # Deployment Guide
 
-How to run MCP Server Monitor in production on a Linux host with systemd.
+How to run NetOps Control Plane in production on a Linux host with systemd.
 For configuration details see [`CONFIGURATION.md`](CONFIGURATION.md).
 
-This guide assumes the project lives at `/home/user/ServersMonitoringMCP` and
+This guide assumes the project lives at `/home/user/netops-control-plane` and
 runs as the `user` account. Adjust paths/usernames to your environment — the
 shipped unit files in `scripts/` use exactly these values.
 
@@ -17,7 +17,7 @@ sudo apt update
 sudo apt install -y python3 python3-venv openssh-client snmp mysql-client
 
 # Project + virtualenv
-cd /home/user/ServersMonitoringMCP
+cd /home/user/netops-control-plane
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
@@ -88,15 +88,15 @@ Create the unit:
 ```ini
 # /etc/systemd/system/mcp-monitor.service
 [Unit]
-Description=MCP Server Monitor
+Description=NetOps Control Plane
 After=network.target
 
 [Service]
 Type=simple
 User=user
-WorkingDirectory=/home/user/ServersMonitoringMCP
-Environment="PATH=/home/user/ServersMonitoringMCP/venv/bin:/usr/local/bin:/usr/bin:/bin"
-ExecStart=/home/user/ServersMonitoringMCP/venv/bin/python -m src.main
+WorkingDirectory=/home/user/netops-control-plane
+Environment="PATH=/home/user/netops-control-plane/venv/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=/home/user/netops-control-plane/venv/bin/python -m src.main
 Restart=always
 RestartSec=5
 TimeoutStopSec=10
@@ -156,7 +156,7 @@ journalctl -u electric-monitor.service -n 50 --no-pager
 ```bash
 # Web service logs (systemd + loguru file)
 journalctl -u mcp-monitor -f
-tail -f /home/user/ServersMonitoringMCP/logs/app.log
+tail -f /home/user/netops-control-plane/logs/app.log
 
 # Timer job logs
 journalctl -u acc-monitor.service
@@ -174,7 +174,7 @@ Application logs rotate automatically (size-based, zipped) per
 ## 6. Updating
 
 ```bash
-cd /home/user/ServersMonitoringMCP
+cd /home/user/netops-control-plane
 git pull
 source venv/bin/activate
 pip install -r requirements.txt        # in case deps changed
