@@ -51,9 +51,9 @@ def env(web_env, monkeypatch):
         assert c.post("/api/auth/login", json={"username": username, "password": "correct horse"}).status_code == 200
         return c
 
-    def resolve_to(command, sudo=True, source="claude"):
-        state["resolved"] = ResolvedCommand(command=command, sudo=sudo, source=source,
-                                            intent=None, server_id="dns1", description="test")
+    def resolve_to(command, sudo=True, source="claude", intent=None, service=None):
+        state["resolved"] = ResolvedCommand(command=command, sudo=sudo, source=source, intent=intent,
+                                            server_id="dns1", service=service, description="test")
 
     return SimpleNamespace(ssh=ssh, client_for=client_for, resolve_to=resolve_to)
 
@@ -99,3 +99,11 @@ def test_only_the_requesting_user_can_confirm(env, web_env):
 def test_operators_cannot_execute(env):
     env.resolve_to("uptime")
     assert env.client_for("bob").post("/api/execute", json={"command": "uptime"}).status_code == 403
+
+
+def test_stopping_a_managed_service_needs_confirmation(env):
+    env.resolve_to("systemctl stop bind9", source="template", intent="stop", service="dns")
+    conf = env.client_for("alice").post("/api/execute", json={"command": "stop dns"}).json()["confirmation"]
+
+    assert (conf["command"], conf["risk"]) == ("systemctl stop bind9", 2)
+    assert env.ssh.calls == []

@@ -169,9 +169,9 @@ A **capability-aware command resolver** now runs first (`src/core/command_resolv
 
 If the resolver yields nothing (e.g. no target server named), it falls through to
 the legacy path: Claude `interpret_command` → if confidence > 0.7 run it, else
-keyword fallback (`status`/`restart`/`logs`|`errors`/`health`). Managed-service
-lifecycle (dhcp/dns/radius restart/start/stop) still routes through the validated
-service handlers. `source` = `template`|`cache`|`claude`|`local`.
+keyword fallback (`status`/`restart`/`logs`|`errors`/`health`). Restarting a
+managed service (dhcp/dns/radius) still routes through the validated service
+handlers; stop/start go through the risk policy like any other command. `source` = `template`|`cache`|`claude`|`local`.
 
 Before a resolved command runs, `src/actions/policy.py` classifies it against
 `config/safe_actions.yaml`. Read-only commands and restarts of listed services run

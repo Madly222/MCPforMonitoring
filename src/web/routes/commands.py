@@ -99,7 +99,7 @@ async def execute_command(
     # restart) render to a profile-correct command with zero Claude tokens;
     # unknown requests fall back to Claude and get cached per server.
     try:
-        from src.core.command_resolver import get_command_resolver, LIFECYCLE
+        from src.core.command_resolver import get_command_resolver, RESTART
 
         resolver = get_command_resolver()
 
@@ -111,11 +111,12 @@ async def execute_command(
             command, servers, ssh, claude_fallback=_claude_fallback,
         )
 
-        # Managed-service lifecycle keeps using the validated handler path below.
+        # Restarting a managed service keeps using the validated handler path below;
+        # stop/start have no handler path and go through the risk policy instead.
         managed_lifecycle = (
             resolved is not None
-            and resolved.intent in LIFECYCLE
-            and resolved.service in ("dhcp", "dns", "radius")
+            and resolved.intent == RESTART
+            and resolved.service in SERVICE_HANDLERS
         )
 
         if resolved and not managed_lifecycle:
