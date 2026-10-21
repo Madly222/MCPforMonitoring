@@ -11,8 +11,9 @@ them, so its contract is checked against generated input, not just examples:
 """
 
 import os
+import shlex
 
-from hypothesis import HealthCheck, given, settings
+from hypothesis import HealthCheck, example, given, settings
 from hypothesis import strategies as st
 
 from src.actions.policy import READ_ONLY, ActionPolicy
@@ -107,11 +108,33 @@ SHELLISH = st.text(
 
 @SETTINGS
 @given(st.one_of(SHELLISH, st.text(max_size=60)))
+@example(">&0")  # found in CI: descriptor duplication is not a write
+@example("grep 'a>b' /etc/hosts")
+@example("cat /etc/hosts >& /etc/cron.d/x")
 def test_arbitrary_text_never_crashes_and_dangerous_syntax_is_never_allowed(text):
     c = POLICY.classify(text)
     assert 0 <= c.risk <= 3
     if runs_unconfirmed(text):
-        for forbidden in ("\n", "\r", "\x00", "`", "$(", "<(", ">(", ">"):
-            if forbidden == ">" and "/dev/null" in text:
-                continue
+        for forbidden in ("\n", "\r", "\x00", "`", "$(", "<(", ">("):
             assert forbidden not in text, (text, c.reason)
+        assert not _writing_redirects(text), (text, c.reason)
+
+
+def _writing_redirects(text: str) -> list[str]:
+    """Redirections that can write a file. Reading (<), descriptor
+    duplication (2>&1, >&-) and /dev/null are harmless."""
+    lexer = shlex.shlex(text, posix=True, punctuation_chars=True)
+    lexer.whitespace_split = True
+    lexer.commenters = ""
+    tokens = list(lexer)
+    found = []
+    for i, tok in enumerate(tokens):
+        if not set(tok) & {">"} or not set(tok) <= set("<>&|"):
+            continue
+        target = tokens[i + 1] if i + 1 < len(tokens) else ""
+        if tok in (">&", "<&") and (target.isdigit() or target == "-"):
+            continue
+        if target == "/dev/null":
+            continue
+        found.append(f"{tok} {target}")
+    return found
