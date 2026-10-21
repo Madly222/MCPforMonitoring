@@ -50,9 +50,7 @@ async def netbox_health(user: UserInfo = Depends(get_current_user)):
         return {"status": "degraded", "netbox": {"connected": False, "error": str(e)}}
 
 @router.post("/scan")
-async def netbox_scan(req: ScanRequest, user: UserInfo = Depends(get_current_user)):
-    if user.role == "operator":
-        raise HTTPException(403, "Access denied for operator role")
+async def netbox_scan(req: ScanRequest, user: UserInfo = Depends(require_admin)):
     if not req.username or not req.password:
         raise HTTPException(400, "Username and password are required")
     orch = Orchestrator(
@@ -71,8 +69,6 @@ async def netbox_scan(req: ScanRequest, user: UserInfo = Depends(get_current_use
 
 @router.post("/apply")
 async def netbox_apply(req: ApplyRequest, user: UserInfo = Depends(require_admin)):
-    if user.role == "operator":
-        raise HTTPException(403, "Access denied for operator role")
     if req.host not in _scan_cache:
         raise HTTPException(404, "Device not scanned yet. Run scan first.")
     orch = Orchestrator()
@@ -83,8 +79,6 @@ async def netbox_apply(req: ApplyRequest, user: UserInfo = Depends(require_admin
 
 @router.post("/auto")
 async def netbox_auto(req: ScanRequest, user: UserInfo = Depends(require_admin)):
-    if user.role == "operator":
-        raise HTTPException(403, "Access denied for operator role")
     if not req.username or not req.password:
         raise HTTPException(400, "Username and password are required")
     orch = Orchestrator(
@@ -112,10 +106,8 @@ async def netbox_auto(req: ScanRequest, user: UserInfo = Depends(require_admin))
 # ROUTER SCAN ENDPOINT
 # ==============================================================================
 @router.post("/scan-router")
-async def netbox_scan_router(req: ScanRequest, user: UserInfo = Depends(get_current_user)):
+async def netbox_scan_router(req: ScanRequest, user: UserInfo = Depends(require_admin)):
     """Scan a Cisco router and return interfaces, routes, CDP neighbors."""
-    if user.role == "operator":
-        raise HTTPException(403, "Access denied for operator role")
     if not req.username or not req.password:
         raise HTTPException(400, "Username and password are required")
 
@@ -200,8 +192,6 @@ async def netbox_scan_router(req: ScanRequest, user: UserInfo = Depends(get_curr
 @router.post("/apply-router")
 async def netbox_apply_router(req: ApplyRequest, user: UserInfo = Depends(require_admin)):
     """Apply router interfaces to NetBox."""
-    if user.role == "operator":
-        raise HTTPException(403, "Access denied for operator role")
 
     logs = []
     results = {"interfaces_updated": 0, "ips_created": 0, "cables_created": 0}
@@ -368,8 +358,6 @@ async def netbox_apply_router(req: ApplyRequest, user: UserInfo = Depends(requir
 @router.post("/sync-mac")
 async def netbox_sync_mac(user: UserInfo = Depends(require_admin)):
     """Sync MAC addresses from DHCP to NetBox."""
-    if user.role == "operator":
-        raise HTTPException(403, "Access denied for operator role")
 
     try:
         from src.monitoring.dhcp_mac_sync import sync_dhcp_to_netbox
@@ -383,8 +371,6 @@ async def netbox_sync_mac(user: UserInfo = Depends(require_admin)):
 @router.post("/sync-interfaces")
 async def netbox_sync_interfaces(payload: dict = Body(default={}), user: UserInfo = Depends(require_admin)):
     """Trace each MAC to its leaf port and assign the IP to that interface in NetBox."""
-    if user.role == "operator":
-        raise HTTPException(403, "Access denied for operator role")
 
     p = payload or {}
     cred_sets = []

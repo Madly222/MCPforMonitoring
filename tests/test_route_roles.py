@@ -47,8 +47,8 @@ ROLES = {
     ("GET", "/api/monitoring/health"): USER,
     ("GET", "/api/claude/health"): USER,
     ("GET", "/api/netbox/health"): USER,
-    ("POST", "/api/netbox/scan"): USER,
-    ("POST", "/api/netbox/scan-router"): USER,
+    ("POST", "/api/netbox/scan"): ADMIN,
+    ("POST", "/api/netbox/scan-router"): ADMIN,
     # changing something on a server, an OLT or NetBox
     ("POST", "/api/servers/{server_id}/action"): ADMIN,
     ("POST", "/api/onu/olt/{olt_id}/poll"): ADMIN,
@@ -133,3 +133,17 @@ def test_anonymous_requests_are_rejected(client, method, path):
 def test_operators_cannot_change_anything(client, method, path):
     login(client, "bob")
     assert client.request(method, path, json={}).status_code == 403
+
+
+def test_roles_are_not_checked_inside_handlers():
+    """Access rules belong in Depends(...), where the table above can see them."""
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent / "src" / "web"
+    offenders = [
+        f"{path.relative_to(root)}:{n}"
+        for path in root.rglob("*.py") if path.name not in ("auth.py", "users.py")
+        for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
+        if "user.role ==" in line or "user.role !=" in line or "user.role in" in line or "user.role not in" in line
+    ]
+    assert offenders == [], f"inline role checks: {offenders}"

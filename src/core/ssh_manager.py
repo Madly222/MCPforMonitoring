@@ -1,5 +1,5 @@
 """
-SSH Manager for MCP Server Monitor.
+SSH Manager for NetOps Control Plane.
 
 Provides async SSH connections to remote servers for:
 - Executing commands
@@ -631,25 +631,6 @@ class SSHManager:
         info["init_system"] = init_sys.value
 
         return info
-
-    async def check_updates(self, server_id: str) -> CommandResult:
-        server = self._config.get_server_by_id(server_id)
-        if not server:
-            raise ValueError(f"Server not found: {server_id}")
-
-        distro = (server.distro or "").lower()
-
-        if distro in ("debian", "ubuntu"):
-            cmd = "apt update -qq && apt list --upgradable 2>/dev/null | grep -v '^Listing'"
-        elif distro in ("centos", "rhel", "rocky", "alma"):
-            cmd = "yum check-update -q || true"
-        elif distro in ("fedora"):
-            cmd = "dnf check-update -q || true"
-        else:
-            # Default to apt for unknown distros
-            cmd = "apt update -qq && apt list --upgradable 2>/dev/null | grep -v '^Listing'"
-
-        return await self.execute_sudo(server_id, cmd, timeout=120.0)
 
     async def test_connection(self, server_id: str) -> bool:
         try:
