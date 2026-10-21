@@ -32,3 +32,7 @@ config/New_Rich_Text_Document.RTF
 
 # Site-specific data (real addresses of network sites) — keep out of git
 config/electric_addresses.txt
+
+# Demo mode runtime data (DEMO_MODE=1)
+demo-data/
+!demo/secrets.yaml

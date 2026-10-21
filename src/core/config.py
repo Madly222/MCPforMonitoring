@@ -7,6 +7,7 @@ Loads and validates configuration from YAML files:
 - config/services/*.yaml: Service-specific configurations
 """
 
+import os
 import sys
 from pathlib import Path
 from typing import Any, Literal, Optional
@@ -21,14 +22,24 @@ def get_project_root() -> Path:
 
 
 PROJECT_ROOT = get_project_root()
+
+# DEMO_MODE=1 runs the app against simulated servers, OLTs and outage feeds
+# (src/demo/), with demo/secrets.yaml and its own data directory.
+DEMO_MODE = os.environ.get("DEMO_MODE", "").strip().lower() in ("1", "true", "yes")
+
 CONFIG_DIR = PROJECT_ROOT / "config"
-SECRETS_FILE = PROJECT_ROOT / "secrets.yaml"
+SECRETS_FILE = Path(os.environ.get(
+    "MONITOR_SECRETS_FILE",
+    PROJECT_ROOT / ("demo/secrets.yaml" if DEMO_MODE else "secrets.yaml"),
+))
 SETTINGS_FILE = CONFIG_DIR / "settings.yaml"
 SERVICES_DIR = CONFIG_DIR / "services"
 KEYS_DIR = PROJECT_ROOT / "keys"
 KNOWLEDGE_DIR = PROJECT_ROOT / "knowledge_base"
-LOGS_DIR = PROJECT_ROOT / "logs"
-SESSIONS_DIR = PROJECT_ROOT / "sessions"
+# Everything the app writes at runtime (users, sessions, settings, audit log, caches)
+DATA_DIR = Path(os.environ.get("MONITOR_DATA_DIR", PROJECT_ROOT / ("demo-data" if DEMO_MODE else "")))
+LOGS_DIR = DATA_DIR / "logs"
+SESSIONS_DIR = DATA_DIR / "sessions"
 
 
 # Service types the monitor has handlers for (mirrors SERVICE_HANDLERS in
@@ -126,7 +137,7 @@ class MCPServerConfig(BaseModel):
 
 
 class ClaudeConfig(BaseModel):
-    api_key: str
+    api_key: str = ""
     model: str = "claude-opus-5-5"
     # Thinking tokens count against this cap, so keep it well above the answer size.
     max_tokens: int = 16000
@@ -310,6 +321,9 @@ class ConfigLoader:
         try:
             data = self.load_yaml(secrets_path)
             self._secrets = SecretsConfig(**data)
+            if not self._secrets.claude.api_key:
+                # Lets Docker / demo setups pass the key as an environment variable
+                self._secrets.claude.api_key = os.environ.get("ANTHROPIC_API_KEY", "")
             self._merge_runtime_overrides()
             logger.info("Secrets configuration loaded successfully")
             return self._secrets

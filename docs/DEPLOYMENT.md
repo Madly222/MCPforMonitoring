@@ -57,6 +57,30 @@ python -m src.main          # Ctrl-C after it reports "Starting web server..."
 
 ---
 
+## 2a. Docker
+
+`Dockerfile` builds a slim image (Python 3.12, `snmp`, `openssh-client`) that runs
+as uid 1000 and keeps its runtime data (users, sessions, settings, audit log,
+caches) in the `/data` volume. `docker-compose.yml` has two services:
+
+- `demo` (default): `docker compose up` runs the app with `DEMO_MODE=1` against
+  simulated servers and OLTs. Nothing outside the container is contacted.
+- `monitor` (profile `prod`): your configuration. The superadmin console edits
+  `.env` and the power-outage address list, so both are mounted writable and must
+  exist before the first start:
+
+```bash
+touch .env
+cp -n config/electric_addresses.example.txt config/electric_addresses.txt
+docker compose --profile prod up -d monitor
+docker compose logs -f monitor
+```
+
+`secrets.yaml` and `keys/` are mounted read-only. Put a reverse proxy with TLS in
+front and set `mcp_server.cookie_secure: true` (see [Hardening](#7-hardening)).
+The DHCP→NetBox MAC sync needs `mysql-client`, which the image leaves out; add it
+to the `apt-get install` line if you use that job.
+
 ## 3. Main service (web app)
 
 Create the unit:

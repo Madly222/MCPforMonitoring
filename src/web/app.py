@@ -9,7 +9,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
-from src.core.config import get_config, PROJECT_ROOT
+from src.core.config import get_config, DEMO_MODE, PROJECT_ROOT
 from src.core.ssh_manager import get_ssh_manager
 from src.monitoring.log_watcher import get_log_watcher, LogEvent
 from src.monitoring.error_detector import get_error_detector
@@ -117,6 +117,11 @@ async def lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
+    if DEMO_MODE:
+        # Must run before anything creates the SSH manager or the monitors
+        from src.demo import install
+        install()
+
     server_cfg = get_config().load_secrets().mcp_server
 
     app = FastAPI(

@@ -18,6 +18,8 @@ from dataclasses import dataclass, field
 
 from loguru import logger
 
+from src.core.config import LOGS_DIR
+
 try:
     from dotenv import load_dotenv
     load_dotenv(Path(__file__).parent.parent.parent / ".env")
@@ -49,8 +51,8 @@ def _email_config() -> dict:
 
 CONFIG_DIR = Path(__file__).parent.parent.parent / "config"
 ADDRESSES_FILE = CONFIG_DIR / "electric_addresses.txt"
-CACHE_FILE = Path(__file__).parent.parent.parent / "logs" / "electric_status.json"
-NOTIFIED_FILE = Path(__file__).parent.parent.parent / "logs" / "electric_notified.json"
+CACHE_FILE = LOGS_DIR / "electric_status.json"
+NOTIFIED_FILE = LOGS_DIR / "electric_notified.json"
 
 _cached_status: Optional[ElectricStatus] = None
 _last_check_time: Optional[datetime] = None

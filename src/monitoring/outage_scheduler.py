@@ -18,9 +18,9 @@ from datetime import datetime
 
 from loguru import logger
 
-from src.core.config import PROJECT_ROOT
+from src.core.config import LOGS_DIR
 
-STATE_FILE = PROJECT_ROOT / "logs" / "outage_schedule_state.json"
+STATE_FILE = LOGS_DIR / "outage_schedule_state.json"
 
 _CHANNELS = ("electric", "acc")
 

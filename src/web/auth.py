@@ -17,7 +17,7 @@ from fastapi import APIRouter, HTTPException, Request, Response, Depends, status
 from pydantic import BaseModel
 from loguru import logger
 
-from src.core.config import get_config, PROJECT_ROOT
+from src.core.config import get_config, SESSIONS_DIR
 
 
 # ==============================================================================
@@ -51,7 +51,7 @@ class ChangePasswordRequest(BaseModel):
 # SESSION STORE
 # ==============================================================================
 
-SESSIONS_FILE = PROJECT_ROOT / "sessions" / "web_sessions.json"
+SESSIONS_FILE = SESSIONS_DIR / "web_sessions.json"
 
 
 def _token_key(session_id: str) -> str:

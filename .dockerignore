@@ -1,0 +1,15 @@
+.git
+.github
+.venv
+venv
+**/__pycache__
+*.pyc
+.claude
+secrets.yaml
+.env
+keys/
+sessions/
+logs/
+demo-data/
+docs/screenshots/
+tests/

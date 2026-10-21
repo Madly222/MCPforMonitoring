@@ -20,9 +20,9 @@ from typing import Optional
 
 from loguru import logger
 
-from src.core.config import PROJECT_ROOT, CONFIG_DIR
+from src.core.config import CONFIG_DIR, SESSIONS_DIR
 
-RUNTIME_FILE = PROJECT_ROOT / "sessions" / "runtime_settings.json"
+RUNTIME_FILE = SESSIONS_DIR / "runtime_settings.json"
 ELECTRIC_ADDRESSES_FILE = CONFIG_DIR / "electric_addresses.txt"
 
 _lock = threading.Lock()

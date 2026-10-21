@@ -31,3 +31,28 @@ jobs:
           cache-dependency-path: requirements.txt
       - run: pip install -r requirements.txt pytest
       - run: python -m pytest -q
+
+  docker-demo:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t mcp-monitor .
+      - name: Start the demo container
+        run: docker run -d --name demo -e DEMO_MODE=1 -p 4455:4455 mcp-monitor
+      - name: Health check and demo login
+        run: |
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:4455/api/health && break
+            sleep 2
+          done
+          curl -sf -c cookies -H 'Content-Type: application/json' \
+            -d '{"username":"admin","password":"demo-password"}' http://localhost:4455/api/auth/login
+          curl -sf -b cookies http://localhost:4455/api/status | python3 -c "
+          import json, sys
+          servers = json.load(sys.stdin)['servers']
+          up = [s['id'] for s in servers if s['connected']]
+          print('connected:', up)
+          assert len(up) == 3, servers
+          "
+      - if: failure()
+        run: docker logs demo

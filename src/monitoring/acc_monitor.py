@@ -17,6 +17,8 @@ from dataclasses import dataclass, field
 
 from loguru import logger
 
+from src.core.config import LOGS_DIR
+
 try:
     from dotenv import load_dotenv
     load_dotenv(Path(__file__).parent.parent.parent / ".env")
@@ -52,8 +54,8 @@ def _acc_pattern() -> str:
     from src.web.runtime_config import get_acc_pattern
     return get_acc_pattern()
 
-CACHE_FILE = Path(__file__).parent.parent.parent / "logs" / "acc_status.json"
-NOTIFIED_FILE = Path(__file__).parent.parent.parent / "logs" / "acc_notified.json"
+CACHE_FILE = LOGS_DIR / "acc_status.json"
+NOTIFIED_FILE = LOGS_DIR / "acc_notified.json"
 
 _cached_status: Optional[ACCStatus] = None
 _last_check_time: Optional[datetime] = None

@@ -29,6 +29,15 @@ edit them.
 
 ---
 
+## 0. Environment variables
+
+| Variable | Default | Meaning |
+|----------|---------|---------|
+| `MONITOR_SECRETS_FILE` | `./secrets.yaml` | Path of the secrets file |
+| `MONITOR_DATA_DIR` | project root | Where `sessions/` and `logs/` (users, sessions, runtime settings, audit log, caches) are written; `/data` in Docker |
+| `DEMO_MODE` | off | `1` runs against simulated servers, OLTs and outage feeds (`src/demo/`), with `demo/secrets.yaml` and data in `demo-data/` unless the two variables above say otherwise |
+| `ANTHROPIC_API_KEY` | — | Used when `secrets.yaml > claude.api_key` is empty |
+
 ## 1. `secrets.yaml`
 
 ### `servers[]`

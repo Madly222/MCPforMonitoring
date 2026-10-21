@@ -7,7 +7,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from loguru import logger
 
-from src.core.config import get_config
+from src.core.config import DEMO_MODE, get_config
 from src.core.ssh_manager import get_ssh_manager
 from src.web.auth import get_current_user, require_admin, require_superadmin, UserInfo
 from src.web.routes.models import (
@@ -18,7 +18,11 @@ from src.services.registry import SERVICE_HANDLERS
 router = APIRouter()
 
 
-_BRAND_DEFAULTS = {"name": "Network Operations", "sub": "AI Network Ops · MCP", "avatar": "NO"}
+_BRAND_DEFAULTS = {
+    "name": "Network Operations",
+    "sub": "Demo · simulated infrastructure" if DEMO_MODE else "AI Network Ops · MCP",
+    "avatar": "NO",
+}
 
 
 @router.get("/branding")

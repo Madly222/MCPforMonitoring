@@ -36,6 +36,16 @@ A self-hosted control plane that watches a fleet of Linux servers over SSH, dete
 
 All screenshots use made-up demo data. Addresses are from the documentation ranges 192.0.2.0/24 and 198.51.100.0/24.
 
+### Try it in a minute
+
+```bash
+docker compose up
+```
+
+Open http://localhost:4455 and sign in as `admin` / `demo-password` (`ops` is an admin, `viewer` is read-only). Demo mode runs the real application against simulated infrastructure: three Linux servers and one unreachable host, two GPON OLTs with 32 ONUs, and a planned power outage. Errors start appearing in the logs within a minute, so the Incidents card fills with fix plans; try `restart dhcp on dhcp-01` or `stop dns on dns-01` in the terminal. Nothing outside the container is contacted. With `ANTHROPIC_API_KEY` set, Claude also interprets free-form requests and diagnoses errors no pattern matches.
+
+Without Docker: `DEMO_MODE=1 python -m src.main`.
+
 ---
 
 ## Table of Contents
@@ -321,6 +331,8 @@ sudo apt update && sudo apt install -y openssh-client snmp mysql-client
 ---
 
 ## Quick start
+
+For a real deployment with Docker, put `secrets.yaml`, `.env` and `keys/` next to `docker-compose.yml` and run `docker compose --profile prod up -d monitor` (details in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)). Without Docker:
 
 ```bash
 # 1. Get the code

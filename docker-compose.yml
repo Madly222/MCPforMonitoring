@@ -1,0 +1,38 @@
+# Demo, with simulated servers and OLTs (nothing real is contacted):
+#   docker compose up
+#   open http://localhost:4455  (admin / demo-password; see demo/secrets.yaml)
+#
+# Real deployment, with your secrets.yaml, .env and SSH keys. The superadmin
+# console edits .env and the power-outage address list, so both are mounted
+# writable and must exist first (the container runs as uid 1000):
+#   touch .env && cp -n config/electric_addresses.example.txt config/electric_addresses.txt
+#   docker compose --profile prod up -d monitor
+
+services:
+  demo:
+    build: .
+    environment:
+      DEMO_MODE: "1"
+      # Optional: lets Claude interpret free-form requests and diagnose unknown errors
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    ports:
+      - "4455:4455"
+    volumes:
+      - demo-data:/data
+
+  monitor:
+    profiles: ["prod"]
+    build: .
+    restart: unless-stopped
+    ports:
+      - "4455:4455"
+    volumes:
+      - ./secrets.yaml:/app/secrets.yaml:ro
+      - ./.env:/app/.env
+      - ./keys:/app/keys:ro
+      - ./config/electric_addresses.txt:/app/config/electric_addresses.txt
+      - monitor-data:/data
+
+volumes:
+  demo-data:
+  monitor-data:

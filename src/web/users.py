@@ -16,13 +16,13 @@ from typing import Optional
 import bcrypt
 from loguru import logger
 
-from src.core.config import get_config, PROJECT_ROOT
+from src.core.config import get_config, SESSIONS_DIR
 
 VALID_ROLES = ("operator", "admin", "superadmin")
 
 MIN_PASSWORD_LENGTH = 10
 
-USERS_FILE = PROJECT_ROOT / "sessions" / "users.json"
+USERS_FILE = SESSIONS_DIR / "users.json"
 
 
 def _hash_password(password: str) -> str:

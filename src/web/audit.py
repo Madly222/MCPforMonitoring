@@ -13,9 +13,9 @@ from typing import Optional
 
 from loguru import logger
 
-from src.core.config import PROJECT_ROOT
+from src.core.config import LOGS_DIR
 
-AUDIT_FILE = PROJECT_ROOT / "logs" / "audit.jsonl"
+AUDIT_FILE = LOGS_DIR / "audit.jsonl"
 
 
 class AuditLogger:
