@@ -284,7 +284,7 @@ ServersMonitoringMCP/
 │   └── js/                     # app.js, api.js, admin.js, onu.js, login.js
 ├── scripts/                    # Test/util scripts + systemd unit/timer files
 │                               #   incl. manage_users.py, check_claude.py, check_electric.py,
-│                               #   test_resolver.py, test_schedule.py, test_outage_filters.py
+│                               #   check_resolver.py, check_schedule.py, check_outage_filters.py
 ├── tests/                      # Pytest suite (e.g. test_mac_port_sync.py)
 ├── secrets.example.yaml        # Template -> copy to secrets.yaml
 ├── .env.example                # Template -> copy to .env
@@ -571,28 +571,34 @@ Auto-remediation is gated by **`config/safe_actions.yaml`**, which classifies ac
 ## Tests
 
 ```bash
-pip install pytest
-python -m pytest tests -q
+pip install pytest ruff
+ruff check .
+python -m pytest -q
 ```
 
-The pytest suite lives in `tests/` (e.g. `tests/test_mac_port_sync.py`). The scripts below are manual checks, not part of the suite; several of them need real servers or API keys.
+The pytest suite lives in `tests/` and also runs the offline self-check scripts. CI (GitHub Actions) runs `ruff check .` and the suite on Python 3.10–3.12 for every push and pull request. Live checks against real servers are listed under [Manual check scripts](#manual-check-scripts).
 
 ---
 
 ## Development
 
-### Test scripts
+### Manual check scripts
+Live checks against real servers or API keys (not part of the pytest suite):
 ```bash
-python scripts/test_ssh.py <server-id>        # SSH connectivity
-python scripts/test_dhcp.py <server-id>       # DHCP handler
-python scripts/test_monitoring.py             # monitoring pipeline
-python scripts/test_claude.py                 # Claude API
-python scripts/check_claude.py                # Claude key/model health
-python scripts/check_electric.py              # power-outage checker
-python scripts/manage_users.py                # CLI user management
-python scripts/test_resolver.py               # command resolver
-python scripts/test_schedule.py               # in-app scheduler
-python scripts/test_outage_filters.py         # outage message filters
+python scripts/check_ssh.py <server-id>        # SSH connectivity
+python scripts/check_dhcp.py <server-id>       # DHCP handler
+python scripts/check_monitoring.py <server-id> # monitoring pipeline
+python scripts/check_claude.py                 # Claude key/model health
+python scripts/check_claude_commands.py        # Claude command interpretation
+python scripts/check_electric.py               # power-outage checker
+python scripts/manage_users.py                 # CLI user management
+```
+
+Offline self-checks (also run by pytest through `tests/test_offline_checks.py`):
+```bash
+python scripts/check_resolver.py               # command resolver
+python scripts/check_schedule.py               # in-app scheduler
+python scripts/check_outage_filters.py         # outage message filters
 ```
 
 ### Adding a new service handler

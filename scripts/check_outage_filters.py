@@ -4,7 +4,7 @@ Offline tests for outage notification filtering and de-duplication.
 No network: exercises the pure functions that decide when the ⚡/💧 indicator
 clears and when an email is considered "new". Run:
 
-    python scripts/test_outage_filters.py
+    python scripts/check_outage_filters.py
 """
 
 import sys

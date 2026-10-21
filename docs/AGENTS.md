@@ -166,7 +166,7 @@ the legacy path: Claude `interpret_command` → if confidence > 0.7 run it, else
 keyword fallback (`status`/`restart`/`logs`|`errors`/`health`). Managed-service
 lifecycle (dhcp/dns/radius restart/start/stop) still routes through the validated
 service handlers. `source` = `template`|`cache`|`claude`|`local`.
-Offline test: `python scripts/test_resolver.py` (no live server / key needed).
+Offline test: `python scripts/check_resolver.py` (no live server / key needed).
 
 ---
 

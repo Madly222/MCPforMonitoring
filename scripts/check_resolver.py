@@ -6,7 +6,7 @@ profile probe returns a systemd or a sysvinit host, and a fake Claude fallback.
 Verifies template rendering per init system, server inference by service,
 sudo on log/error reads, profile persistence, and fallback caching.
 
-Run:  python scripts/test_resolver.py
+Run:  python scripts/check_resolver.py
 """
 
 import asyncio

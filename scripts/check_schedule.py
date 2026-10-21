@@ -5,7 +5,7 @@ Covers runtime_config time validation/normalization and the scheduler's
 "due today" decision (runs at/after the configured time, once per day, with
 restart catch-up). No network. Run:
 
-    python scripts/test_schedule.py
+    python scripts/check_schedule.py
 """
 
 import sys

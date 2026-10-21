@@ -3,7 +3,7 @@
 DHCP Service Test Script.
 
 Tests DHCP service monitoring capabilities.
-Usage: python scripts/test_dhcp.py <server_id>
+Usage: python scripts/check_dhcp.py <server_id>
 """
 
 import asyncio
@@ -136,8 +136,8 @@ async def main():
     setup_logging()
 
     if len(sys.argv) < 2:
-        print("Usage: python scripts/test_dhcp.py <server_id>")
-        print("Example: python scripts/test_dhcp.py dhcp-primary")
+        print("Usage: python scripts/check_dhcp.py <server_id>")
+        print("Example: python scripts/check_dhcp.py dhcp-primary")
         sys.exit(1)
 
     server_id = sys.argv[1]

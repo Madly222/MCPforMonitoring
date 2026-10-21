@@ -3,7 +3,7 @@
 Monitoring Test Script.
 
 Tests log watching and error detection capabilities.
-Usage: python scripts/test_monitoring.py <server_id> [duration_seconds]
+Usage: python scripts/check_monitoring.py <server_id> [duration_seconds]
 """
 
 import asyncio
@@ -166,8 +166,8 @@ async def main():
     logger.info("=" * 60)
 
     if len(sys.argv) < 2:
-        print("Usage: python scripts/test_monitoring.py <server_id> [duration_seconds]")
-        print("Example: python scripts/test_monitoring.py dhcp-primary 60")
+        print("Usage: python scripts/check_monitoring.py <server_id> [duration_seconds]")
+        print("Example: python scripts/check_monitoring.py dhcp-primary 60")
         sys.exit(1)
 
     server_id = sys.argv[1]

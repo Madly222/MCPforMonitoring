@@ -3,7 +3,7 @@
 SSH Connection Test Script.
 
 Tests SSH connectivity to configured servers.
-Usage: python scripts/test_ssh.py [server_id]
+Usage: python scripts/check_ssh.py [server_id]
 """
 
 import asyncio
