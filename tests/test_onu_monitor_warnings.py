@@ -11,7 +11,7 @@ from loguru import logger
 import src.monitoring.onu_monitor as om
 from src.core.config import OLTConfig
 
-NO_CREDS = "не заданы ssh_username/ssh_password"
+NO_CREDS = "ssh_username/ssh_password not set"
 
 
 class _Config:

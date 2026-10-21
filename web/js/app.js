@@ -678,7 +678,7 @@ async function handleExecute() {
             text += '\n';
         }
         if (result.result) text += 'Result:\n' + result.result;
-        if (result.error) text += 'Error: ' + result.error;
+        if (result.error) text += (text ? '\n\n' : '') + 'Error: ' + result.error;
         output.textContent = text || 'Done';
         addToHistory(command, result.success);
         await loadServerStatus();

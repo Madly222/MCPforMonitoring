@@ -361,8 +361,8 @@ expect eof
         num_commands = len(scan_ports) * (3 if with_power else 1)
         total_timeout = timeout + 10 * num_commands
         logger.debug(
-            f"{host}: {num_commands} команд по портам {scan_ports}, "
-            f"лимит сессии {total_timeout}s"
+            f"{host}: {num_commands} commands for ports {scan_ports}, "
+            f"session limit {total_timeout}s"
         )
 
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=total_timeout)
@@ -430,8 +430,8 @@ expect eof
 
     except asyncio.TimeoutError:
         logger.warning(
-            f"SSH timeout for {host} — сессия не уложилась в лимит. "
-            f"Проверь, не выросло ли число портов с ONU"
+            f"SSH timeout for {host}: the session ran past its limit. "
+            f"Check whether the number of ports with ONUs has grown"
         )
         return {}, {}, {}
     except Exception as e:
@@ -549,8 +549,8 @@ class ONUMonitor:
                     logger.warning(f"SSH data retrieval failed for {olt.id}: {e}")
             else:
                 logger.warning(
-                    f"OLT {olt.id}: не заданы ssh_username/ssh_password — "
-                    f"MAC и мощность будут пустыми"
+                    f"OLT {olt.id}: ssh_username/ssh_password not set, "
+                    f"MAC and optical power will be empty"
                 )
 
             # If the session failed, fall back to SNMP status so that an SSH
@@ -558,8 +558,8 @@ class ONUMonitor:
             power_available = bool(rx_table)
             if not power_available:
                 logger.warning(
-                    f"OLT {olt.id}: оптика не получена, статус ONU определяется "
-                    f"по SNMP-регистрации (может расходиться с реальным сигналом)"
+                    f"OLT {olt.id}: no optical data, ONU status falls back "
+                    f"to SNMP registration (may differ from the real signal)"
                 )
 
             onu_config = self.config.get_onu_monitoring_config()

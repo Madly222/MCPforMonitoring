@@ -80,22 +80,22 @@ def _friendly_ssh_error(raw: str) -> str:
     while keeping the original text appended so it's still a real log line."""
     raw = (raw or "").strip()
     if not raw:
-        return "Не удалось подключиться (причина неизвестна)"
+        return "Could not connect (no reason given)"
     low = raw.lower()
     if "timed out" in low or "timeout" in low:
-        return f"Таймаут подключения — хост недоступен или порт фильтруется. {raw}"
+        return f"Connection timed out: host down or port filtered. {raw}"
     if "refused" in low:
-        return f"Соединение отклонено — SSH не слушает на этом порту. {raw}"
+        return f"Connection refused: nothing listens for SSH on this port. {raw}"
     if "no route to host" in low or "unreachable" in low:
-        return f"Хост недоступен — нет маршрута. {raw}"
+        return f"Host unreachable: no route. {raw}"
     if "permission denied" in low or "authentication" in low:
-        return f"Ошибка авторизации — проверь user/ключ/пароль. {raw}"
+        return f"Authentication failed: check the user, key or password. {raw}"
     if "key" in low and ("not found" in low or "no such" in low):
-        return f"SSH-ключ не найден. {raw}"
+        return f"SSH key not found. {raw}"
     if "name or service not known" in low or "getaddrinfo" in low:
-        return f"Не удаётся разрешить имя хоста. {raw}"
+        return f"Cannot resolve the host name. {raw}"
     if "disabled" in low:
-        return f"Сервер отключён в конфиге. {raw}"
+        return f"Server is disabled in the config. {raw}"
     return raw
 
 
