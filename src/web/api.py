@@ -108,29 +108,29 @@ async def build_server_status(server) -> dict:
         "services": [],
         "system_info": None,
     }
-    
+
     try:
         connected, reason = await ssh.probe_connection(server.id)
         server_status["connected"] = connected
         if not connected and reason:
             server_status["error"] = reason
-        
+
         if connected:
             system_info_task = ssh.get_system_info(server.id)
             service_tasks = [
                 get_service_status(server.id, svc_type)
                 for svc_type in server.services
             ]
-            
+
             results = await asyncio.gather(
                 system_info_task,
                 *service_tasks,
                 return_exceptions=True
             )
-            
+
             if not isinstance(results[0], Exception):
                 server_status["system_info"] = results[0]
-            
+
             for i, svc_result in enumerate(results[1:]):
                 if isinstance(svc_result, Exception):
                     server_status["services"].append({
@@ -142,40 +142,40 @@ async def build_server_status(server) -> dict:
                     })
                 else:
                     server_status["services"].append(svc_result)
-    
+
     except Exception as e:
         logger.error(f"Error getting status for {server.id}: {e}")
         server_status["error"] = str(e)
-    
+
     return server_status
 
 
 @router.get("/status")
 async def get_overall_status(user: UserInfo = Depends(get_current_user)):
     import asyncio
-    
+
     config = get_config()
     servers = config.get_enabled_servers()
-    
+
     server_statuses = await asyncio.gather(
         *[build_server_status(server) for server in servers],
         return_exceptions=True
     )
-    
+
     result_servers = []
-    for i, status in enumerate(server_statuses):
-        if isinstance(status, Exception):
+    for i, server_status in enumerate(server_statuses):
+        if isinstance(server_status, Exception):
             result_servers.append({
                 "id": servers[i].id,
                 "host": servers[i].host,
                 "enabled": servers[i].enabled,
                 "connected": False,
                 "services": [],
-                "error": str(status)
+                "error": str(server_status)
             })
         else:
-            result_servers.append(status)
-    
+            result_servers.append(server_status)
+
     return {
         "servers": result_servers,
         "timestamp": datetime.now().isoformat()
@@ -215,7 +215,7 @@ async def get_auto_check_setting(user: UserInfo = Depends(get_current_user)):
 async def list_servers(user: UserInfo = Depends(get_current_user)):
     config = get_config()
     secrets = config.load_secrets()
-    
+
     servers = []
     for server in secrets.servers:
         servers.append({
@@ -226,7 +226,7 @@ async def list_servers(user: UserInfo = Depends(get_current_user)):
             "services": server.services,
             "enabled": server.enabled
         })
-    
+
     return {"servers": servers}
 
 
@@ -236,18 +236,18 @@ async def get_server_details(
     user: UserInfo = Depends(get_current_user)
 ):
     import asyncio
-    
+
     config = get_config()
     server = config.get_server_by_id(server_id)
-    
+
     if not server:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Server not found: {server_id}"
         )
-    
+
     ssh = get_ssh_manager()
-    
+
     result = {
         "id": server.id,
         "host": server.host,
@@ -258,30 +258,30 @@ async def get_server_details(
         "services": [],
         "system_info": None
     }
-    
+
     if not server.enabled:
         return result
-    
+
     try:
         connected = await ssh.test_connection(server_id)
         result["connected"] = connected
-        
+
         if connected:
             system_info_task = ssh.get_system_info(server_id)
             service_tasks = [
                 get_service_status(server_id, svc_type)
                 for svc_type in server.services
             ]
-            
+
             results = await asyncio.gather(
                 system_info_task,
                 *service_tasks,
                 return_exceptions=True
             )
-            
+
             if not isinstance(results[0], Exception):
                 result["system_info"] = results[0]
-            
+
             for i, svc_result in enumerate(results[1:]):
                 if isinstance(svc_result, Exception):
                     result["services"].append({
@@ -293,28 +293,28 @@ async def get_server_details(
                     })
                 else:
                     result["services"].append(svc_result)
-    
+
     except Exception as e:
         logger.error(f"Error getting status for {server_id}: {e}")
         result["error"] = str(e)
-    
+
     return result
 
 
 async def get_service_status(server_id: str, service_type: str) -> dict:
     ssh = get_ssh_manager()
-    
+
     service_handlers = {
         "dhcp": DHCPService,
         "dns": DNSService,
         "radius": RADIUSService,
     }
-    
+
     handler_class = service_handlers.get(service_type)
-    
+
     if handler_class:
         handler = handler_class(ssh, server_id)
-        
+
         try:
             info = await handler.get_info()
             return {
@@ -356,52 +356,52 @@ async def perform_action(
 ):
     config = get_config()
     server = config.get_server_by_id(server_id)
-    
+
     if not server:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Server not found: {server_id}"
         )
-    
+
     if not server.enabled:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Server is disabled: {server_id}"
         )
-    
+
     ssh = get_ssh_manager()
-    
+
     service_handlers = {
         "dhcp": DHCPService,
         "dns": DNSService,
         "radius": RADIUSService,
     }
-    
+
     handler_class = service_handlers.get(request.service_type)
-    
+
     if not handler_class:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Unknown service type: {request.service_type}"
         )
-    
+
     handler = handler_class(ssh, server_id)
-    
+
     action_map = {
         "start": handler.start,
         "stop": handler.stop,
         "restart": handler.restart,
         "reload": handler.reload
     }
-    
+
     action_fn = action_map.get(request.action)
-    
+
     if not action_fn:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Unknown action: {request.action}"
         )
-    
+
     from src.web.audit import get_audit_logger
     client_ip = http_request.client.host if http_request.client else None
     target = f"{request.service_type}@{server_id}"
@@ -425,7 +425,7 @@ async def perform_action(
             message=f"Action {request.action} completed",
             output=result.output if result.success else result.stderr
         )
-    
+
     except Exception as e:
         logger.error(f"Action failed: {e}")
         get_audit_logger().log(
@@ -452,32 +452,32 @@ async def run_diagnostic(
 ):
     config = get_config()
     server = config.get_server_by_id(server_id)
-    
+
     if not server:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Server not found: {server_id}"
         )
-    
+
     ssh = get_ssh_manager()
-    
+
     service_handlers = {
         "dhcp": DHCPService,
         "dns": DNSService,
         "radius": RADIUSService,
     }
-    
+
     handler_class = service_handlers.get(service_type)
-    
+
     if not handler_class:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Unknown service type: {service_type}"
         )
-    
+
     handler = handler_class(ssh, server_id)
     result = await handler.run_diagnostic(diagnostic_name)
-    
+
     return {
         "name": result.name,
         "success": result.success,
@@ -522,7 +522,7 @@ async def check_acc_now(user: UserInfo = Depends(get_current_user)):
         return get_status_dict()
     except Exception as e:
         logger.error(f"ACC check error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ==============================================================================
@@ -553,7 +553,7 @@ async def check_electric_now(user: UserInfo = Depends(get_current_user)):
         return get_status_dict()
     except Exception as e:
         logger.error(f"Electric check error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ==============================================================================
@@ -563,15 +563,15 @@ async def check_electric_now(user: UserInfo = Depends(get_current_user)):
 async def get_onu_status(user: UserInfo = Depends(get_current_user)):
     """Get all ONU status from all OLTs."""
     from src.monitoring.onu_monitor import get_onu_monitor
-    
+
     monitor = get_onu_monitor()
     onus = monitor.get_cached_onus()
     stats = monitor.get_stats()
-    
+
     config = get_config()
     onu_config = config.get_onu_monitoring_config()
     thresholds = onu_config.thresholds if onu_config else None
-    
+
     return {
         "timestamp": datetime.now().isoformat(),
         "stats": stats,
@@ -608,7 +608,7 @@ async def get_olts(user: UserInfo = Depends(get_current_user)):
     """Get configured OLTs."""
     config = get_config()
     olts = config.get_enabled_olts()
-    
+
     return {
         "olts": [
             {
@@ -629,20 +629,20 @@ async def get_olt_onus(
 ):
     """Get ONU status for specific OLT."""
     from src.monitoring.onu_monitor import get_onu_monitor
-    
+
     config = get_config()
     olt = config.get_olt_by_id(olt_id)
-    
+
     if not olt:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"OLT not found: {olt_id}"
         )
-    
+
     monitor = get_onu_monitor()
     onus = monitor.get_cached_onus(olt_id)
     last_poll = monitor.get_last_poll_time(olt_id)
-    
+
     return {
         "olt_id": olt_id,
         "host": olt.host,
@@ -671,19 +671,19 @@ async def poll_olt(
 ):
     """Force poll specific OLT."""
     from src.monitoring.onu_monitor import get_onu_monitor
-    
+
     config = get_config()
     olt = config.get_olt_by_id(olt_id)
-    
+
     if not olt:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"OLT not found: {olt_id}"
         )
-    
+
     monitor = get_onu_monitor()
     onus = await monitor.poll_olt(olt)
-    
+
     return {
         "success": True,
         "message": f"Polled {len(onus)} ONUs from {olt_id}",
@@ -702,7 +702,7 @@ async def execute_command(
     user: UserInfo = Depends(require_admin)
 ):
     command = request.command.strip()
-    
+
     logger.info(f"User {user.username} executing command: {command}")
 
     from src.web.audit import get_audit_logger
@@ -713,10 +713,10 @@ async def execute_command(
         detail=command,
         ip=http_request.client.host if http_request.client else None,
     )
-    
+
     config = get_config()
     ssh = get_ssh_manager()
-    
+
     servers = config.get_enabled_servers()
     server_ids = [s.id for s in servers]
 
@@ -766,27 +766,27 @@ async def execute_command(
 
     try:
         from src.core.claude_client import get_claude_client
-        
+
         claude = get_claude_client()
         interpretation = await claude.interpret_command(command, server_ids)
-        
+
         if interpretation.confidence > 0.7:
             result = await execute_interpreted_command(interpretation, ssh, config)
             result.source = "claude"
             return result
-        
+
     except Exception as e:
         logger.warning(f"Claude interpretation failed: {e}, falling back to basic parsing")
-    
+
     command_lower = command.lower()
-    
+
     if "status" in command_lower:
         target_server = None
         for s in servers:
             if s.id.lower() in command_lower:
                 target_server = s.id
                 break
-        
+
         if target_server:
             try:
                 info = await ssh.get_system_info(target_server)
@@ -813,17 +813,17 @@ async def execute_command(
                         results.append(f"{server.id}: disconnected")
                 except Exception as e:
                     results.append(f"{server.id}: error - {e}")
-            
+
             return CommandResponse(
                 success=True,
                 interpretation="Checking status of all servers",
                 result="\n".join(results)
             )
-    
+
     elif "restart" in command_lower:
         service_type = None
         target_server = None
-        
+
         service_keywords = {
             "dhcp": "dhcp",
             "dns": "dns",
@@ -834,36 +834,36 @@ async def execute_command(
             "web": "apache",
             "spam": "spamfilter"
         }
-        
+
         for keyword, svc_type in service_keywords.items():
             if keyword in command_lower:
                 service_type = svc_type
                 break
-        
+
         for s in servers:
             if s.id.lower() in command_lower:
                 target_server = s.id
                 break
-        
+
         if not target_server and service_type:
             for s in servers:
                 if service_type in s.services:
                     target_server = s.id
                     break
-        
+
         if target_server and service_type:
             service_handlers = {
                 "dhcp": DHCPService,
                 "dns": DNSService,
                 "radius": RADIUSService,
             }
-            
+
             handler_class = service_handlers.get(service_type)
-            
+
             if handler_class:
                 handler = handler_class(ssh, target_server)
                 result = await handler.restart()
-                
+
                 return CommandResponse(
                     success=result.success,
                     interpretation=f"Restarting {service_type} on {target_server}",
@@ -877,7 +877,7 @@ async def execute_command(
                     success=result.success,
                     interpretation=f"Restarting {service_type} on {target_server}",
                     commands_executed=[{"command": f"restart {service_type}", "output": result.output}],
-                    result=f"Service restart attempted",
+                    result="Service restart attempted",
                     error=result.stderr if not result.success else None
                 )
         else:
@@ -886,18 +886,18 @@ async def execute_command(
                 interpretation="Restart command",
                 error="Could not determine service or server. Try: 'restart dhcp on dhcp-primary'"
             )
-    
+
     elif "logs" in command_lower or "errors" in command_lower:
         from src.monitoring.error_detector import get_error_detector
-        
+
         detector = get_error_detector()
         errors = detector.get_recent_errors(60)
-        
+
         if errors:
             error_lines = []
             for e in errors[:10]:
                 error_lines.append(f"[{e.event.server_id}] {e.event.line[:80]}")
-            
+
             return CommandResponse(
                 success=True,
                 interpretation="Showing recent errors",
@@ -909,20 +909,20 @@ async def execute_command(
                 interpretation="Showing recent errors",
                 result="No errors detected in the last hour"
             )
-    
+
     elif "health" in command_lower or "check" in command_lower:
         from src.monitoring.health_checker import get_health_checker
-        
+
         checker = get_health_checker()
         reports = checker.get_all_reports()
-        
+
         if reports:
             lines = []
             for r in reports:
                 lines.append(f"{r.server_id}: {r.check_result.value}")
                 for s in r.services:
                     lines.append(f"  - {s.get('name', 'unknown')}: {s.get('health', 'unknown')}")
-            
+
             return CommandResponse(
                 success=True,
                 interpretation="Health check status",
@@ -934,7 +934,7 @@ async def execute_command(
                 interpretation="Health check status",
                 result="No health reports available yet"
             )
-    
+
     else:
         return CommandResponse(
             success=False,
@@ -951,7 +951,7 @@ async def execute_interpreted_command(
     intent = interpretation.intent
     server_id = interpretation.server_id
     service_type = interpretation.service_type
-    
+
     if intent == "check_status":
         if server_id:
             try:
@@ -974,32 +974,32 @@ async def execute_interpreted_command(
                 try:
                     info = await ssh.get_system_info(server.id)
                     results.append(f"{server.id}: load={info.get('load', 'N/A')}")
-                except:
-                    results.append(f"{server.id}: error")
-            
+                except Exception as e:
+                    results.append(f"{server.id}: error ({e})")
+
             return CommandResponse(
                 success=True,
                 interpretation="Checking status of all servers",
                 result="\n".join(results)
             )
-    
+
     elif intent == "restart_service":
         if not server_id:
             for s in config.get_enabled_servers():
                 if service_type in s.services:
                     server_id = s.id
                     break
-        
+
         if server_id and service_type:
             service_handlers = {"dhcp": DHCPService, "dns": DNSService, "radius": RADIUSService}
             handler_class = service_handlers.get(service_type)
-            
+
             if handler_class:
                 handler = handler_class(ssh, server_id)
                 result = await handler.restart()
             else:
                 result = await ssh.restart_service(server_id, service_type)
-            
+
             return CommandResponse(
                 success=result.success,
                 interpretation=f"Restarting {service_type} on {server_id}",
@@ -1013,31 +1013,31 @@ async def execute_interpreted_command(
                 interpretation="Restart service",
                 error="Could not determine server or service"
             )
-    
+
     elif intent == "get_logs":
         from src.monitoring.error_detector import get_error_detector
-        
+
         if server_id:
             service_handlers = {"dhcp": DHCPService, "dns": DNSService, "radius": RADIUSService}
-            
+
             server = config.get_server_by_id(server_id)
             if server and server.services:
                 svc_type = service_type or server.services[0]
                 handler_class = service_handlers.get(svc_type)
-                
+
                 if handler_class:
                     handler = handler_class(ssh, server_id)
                     logs = await handler.get_recent_logs(30)
-                    
+
                     return CommandResponse(
                         success=True,
                         interpretation=f"Recent logs from {server_id}",
                         result=logs
                     )
-        
+
         detector = get_error_detector()
         errors = detector.get_recent_errors(60)
-        
+
         if errors:
             lines = [f"[{e.event.server_id}] {e.event.line[:100]}" for e in errors[:10]]
             return CommandResponse(
@@ -1051,7 +1051,7 @@ async def execute_interpreted_command(
                 interpretation="Getting recent logs/errors",
                 result="No recent errors detected. All servers healthy."
             )
-    
+
     elif intent == "run_diagnostic":
         if not server_id:
             for s in config.get_enabled_servers():
@@ -1062,35 +1062,35 @@ async def execute_interpreted_command(
                 servers = config.get_enabled_servers()
                 if servers:
                     server_id = servers[0].id
-        
+
         if server_id:
             server = config.get_server_by_id(server_id)
             service_handlers = {"dhcp": DHCPService, "dns": DNSService, "radius": RADIUSService}
-            
+
             svc_type = service_type
             if not svc_type and server and server.services:
                 svc_type = server.services[0]
-            
+
             results = []
-            
+
             if svc_type:
                 handler_class = service_handlers.get(svc_type)
                 if handler_class:
                     handler = handler_class(ssh, server_id)
-                    
+
                     health_checks = await handler.check_health()
                     results.append(f"=== {svc_type.upper()} Health Checks on {server_id} ===")
                     for check in health_checks:
                         status = "PASS" if check.passed else "FAIL"
                         results.append(f"[{status}] {check.name}: {check.message}")
-                    
+
                     try:
                         extra = await handler.get_extra_info()
-                        results.append(f"\n=== Additional Info ===")
+                        results.append("\n=== Additional Info ===")
                         for key, value in extra.items():
                             results.append(f"{key}: {value}")
-                    except:
-                        pass
+                    except Exception as e:
+                        logger.debug(f"get_extra_info failed: {e}")
                 else:
                     status = await ssh.check_service_status(server_id, svc_type)
                     results.append(f"Service: {svc_type}")
@@ -1103,9 +1103,9 @@ async def execute_interpreted_command(
                 results.append(f"Load: {system_info.get('load', 'N/A')}")
                 results.append(f"Memory: {system_info.get('memory', 'N/A')}")
                 results.append(f"Disk: {system_info.get('disk', 'N/A')}")
-                
+
                 if server and server.services:
-                    results.append(f"\n=== Services ===")
+                    results.append("\n=== Services ===")
                     for svc in server.services:
                         handler_class = service_handlers.get(svc)
                         if handler_class:
@@ -1118,7 +1118,7 @@ async def execute_interpreted_command(
                         else:
                             status = await ssh.check_service_status(server_id, svc)
                             results.append(f"{svc}: {'running' if status.running else 'stopped'}")
-            
+
             return CommandResponse(
                 success=True,
                 interpretation=f"Running diagnostics on {server_id}" + (f" ({svc_type})" if svc_type else ""),
@@ -1130,35 +1130,35 @@ async def execute_interpreted_command(
                 interpretation="Run diagnostic",
                 error="No servers available"
             )
-    
+
     elif intent == "show_config":
         if not server_id:
             for s in config.get_enabled_servers():
                 if service_type and service_type in s.services:
                     server_id = s.id
                     break
-        
+
         if server_id and service_type:
             service_handlers = {"dhcp": DHCPService, "dns": DNSService, "radius": RADIUSService}
             handler_class = service_handlers.get(service_type)
-            
+
             if handler_class:
                 handler = handler_class(ssh, server_id)
                 result = await handler.run_diagnostic("get_config")
-                
+
                 return CommandResponse(
                     success=result.success,
                     interpretation=f"Configuration of {service_type} on {server_id}",
                     result=result.output[:2000] if result.output else "No config found",
                     error=result.error
                 )
-        
+
         return CommandResponse(
             success=False,
             interpretation="Show config",
             error="Could not determine server or service"
         )
-    
+
     else:
         return CommandResponse(
             success=False,
@@ -1176,11 +1176,11 @@ async def get_monitoring_status(user: UserInfo = Depends(get_current_user)):
     from src.monitoring.log_watcher import get_log_watcher
     from src.monitoring.health_checker import get_health_checker
     from src.monitoring.error_detector import get_error_detector
-    
+
     watcher = get_log_watcher()
     checker = get_health_checker()
     detector = get_error_detector()
-    
+
     result = {
         "log_watcher": {
             "running": watcher.is_running,
@@ -1193,7 +1193,7 @@ async def get_monitoring_status(user: UserInfo = Depends(get_current_user)):
             "stats": detector.get_error_stats()
         }
     }
-    
+
     try:
         from src.monitoring.onu_monitor import get_onu_monitor
         onu_monitor = get_onu_monitor()
@@ -1201,9 +1201,9 @@ async def get_monitoring_status(user: UserInfo = Depends(get_current_user)):
             "running": onu_monitor.is_running,
             "stats": onu_monitor.get_stats()
         }
-    except:
-        pass
-    
+    except Exception as e:
+        logger.debug(f"ONU monitor status unavailable: {e}")
+
     return result
 
 
@@ -1213,10 +1213,10 @@ async def get_recent_errors(
     user: UserInfo = Depends(get_current_user)
 ):
     from src.monitoring.error_detector import get_error_detector
-    
+
     detector = get_error_detector()
     errors = detector.get_recent_errors(minutes)
-    
+
     return {
         "count": len(errors),
         "errors": [
@@ -1245,10 +1245,10 @@ async def get_recent_errors(
 @router.get("/monitoring/health")
 async def get_health_reports(user: UserInfo = Depends(get_current_user)):
     from src.monitoring.health_checker import get_health_checker
-    
+
     checker = get_health_checker()
     reports = checker.get_all_reports()
-    
+
     return {
         "count": len(reports),
         "reports": [
@@ -1274,27 +1274,27 @@ async def get_server_full_info(
 ):
     config = get_config()
     server = config.get_server_by_id(server_id)
-    
+
     if not server:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Server not found: {server_id}"
         )
-    
+
     ssh = get_ssh_manager()
-    
+
     connected = await ssh.test_connection(server_id)
     if not connected:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"Cannot connect to server: {server_id}"
         )
-    
+
     from src.core.system_info import SystemInfoCollector, report_to_dict
-    
+
     collector = SystemInfoCollector(ssh)
     report = await collector.collect(server_id)
-    
+
     return report_to_dict(report)
 
 
@@ -1336,7 +1336,7 @@ async def restart_service(http_request: Request, user: UserInfo = Depends(get_cu
             action="app_restart", username=user.username, role=user.role,
             target="mcp-monitor", success=False, ip=client_ip,
         )
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ==============================================================================

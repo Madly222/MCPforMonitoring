@@ -3,8 +3,8 @@ Orchestrator: connects SSH data from Cisco switches with NetBox API.
 Implements the full automation workflow.
 """
 
-from dataclasses import dataclass, field, asdict
-from ssh_connector import CiscoSSH, PortInfo, CDPNeighbor
+from dataclasses import dataclass, field
+from ssh_connector import CiscoSSH
 from netbox_client import NetBoxClient
 
 
@@ -55,7 +55,7 @@ class Orchestrator:
         nb_device = self.nb.find_device_by_ip(host)
         if not nb_device:
             result.errors.append(f"Device {host} not found in NetBox")
-            log(f"⚠️  Device not found in NetBox.")
+            log("⚠️  Device not found in NetBox.")
         else:
             result.device_id = nb_device["id"]
             result.device_name = nb_device["name"]
@@ -176,7 +176,7 @@ class Orchestrator:
                         untagged_vlan_id=vlan200["id"],
                     )
                     if create_res["success"]:
-                        log(f"  ✅ Created Vlan200 interface")
+                        log("  ✅ Created Vlan200 interface")
                         vlan_iface = {"id": create_res["interface_id"]}
                     else:
                         log(f"  ❌ Failed to create Vlan200: {create_res['error']}")
@@ -239,7 +239,7 @@ class Orchestrator:
                     "result": res,
                 })
                 if res["success"]:
-                    log(f"  ✅ Interface updated")
+                    log("  ✅ Interface updated")
                 else:
                     log(f"  ❌ Update failed: {res['error']}")
 
@@ -267,7 +267,7 @@ class Orchestrator:
                     "result": cable_res,
                 })
                 if cable_res["success"]:
-                    log(f"  ✅ Cable created (CAT6)")
+                    log("  ✅ Cable created (CAT6)")
                 else:
                     log(f"  ❌ Cable failed: {cable_res['error']}")
             elif action.cdp_neighbor and not action.netbox_neighbor_interface_id:

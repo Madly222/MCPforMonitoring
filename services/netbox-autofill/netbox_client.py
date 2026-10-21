@@ -54,7 +54,7 @@ class NetBoxClient:
 
     def find_device_by_name(self, name: str) -> dict | None:
         """Find device by hostname with fuzzy matching.
-        
+
         CDP gives hostnames like CIS-NX3K-SW36-N.TST but NetBox may have
         CIS-NX3K-SW36-ECB. We extract the core identifier (e.g. SW36)
         and model prefix (e.g. NX3K) to find the right device.
@@ -71,12 +71,12 @@ class NetBoxClient:
         sw_match = re.search(r'(SW\d+)', name, re.IGNORECASE)
         if sw_match:
             sw_num = sw_match.group(1)
-            
+
             # Also extract model prefix like NX3K, 4948, 2950, 3750
             model_match = re.search(r'(NX\d+K|[A-Z]*\d{4})', name, re.IGNORECASE)
-            
+
             devices = list(self.nb.dcim.devices.filter(name__ic=sw_num))
-            
+
             if len(devices) == 1:
                 return self._device_to_dict(devices[0])
             elif len(devices) > 1 and model_match:
@@ -192,7 +192,7 @@ class NetBoxClient:
                     f"FastEthernet{num}", f"FastEthernet0/{num}",
                     f"Fa0/{num}",
                 ])
-        
+
         # GigabitEthernet without slash — Gi1 -> [Gi]1/1
         if re.match(r'^(Gi|GigabitEthernet)(\d+)$', name):
             num_match = re.search(r'(\d+)$', name)
@@ -327,7 +327,7 @@ class NetBoxClient:
                 if cable:
                     cable.delete()
                     return True
-        except:
+        except Exception:  # NetBox API errors: treat as "not found"
             pass
         return False
 
@@ -361,7 +361,7 @@ class NetBoxClient:
             for ip in ips:
                 if str(ip.address).split('/')[0] == address.split('/')[0]:
                     return True
-        except:
+        except Exception:  # NetBox API errors: treat as "not found"
             pass
         return False
 
@@ -444,7 +444,7 @@ class NetBoxClient:
             if ips:
                 return {"id": ips[0].id, "address": str(ips[0].address)}
             return None
-        except:
+        except Exception:  # NetBox API errors: treat as "not found"
             return None
 
     def find_device_by_name_exact(self, name: str) -> dict | None:
@@ -454,7 +454,7 @@ class NetBoxClient:
             if device:
                 return self._device_to_dict(device)
             return None
-        except:
+        except Exception:  # NetBox API errors: treat as "not found"
             return None
 
     def create_interface(self, device_id: int, name: str, description: str = "", mtu: int = None) -> dict:
@@ -471,7 +471,7 @@ class NetBoxClient:
                 iface_type = "virtual"
             elif "loopback" in name_lower:
                 iface_type = "virtual"
-            
+
             data = {
                 "device": device_id,
                 "name": name,
@@ -481,7 +481,7 @@ class NetBoxClient:
                 data["description"] = description
             if mtu:
                 data["mtu"] = mtu
-            
+
             iface = self.nb.dcim.interfaces.create(data)
             return {"success": True, "interface_id": iface.id}
         except Exception as e:

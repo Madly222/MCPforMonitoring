@@ -5,7 +5,6 @@ ACC.md Water Disconnection Monitor Module
 import re
 import os
 import json
-import asyncio
 import aiohttp
 import smtplib
 from email.mime.text import MIMEText
@@ -61,17 +60,17 @@ _last_check_time: Optional[datetime] = None
 
 
 def send_email_notification(matches: list) -> bool:
-    
+
     EMAIL_CONFIG = _email_config()
     if not EMAIL_CONFIG["enabled"]:
         logger.debug("ACC email notifications disabled")
         return False
-    
+
     if not matches:
         return False
-    
+
     logger.info(f"ACC: Sending email notification to {EMAIL_CONFIG['to']}")
-    
+
     try:
         msg = MIMEMultipart()
         msg['From'] = EMAIL_CONFIG["from"]
@@ -80,7 +79,7 @@ def send_email_notification(matches: list) -> bool:
         msg['Date'] = formatdate(localtime=True)
         msg['Message-ID'] = make_msgid(domain=_domain)
         msg['Subject'] = f"⚠️ ACC.md - Возможно отключение воды! ({datetime.now().strftime('%d.%m.%Y')})"
-        
+
         body = f"""⚠️ ВНИМАНИЕ! Обнаружено отключение воды!
 
 Дата проверки: {datetime.now().strftime('%d.%m.%Y %H:%M')}
@@ -93,7 +92,7 @@ def send_email_notification(matches: list) -> bool:
 """
         for match in matches:
             body += f"{match}\n\n"
-        
+
         body += f"""
 {'='*50}
 Проверьте сайт для подробностей:
@@ -102,9 +101,9 @@ https://www.acc.md/disconnections
 --
 MCP Server Monitor
 """
-        
+
         msg.attach(MIMEText(body, 'plain', 'utf-8'))
-        
+
         server = smtplib.SMTP(EMAIL_CONFIG["smtp_server"], EMAIL_CONFIG["smtp_port"], timeout=30)
         if EMAIL_CONFIG.get("smtp_tls"):
             server.starttls()
@@ -112,10 +111,10 @@ MCP Server Monitor
             server.login(EMAIL_CONFIG["smtp_user"], EMAIL_CONFIG.get("smtp_password", ""))
         server.sendmail(EMAIL_CONFIG["from"], EMAIL_CONFIG["to"], msg.as_string())
         server.quit()
-        
+
         logger.info("ACC: Email sent successfully!")
         return True
-        
+
     except Exception as e:
         logger.error(f"ACC: Email error: {e}")
         return False
@@ -237,57 +236,57 @@ def decode_html_entities(text: str) -> str:
 def parse_notifications(html: str, regex) -> list:
     """Parse tab=1 notifications (text format with planned works)."""
     matches = []
-    
+
     time_match = re.search(
         r'intervalul[^<]*<em><strong>([^<]+)</strong></em>.*?următoarele străzi.*?</p>\s*<p[^>]*><span[^>]*><strong><em>([^<]+)</em></strong>',
-        html, 
+        html,
         re.DOTALL | re.IGNORECASE
     )
-    
+
     if time_match:
         time_date = decode_html_entities(time_match.group(1).strip())
         streets = decode_html_entities(time_match.group(2).strip())
-        
+
         if regex.search(streets):
             match_str = f"[Уведомление] ⚠️ Плановое отключение!\n   📅 {time_date}\n   📍 Улицы: {streets}"
             matches.append(match_str)
-    
+
     return matches
 
 
 def parse_table_rows(html: str, regex) -> list:
     """Parse tab=2 HTML table and find matching addresses."""
     matches = []
-    
+
     current_sector = ""
-    
+
     rows = re.findall(r'<tr[^>]*>(.*?)</tr>', html, re.DOTALL | re.IGNORECASE)
-    
+
     for row in rows:
         sector_match = re.search(r"<td colspan=['\"]?\d+['\"]?>([^<]+)</td>", row, re.IGNORECASE)
         if 'sector_title' in row and sector_match:
             current_sector = decode_html_entities(sector_match.group(1).strip())
             continue
-        
+
         tds = re.findall(r'<td[^>]*>(.*?)</td>', row, re.DOTALL | re.IGNORECASE)
         if len(tds) < 4:
             continue
-        
+
         def clean_td(td):
             text = re.sub(r'<[^>]+>', '', td)
             text = decode_html_entities(text)
             text = re.sub(r'\s+', ' ', text).strip()
             return text
-        
+
         tds_clean = [clean_td(td) for td in tds]
         full_row_text = ' '.join(tds_clean)
-        
+
         if regex.search(full_row_text):
             status = tds_clean[0] if tds_clean[0] else ""
             street = tds_clean[2] if len(tds_clean) > 2 else ""
             number = tds_clean[3] if len(tds_clean) > 3 else ""
             problem = tds_clean[4] if len(tds_clean) > 4 else ""
-            
+
             dates = re.findall(r'\d{2}\.\d{2}\.\d{4}(?:\s+\d{2}:\d{2})?', full_row_text)
             date_info = ""
             if dates:
@@ -295,7 +294,7 @@ def parse_table_rows(html: str, regex) -> list:
                     date_info = f"Откл: {dates[0]}, Восст: {dates[1]}"
                 else:
                     date_info = f"Дата: {dates[0]}"
-            
+
             match_str = f"[Работы] 📍 {current_sector}: {street} {number}"
             if status:
                 match_str += f" [{status}]"
@@ -303,24 +302,24 @@ def parse_table_rows(html: str, regex) -> list:
                 match_str += f"\n   Причина: {problem}"
             if date_info:
                 match_str += f"\n   {date_info}"
-            
+
             matches.append(match_str)
-    
+
     return matches
 
 
 async def check_acc_status(force: bool = False) -> ACCStatus:
     global _cached_status, _last_check_time
-    
+
     if not force and _cached_status and _last_check_time:
         elapsed = (datetime.now() - _last_check_time).total_seconds()
         if elapsed < ACC_CONFIG['check_interval']:
             _cached_status.matches = filter_current_matches(_cached_status.matches)
             _cached_status.ok = len(_cached_status.matches) == 0
             return _cached_status
-    
+
     logger.info(f"ACC: checking for '{_acc_pattern()}'...")
-    
+
     today = datetime.now().strftime("%Y-%m-%d")
     pattern = _acc_pattern()
 
@@ -337,19 +336,19 @@ async def check_acc_status(force: bool = False) -> ACCStatus:
         return status
 
     all_matches = []
-    
+
     # Tab 1 = Planned notifications
     content1 = await fetch_acc_page(today, tab=1)
     if content1:
         matches1 = parse_notifications(content1, regex)
         all_matches.extend(matches1)
-    
+
     # Tab 2 = Current works
     content2 = await fetch_acc_page(today, tab=2)
     if content2:
         matches2 = parse_table_rows(content2, regex)
         all_matches.extend(matches2)
-    
+
     all_matches = filter_current_matches(all_matches)
 
     # Send email for disconnections we haven't emailed about yet (by content,
@@ -359,16 +358,16 @@ async def check_acc_status(force: bool = False) -> ACCStatus:
         new_matches = [m for m in all_matches if _match_signature(m) not in notified]
         if new_matches and send_email_notification(new_matches):
             mark_notified(new_matches)
-    
+
     status = ACCStatus(
         ok=len(all_matches) == 0,
         last_check=datetime.now(),
         matches=all_matches,
     )
-    
+
     _cached_status = status
     _last_check_time = datetime.now()
-    
+
     try:
         CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
         with open(CACHE_FILE, 'w') as f:
@@ -380,33 +379,33 @@ async def check_acc_status(force: bool = False) -> ACCStatus:
             }, f)
     except Exception as e:
         logger.debug(f"ACC: failed to save cache: {e}")
-    
+
     if all_matches:
         logger.warning(f"ACC: FOUND {len(all_matches)} matches!")
     else:
         logger.info("ACC: no disconnections found")
-    
+
     return status
 
 
 def load_cached_status() -> Optional[ACCStatus]:
     global _cached_status, _last_check_time
-    
+
     if _cached_status:
         _cached_status.matches = filter_current_matches(_cached_status.matches)
         _cached_status.ok = len(_cached_status.matches) == 0
         return _cached_status
-    
+
     try:
         if CACHE_FILE.exists():
             with open(CACHE_FILE, 'r') as f:
                 data = json.load(f)
-                
+
                 cached_date = data.get('date_checked')
                 today = datetime.now().strftime("%Y-%m-%d")
                 if cached_date != today:
                     return None
-                
+
                 matches = filter_current_matches(data.get('matches', []))
                 _cached_status = ACCStatus(
                     ok=len(matches) == 0,

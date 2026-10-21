@@ -96,59 +96,59 @@ ZTE_OFFLINE_REASONS = {
 def decode_port_index(port_index: int, onu_id: str) -> str:
     """
     Decode ZTE port index to human-readable format.
-    
+
     268501248 = 0x10010100 -> port 1
-    268501760 = 0x10010300 -> port 3  
+    268501760 = 0x10010300 -> port 3
     268502016 = 0x10010400 -> port 4
-    
+
     Returns format: "1/1/3:5" (slot/frame/port:onu)
     """
     try:
         # ZTE format: the port number is in bits 8-15
         port = (port_index >> 8) & 0xFF
-        
+
         return f"1/1/{port}:{onu_id}"
-        
-    except:
+
+    except (TypeError, ValueError):
         return f"?:{onu_id}"
 
 
 def clean_description(desc: str) -> str:
     if not desc:
         return ""
-    
+
     if desc.startswith("$$$$"):
         desc = desc[4:]
-    
+
     desc = desc.strip('"').strip()
-    
+
     # If it's just "ONU-X:Y", return empty (not useful)
     if desc.startswith("ONU-") and ":" in desc:
         return ""
-    
+
     return desc
 
 
 def parse_onu_serial_number(hex_string: str) -> str:
     """
     Parse ONU Serial Number from Hex-STRING.
-    
+
     Input: "5A 54 45 47 C9 8D 8E 1A" or "Hex-STRING: 5A 54 45 47 C9 8D 8E 1A"
     Output: "ZTEGC98D8E1A"
-    
+
     First 4 bytes are vendor ID (ASCII), remaining 4 bytes are serial (hex).
     """
     if not hex_string:
         return ""
-    
+
     if "Hex-STRING:" in hex_string:
         hex_string = hex_string.split("Hex-STRING:")[-1].strip()
-    
+
     hex_bytes = hex_string.strip().split()
-    
+
     if len(hex_bytes) < 4:
         return hex_string  # Return as-is if format unknown
-    
+
     try:
         # First 4 bytes: vendor ID as ASCII (e.g., "ZTEG")
         vendor = ""
@@ -158,12 +158,12 @@ def parse_onu_serial_number(hex_string: str) -> str:
                 vendor += chr(byte_val)
             else:
                 vendor += hex_bytes[i]
-        
+
         # Remaining bytes: serial number as hex (uppercase, no separators)
         serial = "".join(hex_bytes[4:]).upper()
-        
+
         return vendor + serial
-        
+
     except (ValueError, IndexError):
         return "".join(hex_bytes).upper()
 
@@ -171,21 +171,21 @@ def parse_onu_serial_number(hex_string: str) -> str:
 def format_mac_address(mac_str: str) -> str:
     """
     Format MAC address from raw string to standard format.
-    
+
     Input: "284294001088" or "28:42:94:00:10:88"
     Output: "28:42:94:00:10:88"
     """
     if not mac_str:
         return ""
-    
+
     mac_str = mac_str.strip().strip('"')
-    
+
     if ":" in mac_str:
         return mac_str.upper()
-    
+
     if len(mac_str) == 12 and mac_str.isalnum():
         return ":".join(mac_str[i:i+2] for i in range(0, 12, 2)).upper()
-    
+
     return mac_str
 
 
@@ -200,52 +200,52 @@ async def snmpwalk_cli(host: str, community: str, oid: str, timeout: int = 30) -
         "-t", str(timeout),
         host, oid
     ]
-    
+
     try:
         proc = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE
         )
-        
+
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout + 5)
-        
+
         if proc.returncode != 0:
             logger.debug(f"snmpwalk error: {stderr.decode()}")
             return {}
-        
+
         results = {}
         base_parts = oid.split(".")
-        
+
         for line in stdout.decode().strip().split("\n"):
             if not line or "=" not in line:
                 continue
-            
+
             try:
                 # Format: iso.3.6.1.4.1.3902...268502016.1 = STRING: "ONU-4:1"
                 oid_part, value_part = line.split(" = ", 1)
-                
+
                 oid_nums = oid_part.replace("iso", "1").split(".")
-                
+
                 if len(oid_nums) > len(base_parts):
                     index = ".".join(oid_nums[len(base_parts):])
                 else:
                     continue
-                
+
                 if ": " in value_part:
                     value_type, value = value_part.split(": ", 1)
                     value = value.strip('"')
                 else:
                     value = value_part.strip('"')
-                
+
                 results[index] = value
-                
+
             except Exception as e:
                 logger.debug(f"Parse error for line '{line}': {e}")
                 continue
-        
+
         return results
-        
+
     except asyncio.TimeoutError:
         logger.error(f"snmpwalk timeout for {host} OID {oid}")
         return {}
@@ -285,7 +285,7 @@ async def ssh_get_olt_data(
     mac_table: dict[str, str] = {}
     rx_table: dict[str, float] = {}
     tx_table: dict[str, float] = {}
-    
+
     expect_script = f'''
 set timeout {timeout}
 spawn ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o KexAlgorithms=+diffie-hellman-group1-sha1 -o HostKeyAlgorithms=+ssh-dss -o Ciphers=+aes128-cbc -p {port} {username}@{host}
@@ -309,7 +309,7 @@ expect {{
 
 # Get MAC for ports 1-8
 '''
-    
+
     scan_ports = sorted(ports) if ports else list(range(1, 9))
 
     for gpon_port in scan_ports:
@@ -344,19 +344,19 @@ expect {{
     timeout {{ }}
 }}
 '''
-    
+
     expect_script += '''
 send "exit\\r"
 expect eof
 '''
-    
+
     try:
         proc = await asyncio.create_subprocess_exec(
             "expect", "-c", expect_script,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE
         )
-        
+
         # Commands per session: one per port for MACs + two per port for optics.
         num_commands = len(scan_ports) * (3 if with_power else 1)
         total_timeout = timeout + 10 * num_commands
@@ -366,34 +366,34 @@ expect eof
         )
 
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=total_timeout)
-        
+
         if proc.returncode != 0:
             logger.debug(f"SSH expect failed: {stderr.decode()}")
             return {}, {}, {}
-        
+
         output = stdout.decode()
-        
+
         # Parse output - look for MAC entries with vport 1
         # Format: ec23.7b1d.d2a8   800    Dynamic   gpon-onu_1/1/3:2          vport 1
         for line in output.split("\n"):
             line = line.strip()
             if not line or "vport 1" not in line:
                 continue
-            
+
             match = re.match(r'^([0-9a-f]{4}\.[0-9a-f]{4}\.[0-9a-f]{4})\s+.*gpon-onu_1/1/(\d+):(\d+)\s+vport 1', line, re.IGNORECASE)
             if match:
                 mac_raw = match.group(1)
                 port_num = match.group(2)
                 onu_id = match.group(3)
-                
+
                 # Convert MAC: ec23.7b1d.d2a8 -> EC:23:7B:1D:D2:A8
                 mac_clean = mac_raw.replace(".", "").upper()
                 mac_formatted = ":".join(mac_clean[i:i+2] for i in range(0, 12, 2))
-                
+
                 key = f"{port_num}:{onu_id}"
                 mac_table[key] = mac_formatted
                 logger.debug(f"Found MAC {mac_formatted} for ONU {key}")
-        
+
         # ZTE C320 power lines look like:
         #   gpon-onu_1/1/4:1    -24.432(dbm)
         #   gpon-onu_1/1/4:10 N/A
@@ -427,7 +427,7 @@ expect eof
             f"{len(rx_table)} Rx, {len(tx_table)} Tx"
         )
         return mac_table, rx_table, tx_table
-        
+
     except asyncio.TimeoutError:
         logger.warning(
             f"SSH timeout for {host} — сессия не уложилась в лимит. "
@@ -456,10 +456,10 @@ async def ssh_get_mac_table(
 
 class ONUMonitor:
     """SNMP-based ONU monitoring for ZTE C320 GPON OLT."""
-    
+
     # How long to keep history for averaging (seconds)
     HISTORY_DURATION = 300
-    
+
     def __init__(self):
         self.config = get_config()
         self._onu_cache: dict[str, list[ONUInfo]] = {}
@@ -468,62 +468,62 @@ class ONUMonitor:
         self._task: Optional[asyncio.Task] = None
         # History for averaging: {olt_id:port_index.onu_id: [(timestamp, rx, tx), ...]}
         self._power_history: dict[str, list[tuple[datetime, Optional[float], Optional[float]]]] = {}
-    
+
     def _get_onu_key(self, olt_id: str, index: str) -> str:
         return f"{olt_id}:{index}"
-    
+
     def _add_to_history(self, key: str, rx_power: Optional[float], tx_power: Optional[float]):
         now = datetime.now()
-        
+
         if key not in self._power_history:
             self._power_history[key] = []
-        
+
         self._power_history[key].append((now, rx_power, tx_power))
-        
+
         cutoff = now - timedelta(seconds=self.HISTORY_DURATION)
         self._power_history[key] = [
             (ts, rx, tx) for ts, rx, tx in self._power_history[key]
             if ts > cutoff
         ]
-    
+
     def _get_averages(self, key: str) -> tuple[Optional[float], Optional[float]]:
         if key not in self._power_history or not self._power_history[key]:
             return None, None
-        
+
         rx_values = [rx for _, rx, _ in self._power_history[key] if rx is not None]
         tx_values = [tx for _, _, tx in self._power_history[key] if tx is not None]
-        
+
         rx_avg = round(sum(rx_values) / len(rx_values), 2) if rx_values else None
         tx_avg = round(sum(tx_values) / len(tx_values), 2) if tx_values else None
-        
+
         return rx_avg, tx_avg
-    
+
     async def poll_olt(self, olt: OLTConfig) -> list[ONUInfo]:
         logger.debug(f"Polling OLT: {olt.id} ({olt.host})")
-        
+
         oids = ZTE_C320_OIDS
         onus: list[ONUInfo] = []
         community = olt.community or "public"
-        
+
         try:
             # Get ONU names first (this gives us the list of all ONUs)
             name_results = await snmpwalk_cli(olt.host, community, oids["onu_name"])
-            
+
             if not name_results:
                 logger.warning(f"No ONU data from {olt.id}")
                 self._onu_cache[olt.id] = []
                 self._last_poll[olt.id] = datetime.now()
                 return []
-            
+
             logger.debug(f"Got {len(name_results)} ONU names")
-            
+
             type_results = await snmpwalk_cli(olt.host, community, oids["onu_type"])
             desc_results = await snmpwalk_cli(olt.host, community, oids["onu_description"])
             sn_results = await snmpwalk_cli(olt.host, community, oids["onu_sn"])
             status_results = await snmpwalk_cli(olt.host, community, oids["onu_status"])
             phase_state_results = await snmpwalk_cli(olt.host, community, oids["onu_phase_state"])
             last_offline_results = await snmpwalk_cli(olt.host, community, oids["onu_last_offline"])
-            
+
             # MACs and optics come from a single SSH session (if credentials are set).
             # Power is no longer read from SNMP: see the note below ZTE_C320_OIDS.
             mac_table = {}
@@ -565,41 +565,41 @@ class ONUMonitor:
             onu_config = self.config.get_onu_monitoring_config()
             thresholds = onu_config.thresholds if onu_config else None
             warning_threshold = thresholds.warning if thresholds else -25
-            
-            for index, onu_name in name_results.items():
+
+            for index in name_results:
                 try:
                     # Parse index: "port_index.onu_id"
                     parts = index.split(".")
                     if len(parts) < 2:
                         continue
-                    
+
                     port_index = int(parts[0])
                     onu_id = parts[1]
-                    
+
                     onu_type = type_results.get(index, "")
                     description = clean_description(desc_results.get(index, ""))
                     serial_number = parse_onu_serial_number(sn_results.get(index, ""))
-                    
+
                     # Key format: "port:onu_id" e.g. "3:2"
                     port_num = (port_index >> 8) & 0xFF
                     mac_key = f"{port_num}:{onu_id}"
                     mac_address = mac_table.get(mac_key, "")
-                    
+
                     # Get status from SNMP (1=online, 2=offline)
                     status_raw = status_results.get(index, "1")
                     try:
                         snmp_status = int(status_raw)
-                    except:
+                    except (TypeError, ValueError):
                         snmp_status = 1
-                    
+
                     # A missing key means the OLT answered N/A or the session failed.
                     rx_power = rx_table.get(mac_key)
                     tx_power = tx_table.get(mac_key)
-                    
+
                     last_offline = last_offline_results.get(index, "")
                     if last_offline and "0000" in last_offline:
                         last_offline = None  # Never was offline
-                    
+
                     # Get offline reason from phase_state (OID ...2.1.4)
                     # 1=LOS, 3=Dying Gasp, 6=Working
                     offline_reason = None
@@ -608,9 +608,9 @@ class ONUMonitor:
                         try:
                             phase_code = int(phase_state_raw)
                             offline_reason = ZTE_OFFLINE_REASONS.get(phase_code)
-                        except:
+                        except (TypeError, ValueError):
                             pass
-                    
+
                     # Registration on the OLT is tracked separately from ONU liveness.
                     if snmp_status == 1:
                         registration = ONURegistration.REGISTERED
@@ -637,13 +637,13 @@ class ONUMonitor:
                         status = ONUStatus.LOW_SIGNAL
                     else:
                         status = ONUStatus.ONLINE
-                    
+
                     port_str = decode_port_index(port_index, onu_id)
-                    
+
                     onu_key = self._get_onu_key(olt.id, index)
                     self._add_to_history(onu_key, rx_power, tx_power)
                     rx_power_avg, tx_power_avg = self._get_averages(onu_key)
-                    
+
                     onu = ONUInfo(
                         olt_id=olt.id,
                         onu_id=onu_id,
@@ -662,75 +662,75 @@ class ONUMonitor:
                         last_offline=last_offline,
                     )
                     onus.append(onu)
-                    
+
                 except Exception as e:
                     logger.debug(f"Error processing ONU {index}: {e}")
                     continue
-            
+
             def sort_key(onu):
                 try:
                     # Parse "1/1/3:5" -> (3, 5)
                     port_part = onu.port.split("/")[-1]
                     port_num, onu_num = port_part.split(":")
                     return (int(port_num), int(onu_num))
-                except:
+                except (AttributeError, ValueError):
                     return (999, 999)
-            
+
             onus.sort(key=sort_key)
-            
+
             logger.info(f"OLT {olt.id}: found {len(onus)} ONUs")
-            
+
         except Exception as e:
             logger.error(f"Failed to poll OLT {olt.id}: {e}")
-        
+
         self._onu_cache[olt.id] = onus
         self._last_poll[olt.id] = datetime.now()
-        
+
         return onus
-    
+
     async def poll_all(self) -> dict[str, list[ONUInfo]]:
         results = {}
         olts = self.config.get_enabled_olts()
-        
+
         for olt in olts:
             onus = await self.poll_olt(olt)
             results[olt.id] = onus
-        
+
         return results
-    
+
     async def _poll_loop(self):
         onu_config = self.config.get_onu_monitoring_config()
         interval = onu_config.poll_interval if onu_config else 60
-        
+
         logger.info(f"ONU monitor loop started (interval: {interval}s)")
-        
+
         while self._running:
             try:
                 await self.poll_all()
             except Exception as e:
                 logger.error(f"ONU poll loop error: {e}")
-            
+
             await asyncio.sleep(interval)
-        
+
         logger.info("ONU monitor loop stopped")
-    
+
     async def start(self):
         if self._running:
             return
-        
+
         olts = self.config.get_enabled_olts()
         if not olts:
             logger.info("No OLTs configured, ONU monitoring disabled")
             return
-        
+
         self._running = True
         self._task = asyncio.create_task(self._poll_loop())
         logger.info(f"ONU monitor started for {len(olts)} OLT(s)")
-    
+
     async def stop(self):
         if not self._running:
             return
-        
+
         self._running = False
         if self._task:
             self._task.cancel()
@@ -738,24 +738,24 @@ class ONUMonitor:
                 await self._task
             except asyncio.CancelledError:
                 pass
-        
+
         logger.info("ONU monitor stopped")
-    
+
     def get_cached_onus(self, olt_id: Optional[str] = None) -> list[ONUInfo]:
         if olt_id:
             return self._onu_cache.get(olt_id, [])
-        
+
         all_onus = []
         for onus in self._onu_cache.values():
             all_onus.extend(onus)
         return all_onus
-    
+
     def get_last_poll_time(self, olt_id: str) -> Optional[datetime]:
         return self._last_poll.get(olt_id)
-    
+
     def get_stats(self) -> dict:
         all_onus = self.get_cached_onus()
-        
+
         return {
             "total_onus": len(all_onus),
             "online": len([o for o in all_onus if o.status == ONUStatus.ONLINE]),
@@ -763,7 +763,7 @@ class ONUMonitor:
             "low_signal": len([o for o in all_onus if o.status == ONUStatus.LOW_SIGNAL]),
             "olts_polled": len(self._onu_cache),
         }
-    
+
     @property
     def is_running(self) -> bool:
         return self._running

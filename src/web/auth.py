@@ -5,13 +5,11 @@ Handles user authentication and session management.
 """
 
 import secrets
-import hashlib
 from datetime import datetime, timedelta
 from typing import Optional
 
 import bcrypt
 from fastapi import APIRouter, HTTPException, Request, Response, Depends, status
-from fastapi.security import HTTPBasic
 from pydantic import BaseModel
 from loguru import logger
 
@@ -54,39 +52,39 @@ MIN_PASSWORD_LENGTH = 6
 
 class SessionStore:
     """In-memory session storage."""
-    
+
     def __init__(self):
         self._sessions: dict[str, dict] = {}
         self._config = get_config()
-    
+
     def create_session(self, username: str, role: str) -> str:
         session_id = secrets.token_urlsafe(32)
-        
+
         secrets_config = self._config.load_secrets()
         expire_hours = secrets_config.mcp_server.session_expire_hours
-        
+
         self._sessions[session_id] = {
             "username": username,
             "role": role,
             "created_at": datetime.now(),
             "expires_at": datetime.now() + timedelta(hours=expire_hours)
         }
-        
+
         logger.info(f"Session created for user: {username}")
         return session_id
-    
+
     def get_session(self, session_id: str) -> Optional[dict]:
         if session_id not in self._sessions:
             return None
-        
+
         session = self._sessions[session_id]
-        
+
         if datetime.now() > session["expires_at"]:
             del self._sessions[session_id]
             return None
-        
+
         return session
-    
+
     def delete_session(self, session_id: str) -> bool:
         if session_id in self._sessions:
             username = self._sessions[session_id]["username"]
@@ -94,7 +92,7 @@ class SessionStore:
             logger.info(f"Session deleted for user: {username}")
             return True
         return False
-    
+
     def cleanup_expired(self) -> int:
         now = datetime.now()
         expired = [
@@ -138,7 +136,7 @@ def verify_password(password: str, hashed: str) -> bool:
 def authenticate_user(username: str, password: str) -> Optional[dict]:
     """
     Authenticate user against the user store.
-    
+
     Returns user dict if successful, None otherwise.
     """
     from src.web.users import get_user_store
@@ -156,26 +154,26 @@ def authenticate_user(username: str, password: str) -> Optional[dict]:
 async def get_current_user(request: Request) -> UserInfo:
     """
     Dependency to get current authenticated user.
-    
+
     Raises HTTPException if not authenticated.
     """
     session_id = request.cookies.get("session_id")
-    
+
     if not session_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated"
         )
-    
+
     session_store = get_session_store()
     session = session_store.get_session(session_id)
-    
+
     if not session:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Session expired"
         )
-    
+
     return UserInfo(
         username=session["username"],
         role=session["role"]
@@ -212,14 +210,14 @@ router = APIRouter()
 async def login(request: LoginRequest, response: Response, http_request: Request):
     """
     Authenticate user and create session.
-    
+
     Sets session cookie on successful authentication.
     """
     from src.web.audit import get_audit_logger
 
     client_ip = http_request.client.host if http_request.client else None
     user = authenticate_user(request.username, request.password)
-    
+
     if not user:
         logger.warning(f"Failed login attempt for user: {request.username}")
         get_audit_logger().log(
@@ -232,7 +230,7 @@ async def login(request: LoginRequest, response: Response, http_request: Request
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password"
         )
-    
+
     get_audit_logger().log(
         action="login",
         username=user["username"],
@@ -240,14 +238,14 @@ async def login(request: LoginRequest, response: Response, http_request: Request
         ip=client_ip,
         success=True,
     )
-    
+
     session_store = get_session_store()
     session_id = session_store.create_session(user["username"], user["role"])
-    
+
     config = get_config()
     secrets = config.load_secrets()
     max_age = secrets.mcp_server.session_expire_hours * 3600
-    
+
     response.set_cookie(
         key="session_id",
         value=session_id,
@@ -255,7 +253,7 @@ async def login(request: LoginRequest, response: Response, http_request: Request
         max_age=max_age,
         samesite="lax"
     )
-    
+
     return LoginResponse(
         success=True,
         message="Login successful",
@@ -270,7 +268,7 @@ async def logout(request: Request, response: Response):
     Logout user and delete session.
     """
     session_id = request.cookies.get("session_id")
-    
+
     if session_id:
         session_store = get_session_store()
         session = session_store.get_session(session_id)
@@ -284,9 +282,9 @@ async def logout(request: Request, response: Response):
                 success=True,
             )
         session_store.delete_session(session_id)
-    
+
     response.delete_cookie("session_id")
-    
+
     return {"success": True, "message": "Logged out"}
 
 
@@ -332,7 +330,7 @@ async def change_own_password(
     try:
         store.set_password(user.username, body.new_password)
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
 
     get_audit_logger().log(
         action="password_change_self",
@@ -355,16 +353,16 @@ async def get_me(user: UserInfo = Depends(get_current_user)):
 async def check_auth(request: Request):
     """Check if user is authenticated."""
     session_id = request.cookies.get("session_id")
-    
+
     if not session_id:
         return {"authenticated": False}
-    
+
     session_store = get_session_store()
     session = session_store.get_session(session_id)
-    
+
     if not session:
         return {"authenticated": False}
-    
+
     return {
         "authenticated": True,
         "username": session["username"],

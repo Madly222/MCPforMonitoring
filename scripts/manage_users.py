@@ -19,7 +19,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.web.users import get_user_store, VALID_ROLES
+from src.web.users import get_user_store
 
 
 def usage():

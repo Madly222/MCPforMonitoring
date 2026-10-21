@@ -15,7 +15,6 @@ so even a redundant run never sends a duplicate.
 import asyncio
 import json
 from datetime import datetime
-from pathlib import Path
 
 from loguru import logger
 

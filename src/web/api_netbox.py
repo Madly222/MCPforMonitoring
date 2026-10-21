@@ -2,7 +2,6 @@
 NetBox Auto-Fill API Router.
 Separate module to keep api.py clean.
 """
-import os
 import sys
 from pathlib import Path
 from dataclasses import asdict
@@ -20,9 +19,8 @@ services_path = str(Path(__file__).parent.parent.parent / "services" / "netbox-a
 if services_path not in sys.path:
     sys.path.insert(0, services_path)
 
-from ssh_connector import CiscoSSH
-from netbox_client import NetBoxClient
-from orchestrator import Orchestrator, ScanResult
+from netbox_client import NetBoxClient  # noqa: E402
+from orchestrator import Orchestrator, ScanResult  # noqa: E402
 
 router = APIRouter()
 
@@ -120,22 +118,22 @@ async def netbox_scan_router(req: ScanRequest, user: UserInfo = Depends(get_curr
         raise HTTPException(403, "Access denied for operator role")
     if not req.username or not req.password:
         raise HTTPException(400, "Username and password are required")
-    
+
     from ssh_connector import CiscoRouterSSH
-    
+
     logs = []
     try:
         logs.append(f"Connecting to router {req.host}...")
         ssh = CiscoRouterSSH(req.host, req.username, req.password)
         result = ssh.connect()
-        
+
         if not result["success"]:
             logs.append(f"Connection failed: {result.get('error', 'Unknown error')}")
             return {"success": False, "logs": logs, "error": result.get("error")}
-        
+
         logs.append(f"Connected to {result.get('hostname', req.host)}")
         logs.append("Scanning interfaces...")
-        
+
         scan_result = ssh.scan_router()
         # Cache for apply - convert to dict format
         _scan_cache[req.host] = {
@@ -155,11 +153,11 @@ async def netbox_scan_router(req: ScanRequest, user: UserInfo = Depends(get_curr
             ],
         }
         ssh.disconnect()
-        
+
         logs.append(f"Found {len(scan_result['interfaces'])} interfaces")
         logs.append(f"Found {len(scan_result['routes'])} connected routes")
         logs.append(f"Found {len(scan_result['cdp_neighbors'])} CDP neighbors")
-        
+
         return {
             "success": True,
             "host": req.host,
@@ -204,28 +202,28 @@ async def netbox_apply_router(req: ApplyRequest, user: UserInfo = Depends(get_cu
     """Apply router interfaces to NetBox."""
     if user.role == "operator":
         raise HTTPException(403, "Access denied for operator role")
-    
+
     logs = []
     results = {"interfaces_updated": 0, "ips_created": 0, "cables_created": 0}
-    
+
     try:
         from netbox_client import NetBoxClient
         nb = NetBoxClient()
-        
+
         # Get cached scan data first to get hostname
         if req.host not in _scan_cache:
             logs.append("❌ No scan data found. Please scan the router first.")
             return {"success": False, "logs": logs, "error": "Scan the router first"}
-        
+
         scan_data = _scan_cache[req.host]
         hostname = scan_data.get("hostname", req.host)
         model = scan_data.get("model", "Unknown")
-        
+
         logs.append(f"Looking for device '{hostname}' in NetBox...")
-        
+
         # First try EXACT match by hostname
         device = nb.find_device_by_name_exact(hostname)
-        
+
         if not device:
             logs.append(f"Device '{hostname}' not found by exact name, trying by management IP {req.host}...")
             device = nb.find_device_by_ip(req.host)
@@ -240,7 +238,7 @@ async def netbox_apply_router(req: ApplyRequest, user: UserInfo = Depends(get_cu
                     else:
                         logs.append(f"⚠️ Could not update hostname: {update_result.get('error')}")
                         # Continue anyway - device is correct, just hostname update failed
-        
+
         if not device:
             logs.append(f"Device not found, creating {hostname}...")
             dt_result = nb.find_or_create_device_type(model)
@@ -249,7 +247,7 @@ async def netbox_apply_router(req: ApplyRequest, user: UserInfo = Depends(get_cu
                 device_type_id = None
             else:
                 device_type_id = dt_result.get("device_type_id")
-            
+
             create_result = nb.create_device(
                 name=hostname,
                 device_type_id=device_type_id,
@@ -261,30 +259,30 @@ async def netbox_apply_router(req: ApplyRequest, user: UserInfo = Depends(get_cu
             else:
                 logs.append(f"❌ Failed to create device: {create_result.get('error')}")
                 return {"success": False, "logs": logs, "error": create_result.get("error")}
-        
+
         device_id = device["id"]
         device_name = device["name"]
         logs.append(f"✅ Found device: {device_name} (ID: {device_id})")
-        
 
-        
+
+
         for port_name in req.selected_ports:
             iface_data = None
             for iface in scan_data.get("interfaces", []):
                 if iface.get("name") == port_name:
                     iface_data = iface
                     break
-            
+
             if not iface_data:
                 continue
-            
+
             logs.append(f"Processing {port_name}...")
-            
+
             nb_iface = nb.find_interface(device_id, port_name)
             if not nb_iface:
                 full_name = port_name.replace("Gi", "GigabitEthernet").replace("Fa", "FastEthernet")
                 nb_iface = nb.find_interface(device_id, full_name)
-            
+
             if not nb_iface:
                 create_result = nb.create_interface(device_id, port_name, iface_data.get("description", ""), iface_data.get("mtu"))
                 if create_result.get("success"):
@@ -293,7 +291,7 @@ async def netbox_apply_router(req: ApplyRequest, user: UserInfo = Depends(get_cu
                 else:
                     logs.append(f"  ⚠️ Could not create interface {port_name}: {create_result.get('error')}")
                     continue
-            
+
             update_data = {}
             if iface_data.get("description"):
                 update_data["description"] = iface_data["description"]
@@ -303,7 +301,7 @@ async def netbox_apply_router(req: ApplyRequest, user: UserInfo = Depends(get_cu
                 nb.update_interface(nb_iface["id"], update_data)
                 logs.append(f"  ✅ Updated {port_name}" + (f" (MTU: {iface_data.get('mtu')})" if iface_data.get('mtu') else ""))
             results["interfaces_updated"] += 1
-            
+
             ip_addr = iface_data.get("ip_address")
             if ip_addr and ip_addr != "unassigned":
                 # Always reassign IP to correct interface
@@ -313,33 +311,33 @@ async def netbox_apply_router(req: ApplyRequest, user: UserInfo = Depends(get_cu
                     results["ips_created"] += 1
                 else:
                     logs.append(f"  ⚠️ IP {ip_addr}: {result.get('error', 'failed')}")
-        
+
         # Process CDP neighbors for cables
         for cdp in scan_data.get("cdp_neighbors", []):
             local_port = cdp.get("local_port")
             remote_device = cdp.get("remote_device")
             remote_port = cdp.get("remote_port")
-            
+
             if local_port not in req.selected_ports:
                 continue
-            
+
             logs.append(f"Creating cable: {local_port} -> {remote_device}:{remote_port}")
-            
+
             local_iface = nb.find_interface(device_id, local_port)
             if not local_iface:
                 logs.append(f"  ⚠️ Local interface {local_port} not found")
                 continue
-            
+
             remote_dev = nb.find_device_by_name(remote_device)
             if not remote_dev:
                 logs.append(f"  ⚠️ Remote device {remote_device} not found")
                 continue
-            
+
             remote_iface = nb.find_interface(remote_dev["id"], remote_port)
             if not remote_iface:
                 logs.append(f"  ⚠️ Remote interface {remote_port} not found")
                 continue
-            
+
             # Delete existing cables first
             if nb.check_cable_exists(local_iface["id"]):
                 nb.delete_cable(local_iface["id"])
@@ -347,17 +345,17 @@ async def netbox_apply_router(req: ApplyRequest, user: UserInfo = Depends(get_cu
             if nb.check_cable_exists(remote_iface["id"]):
                 nb.delete_cable(remote_iface["id"])
                 logs.append(f"  🗑️ Deleted old cable on {remote_port}")
-            
+
             cable_result = nb.create_cable(local_iface["id"], remote_iface["id"])
             if cable_result.get("success"):
-                logs.append(f"  ✅ Cable created")
+                logs.append("  ✅ Cable created")
                 results["cables_created"] += 1
             else:
                 logs.append(f"  ⚠️ Cable: {cable_result.get('error', 'failed')}")
-        
+
         logs.append(f"Done: {results['interfaces_updated']} interfaces, {results['ips_created']} IPs, {results['cables_created']} cables")
         return {"success": True, "logs": logs, "results": results}
-        
+
     except Exception as e:
         logger.error(f"Router apply error: {e}")
         logs.append(f"❌ Error: {str(e)}")
@@ -372,7 +370,7 @@ async def netbox_sync_mac(user: UserInfo = Depends(get_current_user)):
     """Sync MAC addresses from DHCP to NetBox."""
     if user.role == "operator":
         raise HTTPException(403, "Access denied for operator role")
-    
+
     try:
         from src.monitoring.dhcp_mac_sync import sync_dhcp_to_netbox
         result = sync_dhcp_to_netbox()

@@ -11,7 +11,6 @@ Roles: superadmin > admin > operator.
 import json
 import threading
 from datetime import datetime
-from pathlib import Path
 from typing import Optional
 
 import bcrypt

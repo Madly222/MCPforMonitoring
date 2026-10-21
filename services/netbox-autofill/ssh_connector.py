@@ -49,22 +49,14 @@ class CiscoSSH:
             "banner_timeout": 30,
             "conn_timeout": 30,
             "ssh_config_file": None,
-            "disabled_algorithms": {},  # netmiko handles this
-        }
-
-        # For old Cisco IOS — force legacy algorithms
-        ssh_connect_params = {
+            # Old Cisco IOS only speaks ssh-rsa (SHA-1) host keys
             "disabled_algorithms": {
                 "pubkeys": ["rsa-sha2-256", "rsa-sha2-512"],
+                "kex": [],
             },
-            "transport_factory": None,
         }
 
         try:
-            device["disabled_algorithms"] = {
-                "pubkeys": ["rsa-sha2-256", "rsa-sha2-512"],
-                "kex": [],
-            }
             self.connection = ConnectHandler(**device)
             # Disable paging (--More--)
             self.connection.send_command("terminal length 0", expect_string=r"#")
@@ -190,7 +182,6 @@ class CiscoSSH:
             local_match = re.search(r'Interface:\s*(\S+?)\s*,', block)
             remote_match = re.search(r'Port ID \(outgoing port\):\s*(\S+)', block)
             platform_match = re.search(r'Platform:\s*(.+?),', block)
-            ip_match = re.search(r'IP address:\s*(\S+)', block)
 
             if device_match and local_match and remote_match:
                 device_name = device_match.group(1).split('.')[0]
@@ -372,7 +363,7 @@ class CiscoRouterSSH(CiscoSSH):
         """Full router scan - interfaces, routes, CDP, version."""
         interfaces = self.get_interfaces()
         descriptions = self.get_interface_descriptions()
-        
+
         for iface in interfaces:
             if iface.name in descriptions:
                 iface.description = descriptions[iface.name]
@@ -405,6 +396,6 @@ class CiscoRouterSSH(CiscoSSH):
             match = re.search(r'ip mtu\s+(\d+)', output)
             if match:
                 return int(match.group(1))
-        except:
+        except (ValueError, TypeError):
             pass
         return None

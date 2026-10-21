@@ -69,14 +69,14 @@ def parse_house_number(num_str: str) -> Tuple[int, str]:
 def house_in_range(target: str, range_str: str) -> bool:
     """Check if target house number is in a range like '15-23' or matches exactly."""
     target_base, target_suffix = parse_house_number(target)
-    
+
     range_match = re.match(r'^(\d+)\s*[-–]\s*(\d+)$', range_str.strip())
     if range_match:
         start = int(range_match.group(1))
         end = int(range_match.group(2))
         # For ranges, only check base number (ignore suffix)
         return start <= target_base <= end
-    
+
     # Exact match (including suffix)
     range_base, range_suffix = parse_house_number(range_str)
     if target_base == range_base:
@@ -85,7 +85,7 @@ def house_in_range(target: str, range_str: str) -> bool:
             return target_suffix == range_suffix
         # If target has no suffix, match any
         return True
-    
+
     return False
 
 
@@ -94,7 +94,7 @@ def find_house_in_list(target: str, houses_text: str) -> bool:
     # Split by comma and space, but be careful with ranges
     pattern = r'(\d+(?:/\d+)?(?:[A-Za-z])?(?:\s*[-–]\s*\d+)?)'
     houses = re.findall(pattern, houses_text)
-    
+
     for house in houses:
         if house_in_range(target, house):
             return True
@@ -102,17 +102,17 @@ def find_house_in_list(target: str, houses_text: str) -> bool:
 
 
 def send_email_notification(matches: list) -> bool:
-    
+
     EMAIL_CONFIG = _email_config()
     if not EMAIL_CONFIG["enabled"]:
         logger.debug("Electric email notifications disabled")
         return False
-    
+
     if not matches:
         return False
-    
+
     logger.info(f"Electric: Sending email notification to {EMAIL_CONFIG['to']}")
-    
+
     try:
         msg = MIMEMultipart()
         msg['From'] = EMAIL_CONFIG["from"]
@@ -121,7 +121,7 @@ def send_email_notification(matches: list) -> bool:
         msg['Date'] = formatdate(localtime=True)
         msg['Message-ID'] = make_msgid(domain=_domain)
         msg['Subject'] = f"⚡ Premier Energy - Запланированное отключение электричества! ({datetime.now().strftime('%d.%m.%Y')})"
-        
+
         body = f"""⚡ ВНИМАНИЕ! Запланированное отключение электричества!
 
 Дата проверки: {datetime.now().strftime('%d.%m.%Y %H:%M')}
@@ -133,7 +133,7 @@ def send_email_notification(matches: list) -> bool:
 """
         for match in matches:
             body += f"{match}\n\n"
-        
+
         body += f"""
 {'='*50}
 Проверьте сайт для подробностей:
@@ -142,9 +142,9 @@ https://premierenergydistribution.md/ru/toate-lucrarile-programate
 --
 MCP Server Monitor
 """
-        
+
         msg.attach(MIMEText(body, 'plain', 'utf-8'))
-        
+
         server = smtplib.SMTP(EMAIL_CONFIG["smtp_server"], EMAIL_CONFIG["smtp_port"], timeout=30)
         if EMAIL_CONFIG.get("smtp_tls"):
             server.starttls()
@@ -152,10 +152,10 @@ MCP Server Monitor
             server.login(EMAIL_CONFIG["smtp_user"], EMAIL_CONFIG.get("smtp_password", ""))
         server.sendmail(EMAIL_CONFIG["from"], EMAIL_CONFIG["to"], msg.as_string())
         server.quit()
-        
+
         logger.info("Electric: Email sent successfully!")
         return True
-        
+
     except Exception as e:
         logger.error(f"Electric: Email error: {e}")
         return False
@@ -278,50 +278,50 @@ def clean_html(content: str) -> str:
 def find_in_chisinau(content: str, addresses: list, date_str: str) -> list:
     """Find addresses only in Chisinau sections."""
     matches = []
-    
+
     text = clean_html(content)
-    
+
     # Split by "Chişinău, sectorul" to get Chisinau blocks
     parts = re.split(r'(Chişinău,\s*sectorul\s+\w+)', text, flags=re.IGNORECASE)
-    
+
     i = 1
     while i < len(parts):
         if not re.match(r'Chişinău,\s*sectorul', parts[i], re.IGNORECASE):
             i += 1
             continue
-        
+
         header = parts[i]
         content_block = parts[i + 1] if i + 1 < len(parts) else ""
-        
+
         # Skip sub-localities (com. Băcioi, or. Durleşti, etc.)
         if re.search(r',\s*(com\.|or\.|s\.)\s*\w+', header, re.IGNORECASE):
             i += 2
             continue
-        
+
         sector_match = re.search(r'sectorul\s+(\w+)', header, re.IGNORECASE)
         sector = sector_match.group(1) if sector_match else ""
-        
+
         block = content_block[:1000]
-        
+
         for addr in addresses:
             street, house_num = parse_address(addr)
-            
+
             street_pattern = re.compile(
                 r'(?:str\.\s*|bd\.\s*|str-la\s*\d*\s*)?' + re.escape(street) + r'(?:\s+(?:bd\.|str\.|str-la))?\s*([\d\s,/\-–A-Za-z]+?)(?=\s+în\s+intervalul|\s+pentru|\s*$|[A-Z][a-z]+\s+\d)',
                 re.IGNORECASE
             )
-            
+
             street_match = street_pattern.search(block)
             if street_match:
                 houses_text = street_match.group(1) if street_match.lastindex else ""
-                
+
                 if house_num:
                     if not find_house_in_list(house_num, houses_text):
                         continue
-                
+
                 time_match = re.search(r'(\d{1,2}:\d{2})\s*[-–]\s*(\d{1,2}:\d{2})', block)
                 time_info = time_match.group(0) if time_match else ""
-                
+
                 street_pos = block.lower().find(street.lower())
                 if street_pos >= 0:
                     start = max(0, street_pos - 20)
@@ -329,17 +329,17 @@ def find_in_chisinau(content: str, addresses: list, date_str: str) -> list:
                     display = block[start:end].strip()
                 else:
                     display = block[:200].strip()
-                
+
                 match_str = f"[{date_str}] ⚡ {addr} (Chișinău, {sector})"
                 if time_info:
                     match_str += f" ⏰ {time_info}"
                 match_str += f"\n   📍 ...{display}..."
-                
+
                 if match_str not in matches:
                     matches.append(match_str)
-        
+
         i += 2
-    
+
     return matches
 
 
@@ -377,32 +377,31 @@ def filter_current_matches(matches: list) -> list:
 
 async def check_electric_status(force: bool = False) -> ElectricStatus:
     global _cached_status, _last_check_time
-    
+
     cleanup_old_notifications()
-    
+
     if not force and _cached_status and _last_check_time:
         elapsed = (datetime.now() - _last_check_time).total_seconds()
         if elapsed < ELECTRIC_CONFIG['check_interval']:
             _cached_status.matches = filter_current_matches(_cached_status.matches)
             _cached_status.ok = len(_cached_status.matches) == 0
             return _cached_status
-    
+
     addresses = load_addresses()
     if not addresses:
         logger.warning("Electric: no addresses in config/electric_addresses.txt")
         return ElectricStatus(ok=True, last_check=datetime.now(), matches=[])
-    
+
     logger.info(f"Electric: checking {len(addresses)} addresses: {addresses}")
-    
+
     all_matches = []
     matched_dates = []
-    today = datetime.now().strftime('%Y-%m-%d')
-    
+
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         "Accept": "text/html,application/xhtml+xml",
     }
-    
+
     async with aiohttp.ClientSession(headers=headers) as session:
         urls = []
         for days in range(0, ELECTRIC_CONFIG['days_ahead'] + 1):
@@ -410,39 +409,39 @@ async def check_electric_status(force: bool = False) -> ElectricStatus:
             date_str = date.strftime("%Y-%m-%d")
             url = f"{ELECTRIC_CONFIG['base_url']}/ro/lucrari-programate-{date_str}"
             urls.append((date_str, url))
-        
+
         tasks = [fetch_page(session, url) for _, url in urls]
         results = await asyncio.gather(*tasks, return_exceptions=True)
-        
+
         for i, result in enumerate(results):
             if isinstance(result, Exception) or not result:
                 continue
-            
+
             date_str = urls[i][0]
             matches = find_in_chisinau(result, addresses, date_str)
-            
+
             if matches:
                 matched_dates.append(date_str)
-            
+
             all_matches.extend([m for m in matches if m not in all_matches])
-    
+
     all_matches = filter_current_matches(all_matches)
-    
+
     if all_matches:
         notified = get_notified_signatures()
         new_matches = [m for m in all_matches if _match_signature(m) not in notified]
         if new_matches and send_email_notification(new_matches):
             mark_notified(new_matches)
-    
+
     status = ElectricStatus(
         ok=len(all_matches) == 0,
         last_check=datetime.now(),
         matches=all_matches,
     )
-    
+
     _cached_status = status
     _last_check_time = datetime.now()
-    
+
     try:
         CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
         with open(CACHE_FILE, 'w') as f:
@@ -454,23 +453,23 @@ async def check_electric_status(force: bool = False) -> ElectricStatus:
             }, f)
     except Exception as e:
         logger.debug(f"Electric: cache save error: {e}")
-    
+
     if all_matches:
         logger.warning(f"Electric: FOUND {len(all_matches)} matches!")
     else:
         logger.info("Electric: no disconnections found")
-    
+
     return status
 
 
 def load_cached_status() -> Optional[ElectricStatus]:
     global _cached_status, _last_check_time
-    
+
     if _cached_status:
         _cached_status.matches = filter_current_matches(_cached_status.matches)
         _cached_status.ok = len(_cached_status.matches) == 0
         return _cached_status
-    
+
     try:
         if CACHE_FILE.exists():
             with open(CACHE_FILE, 'r') as f:

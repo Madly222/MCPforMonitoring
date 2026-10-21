@@ -21,33 +21,33 @@ from src.core.ssh_manager import SSHManager
 
 
 class DNSService(BaseService):
-    
+
     service_type: str = "dns"
-    
+
     def __init__(self, ssh_manager: SSHManager, server_id: str):
         super().__init__(ssh_manager, server_id)
         self._zones_dir: Optional[str] = None
-    
+
     async def detect(self) -> Optional[dict]:
         """
         Auto-detect DNS server type.
-        
+
         Checks for running processes and installed packages to determine
         which DNS server is in use.
         """
         if self._detected_service is not None:
             return self._detected_service
-        
+
         # First try config-based detection
         detection = self.service_config.get("detection", {}).get("commands", [])
-        
+
         for det in detection:
             result = await self.ssh.execute(self.server_id, det["check"], timeout=10.0)
             if result.success and "found" in result.stdout:
                 self._detected_service = det
                 logger.debug(f"Detected {det['name']} on {self.server_id}")
                 return det
-        
+
         # Fallback: auto-detect by checking processes and packages
         dns_servers = [
             {
@@ -75,7 +75,7 @@ class DNSService(BaseService):
                 "check_cmd": "pgrep -x pdns_server >/dev/null || dpkg -l pdns-server 2>/dev/null | grep -q '^ii'"
             },
         ]
-        
+
         for dns in dns_servers:
             result = await self.ssh.execute(self.server_id, dns["check_cmd"], timeout=10.0)
             if result.exit_code == 0:
@@ -86,18 +86,18 @@ class DNSService(BaseService):
                 }
                 logger.info(f"Auto-detected DNS server: {dns['name']} on {self.server_id}")
                 return self._detected_service
-        
+
         logger.warning(f"No DNS service detected on {self.server_id}")
         return None
-    
+
     async def get_config_file(self) -> Optional[str]:
         if self._config_file is not None:
             return self._config_file
-        
+
         det = await self.detect()
         if not det:
             return None
-        
+
         config_paths = {
             "bind9": [
                 "/etc/bind/named.conf",
@@ -118,25 +118,25 @@ class DNSService(BaseService):
                 "/etc/pdns/pdns.conf"
             ]
         }
-        
+
         paths = config_paths.get(det["name"], [])
-        
+
         # Also check service_config if available
         file_paths = self.service_config.get("file_paths", {}).get(det["name"], {})
         if file_paths.get("config"):
             paths = file_paths["config"] + paths
-        
+
         self._config_file = await self.ssh.find_existing_file(self.server_id, paths)
         return self._config_file
-    
+
     async def get_zones_dir(self) -> Optional[str]:
         if self._zones_dir is not None:
             return self._zones_dir
-        
+
         det = await self.detect()
         if not det:
             return None
-        
+
         zones_paths = {
             "bind9": [
                 "/etc/bind/zones",
@@ -149,9 +149,9 @@ class DNSService(BaseService):
                 "/var/lib/powerdns"
             ]
         }
-        
+
         paths = zones_paths.get(det["name"], [])
-        
+
         for path in paths:
             result = await self.ssh.execute(
                 self.server_id,
@@ -160,13 +160,13 @@ class DNSService(BaseService):
             if "exists" in result.stdout:
                 self._zones_dir = path
                 return self._zones_dir
-        
+
         return None
-    
+
     async def check_health(self) -> list[HealthCheckResult]:
         """
         Perform DNS-specific health checks.
-        
+
         Checks:
         - Process is running
         - Port 53 is listening (TCP and UDP)
@@ -174,7 +174,7 @@ class DNSService(BaseService):
         - DNS resolution works
         """
         results = []
-        
+
         status = await self.get_status()
         results.append(HealthCheckResult(
             name="process_running",
@@ -182,7 +182,7 @@ class DNSService(BaseService):
             message="DNS process is running" if status.running else "DNS process is not running",
             details={"pid": status.pid} if status.pid else None
         ))
-        
+
         port_check_udp = await self.ssh.execute(
             self.server_id,
             "netstat -uln 2>/dev/null | grep -q ':53 ' && echo 'ok' || "
@@ -194,7 +194,7 @@ class DNSService(BaseService):
             passed=udp_listening,
             message="UDP port 53 is listening" if udp_listening else "UDP port 53 is not listening"
         ))
-        
+
         port_check_tcp = await self.ssh.execute(
             self.server_id,
             "netstat -tln 2>/dev/null | grep -q ':53 ' && echo 'ok' || "
@@ -206,7 +206,7 @@ class DNSService(BaseService):
             passed=tcp_listening,
             message="TCP port 53 is listening" if tcp_listening else "TCP port 53 is not listening"
         ))
-        
+
         config_file = await self.get_config_file()
         results.append(HealthCheckResult(
             name="config_exists",
@@ -214,7 +214,7 @@ class DNSService(BaseService):
             message=f"Config file found: {config_file}" if config_file else "Config file not found",
             details={"path": config_file} if config_file else None
         ))
-        
+
         # Check DNS resolution. A variant can define its own probe in
         # dns.yaml -> resolution_test (e.g. Technitium, which answers for its
         # own zones rather than a generic 'localhost' lookup); otherwise use the
@@ -229,7 +229,7 @@ class DNSService(BaseService):
             except Exception:
                 zone = "example.com"
             custom_test = custom_test.replace("{zone}", zone)
-        
+
         dns_test = await self.ssh.execute(
             self.server_id,
             custom_test or (
@@ -244,13 +244,13 @@ class DNSService(BaseService):
             passed=dns_works,
             message="DNS resolution working" if dns_works else "DNS resolution failed"
         ))
-        
+
         return results
-    
+
     async def get_extra_info(self) -> dict[str, Any]:
         """
         Get DNS-specific information.
-        
+
         Returns:
             - dns_type: Type of DNS server (bind9, dnsmasq, etc.)
             - config_file: Path to config file
@@ -259,12 +259,12 @@ class DNSService(BaseService):
             - query_stats: Query statistics (if available)
         """
         info = {}
-        
+
         det = await self.detect()
         info["dns_type"] = det["name"] if det else "unknown"
         info["config_file"] = await self.get_config_file()
         info["zones_dir"] = await self.get_zones_dir()
-        
+
         if det and det["name"] == "bind9" and info["zones_dir"]:
             count_result = await self.ssh.execute(
                 self.server_id,
@@ -274,7 +274,7 @@ class DNSService(BaseService):
                 info["zones_count"] = int(count_result.stdout.strip())
             except (ValueError, TypeError):
                 info["zones_count"] = 0
-        
+
         if det and det["name"] == "bind9":
             stats_result = await self.ssh.execute(
                 self.server_id,
@@ -282,14 +282,14 @@ class DNSService(BaseService):
             )
             if stats_result.stdout.strip():
                 info["has_stats"] = True
-        
+
         return info
-    
+
     async def get_log_files(self) -> list[str]:
         det = await self.detect()
         if not det:
             return []
-        
+
         log_paths = {
             "bind9": [
                 "/var/log/named/queries.log",
@@ -310,27 +310,27 @@ class DNSService(BaseService):
                 "/var/log/syslog"
             ]
         }
-        
+
         paths = log_paths.get(det["name"], ["/var/log/syslog"])
-        
+
         # Also check service_config
         log_config = self.service_config.get("log_files", {}).get(det["name"], [])
         for log in log_config:
             path = log.get("path") if isinstance(log, dict) else log
             if path not in paths:
                 paths.insert(0, path)
-        
+
         existing = []
         for path in paths:
             if await self.ssh.file_exists(self.server_id, path):
                 existing.append(path)
-        
+
         return existing if existing else ["/var/log/syslog"]
-    
+
     async def run_diagnostic(self, name: str) -> DiagnosticResult:
         """
         Run DNS-specific diagnostic.
-        
+
         Available diagnostics:
         - get_config: Show configuration
         - config_test: Test configuration syntax
@@ -348,7 +348,7 @@ class DNSService(BaseService):
                 output="",
                 error="DNS service not detected"
             )
-        
+
         if name == "get_config":
             config_file = await self.get_config_file()
             if not config_file:
@@ -368,7 +368,7 @@ class DNSService(BaseService):
                 output=result.stdout,
                 error=result.stderr if not result.success else None
             )
-        
+
         elif name == "config_test":
             if det["name"] == "bind9":
                 cmd = "named-checkconf 2>&1"
@@ -385,7 +385,7 @@ class DNSService(BaseService):
                     output="",
                     error=f"Config test not supported for {det['name']}"
                 )
-            
+
             result = await self.ssh.execute(self.server_id, cmd)
             # For named-checkconf, empty output means success
             success = result.exit_code == 0 or (det["name"] == "bind9" and not result.stderr)
@@ -395,7 +395,7 @@ class DNSService(BaseService):
                 output=result.stdout or "Configuration OK",
                 error=result.stderr if not success else None
             )
-        
+
         elif name == "get_zones":
             zones_dir = await self.get_zones_dir()
             if not zones_dir:
@@ -405,7 +405,7 @@ class DNSService(BaseService):
                     output="",
                     error="Zones directory not found"
                 )
-            
+
             result = await self.ssh.execute(
                 self.server_id,
                 f"find {zones_dir} -type f \\( -name '*.zone' -o -name 'db.*' \\) 2>/dev/null | head -50"
@@ -416,7 +416,7 @@ class DNSService(BaseService):
                 output=result.stdout or "No zone files found",
                 error=result.stderr if not result.success else None
             )
-        
+
         elif name == "query_test":
             result = await self.ssh.execute(
                 self.server_id,
@@ -430,7 +430,7 @@ class DNSService(BaseService):
                 output=result.stdout or "No response",
                 error=result.stderr if not result.success else None
             )
-        
+
         elif name == "get_stats":
             if det["name"] == "bind9":
                 cmd = "rndc stats 2>/dev/null; cat /var/cache/bind/named.stats 2>/dev/null | tail -50 || echo 'Stats not available'"
@@ -445,7 +445,7 @@ class DNSService(BaseService):
                     output="",
                     error=f"Stats not supported for {det['name']}"
                 )
-            
+
             result = await self.ssh.execute(self.server_id, cmd)
             return DiagnosticResult(
                 name=name,
@@ -453,7 +453,7 @@ class DNSService(BaseService):
                 output=result.stdout,
                 error=result.stderr if not result.success else None
             )
-        
+
         elif name == "get_process_info":
             process_name = await self.get_process_name()
             result = await self.ssh.execute(
@@ -466,7 +466,7 @@ class DNSService(BaseService):
                 output=result.stdout,
                 error=result.stderr if not result.success else None
             )
-        
+
         elif name == "get_cache_stats":
             if det["name"] == "bind9":
                 cmd = "rndc dumpdb -cache 2>/dev/null && wc -l /var/cache/bind/named_dump.db 2>/dev/null || echo 'Cache dump not available'"
@@ -477,7 +477,7 @@ class DNSService(BaseService):
                 cmd = "echo 'Cache inspection not supported for dnsmasq'"
             else:
                 cmd = "echo 'Cache inspection not supported'"
-            
+
             result = await self.ssh.execute(self.server_id, cmd)
             return DiagnosticResult(
                 name=name,
@@ -485,7 +485,7 @@ class DNSService(BaseService):
                 output=result.stdout,
                 error=result.stderr if not result.success else None
             )
-        
+
         else:
             return DiagnosticResult(
                 name=name,
@@ -493,11 +493,11 @@ class DNSService(BaseService):
                 output="",
                 error=f"Unknown diagnostic: {name}"
             )
-    
+
     async def get_recent_logs(self, lines: int = 50) -> str:
         det = await self.detect()
         log_files = await self.get_log_files()
-        
+
         if not log_files:
             # Fallback to syslog with dns filter - use sudo for protected files
             filter_pattern = "named|dns|bind|unbound" if det else "dns"
@@ -507,33 +507,33 @@ class DNSService(BaseService):
                 f"tail -n {lines} /var/log/syslog 2>/dev/null || echo 'Cannot read logs'"
             )
             return result.stdout if result.success else f"Error: {result.stderr}"
-        
+
         log_file = log_files[0]
-        
+
         # Try without sudo first, then with sudo
         result = await self.ssh.execute(
             self.server_id,
             f"tail -n {lines} {log_file} 2>/dev/null"
         )
-        
+
         if result.success and result.stdout.strip():
             return result.stdout
-        
+
         result = await self.ssh.execute_sudo(
             self.server_id,
             f"tail -n {lines} {log_file} 2>/dev/null || echo 'Cannot read log file'"
         )
-        
+
         return result.stdout if result.success else f"Error: {result.stderr}"
-    
+
     async def query(self, domain: str, record_type: str = "A") -> DiagnosticResult:
         """
         Query DNS for a specific domain.
-        
+
         Args:
             domain: Domain name to query
             record_type: Record type (A, AAAA, MX, NS, TXT, etc.)
-            
+
         Returns:
             DiagnosticResult with query output
         """
@@ -542,7 +542,7 @@ class DNSService(BaseService):
             f"dig @127.0.0.1 {domain} {record_type} +short +time=5 2>&1 || "
             f"nslookup -type={record_type} {domain} 127.0.0.1 2>&1"
         )
-        
+
         return DiagnosticResult(
             name=f"query_{domain}_{record_type}",
             success=result.success and bool(result.stdout.strip()),

@@ -7,7 +7,6 @@ import re
 import os
 import paramiko
 import requests
-from datetime import datetime
 from pathlib import Path
 from loguru import logger
 from dotenv import load_dotenv
@@ -118,56 +117,56 @@ def sync_dhcp_to_netbox(progress_callback=None):
     """Sync DHCP MACs to NetBox. Returns dict with stats and logs."""
     import urllib3
     urllib3.disable_warnings()
-    
+
     logs = []
     stats = {'updated': 0, 'skipped': 0, 'not_found': 0, 'errors': 0, 'total': 0}
-    
+
     def log(msg):
         logs.append(msg)
         logger.info(f"DHCP-MAC: {msg}")
         if progress_callback:
             progress_callback(msg)
-    
+
     try:
         log(f"Connecting to DHCP server {DHCP_SSH_HOST}...")
         ssh = ssh_connect(DHCP_SSH_HOST, DHCP_SSH_USER, DHCP_SSH_PASS, DHCP_SSH_PORT)
         log("SSH connected")
-        
+
         log("Getting clients from MySQL...")
         clients = get_dhcp_clients(ssh)
         stats['total'] = len(clients)
         log(f"Found {len(clients)} clients in DHCP")
-        
-        for i, client in enumerate(clients, 1):
+
+        for client in clients:
             ip = client['ip']
             mac = client['mac']
-            
+
             ip_obj = netbox_find_ip(ip)
-            
+
             if not ip_obj:
                 stats['not_found'] += 1
                 continue
-            
+
             current_mac = netbox_get_current_mac(ip_obj)
-            
+
             if current_mac:
                 current_normalized = normalize_mac(current_mac)
                 if current_normalized == mac:
                     stats['skipped'] += 1
                     continue
-            
+
             if netbox_update_mac(ip_obj['id'], ip, mac):
                 stats['updated'] += 1
                 log(f"Updated {ip} -> {mac}")
             else:
                 stats['errors'] += 1
-        
+
         ssh.close()
-        
+
         log(f"Sync complete: {stats['updated']} updated, {stats['skipped']} skipped, {stats['not_found']} not found, {stats['errors']} errors")
-        
+
         return {"success": True, "stats": stats, "logs": logs}
-        
+
     except Exception as e:
         logger.error(f"DHCP-MAC sync error: {e}")
         logs.append(f"Error: {str(e)}")

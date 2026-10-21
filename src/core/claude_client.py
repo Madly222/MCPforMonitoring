@@ -51,14 +51,14 @@ class CacheEntry:
 class ClaudeClient:
     """
     Client for Claude API interactions.
-    
+
     Features:
     - Error analysis
     - Command interpretation
     - Response caching
     - Rate limiting
     """
-    
+
     SYSTEM_PROMPT_ANALYSIS = """You are a Linux server diagnostic assistant.
 Analyze the provided error logs and system information.
 
@@ -109,65 +109,65 @@ Rules:
         self._client: Optional[Anthropic] = None
         self._cache: dict[str, CacheEntry] = {}
         self._request_times: list[datetime] = []
-    
+
     @property
     def client(self) -> Anthropic:
         if self._client is None:
             secrets = self.config.load_secrets()
             self._client = Anthropic(api_key=secrets.claude.api_key)
         return self._client
-    
+
     def _get_cache_key(self, prompt: str) -> str:
         return hashlib.md5(prompt.encode()).hexdigest()
-    
+
     def _get_cached(self, key: str) -> Optional[Any]:
         if key not in self._cache:
             return None
-        
+
         entry = self._cache[key]
         settings = self.config.load_settings()
         ttl_hours = settings.claude_optimization.cache.ttl_hours
-        
+
         if datetime.now() - entry.created_at > timedelta(hours=ttl_hours):
             del self._cache[key]
             return None
-        
+
         return entry.response
-    
+
     def _set_cached(self, key: str, response: Any):
         self._cache[key] = CacheEntry(
             response=response,
             created_at=datetime.now()
         )
-    
+
     def _check_rate_limit(self) -> bool:
         settings = self.config.load_settings()
         now = datetime.now()
-        
+
         minute_ago = now - timedelta(minutes=1)
         hour_ago = now - timedelta(hours=1)
-        
+
         self._request_times = [t for t in self._request_times if t > hour_ago]
-        
+
         requests_last_minute = sum(1 for t in self._request_times if t > minute_ago)
         requests_last_hour = len(self._request_times)
-        
+
         max_per_minute = settings.claude_optimization.rate_limit.max_requests_per_minute
         max_per_hour = settings.claude_optimization.rate_limit.max_requests_per_hour
-        
+
         if requests_last_minute >= max_per_minute:
             logger.warning(f"Rate limit: {requests_last_minute}/{max_per_minute} per minute")
             return False
-        
+
         if requests_last_hour >= max_per_hour:
             logger.warning(f"Rate limit: {requests_last_hour}/{max_per_hour} per hour")
             return False
-        
+
         return True
-    
+
     def _record_request(self):
         self._request_times.append(datetime.now())
-    
+
     async def analyze_error(
         self,
         error_lines: list[str],
@@ -176,12 +176,12 @@ Rules:
     ) -> AnalysisResult:
         """
         Analyze error using Claude API.
-        
+
         Args:
             error_lines: Error log lines
             server_info: Server information dict
             context_lines: Additional context lines
-            
+
         Returns:
             AnalysisResult with diagnosis and recommendations
         """
@@ -193,19 +193,19 @@ Init System: {server_info.get('init_system', 'unknown')}
 Error lines:
 {chr(10).join(error_lines[-20:])}
 """
-        
+
         if context_lines:
             prompt += f"""
 Context:
 {chr(10).join(context_lines[-30:])}
 """
-        
+
         cache_key = self._get_cache_key(prompt)
         cached = self._get_cached(cache_key)
         if cached:
             logger.debug("Using cached analysis")
             return cached
-        
+
         if not self._check_rate_limit():
             return AnalysisResult(
                 diagnosis="Rate limit exceeded, please try again later",
@@ -215,12 +215,12 @@ Context:
                 needs_human=True,
                 reason="API rate limit"
             )
-        
+
         try:
             secrets = self.config.load_secrets()
-            
+
             self._record_request()
-            
+
             response = self.client.messages.create(
                 model=secrets.claude.model,
                 max_tokens=secrets.claude.max_tokens,
@@ -229,13 +229,13 @@ Context:
                     {"role": "user", "content": prompt}
                 ]
             )
-            
+
             content = response.content[0].text
-            
+
             try:
                 # Handle potential markdown code blocks and extract JSON
                 json_str = content.strip()
-                
+
                 # Try to find JSON in markdown code block
                 if "```json" in json_str:
                     json_str = json_str.split("```json")[1].split("```")[0]
@@ -246,13 +246,13 @@ Context:
                         if part.startswith("{"):
                             json_str = part
                             break
-                
+
                 # Try to find JSON object directly
                 if not json_str.startswith("{"):
                     match = re.search(r'\{[^{}]*\}', json_str, re.DOTALL)
                     if match:
                         json_str = match.group(0)
-                
+
                 # Handle nested braces properly
                 brace_count = 0
                 start_idx = None
@@ -266,9 +266,9 @@ Context:
                         if brace_count == 0 and start_idx is not None:
                             json_str = json_str[start_idx:i+1]
                             break
-                
+
                 data = json.loads(json_str)
-                
+
                 result = AnalysisResult(
                     diagnosis=data.get("diagnosis", "Unable to analyze"),
                     severity=data.get("severity", "warning"),
@@ -278,13 +278,13 @@ Context:
                     reason=data.get("reason"),
                     suggestions=data.get("suggestions", [])
                 )
-                
+
                 self._set_cached(cache_key, result)
-                
+
                 logger.info(f"Claude analysis: {result.diagnosis[:50]}...")
-                
+
                 return result
-                
+
             except json.JSONDecodeError as e:
                 logger.error(f"Failed to parse Claude response: {e}")
                 return AnalysisResult(
@@ -295,7 +295,7 @@ Context:
                     needs_human=True,
                     reason="Could not parse structured response"
                 )
-                
+
         except Exception as e:
             logger.error(f"Claude API error: {e}")
             return AnalysisResult(
@@ -306,7 +306,7 @@ Context:
                 needs_human=True,
                 reason=str(e)
             )
-    
+
     async def interpret_command(
         self,
         command: str,
@@ -314,24 +314,24 @@ Context:
     ) -> CommandInterpretation:
         """
         Interpret natural language command.
-        
+
         Args:
             command: Natural language command from user
             available_servers: List of available server IDs
-            
+
         Returns:
             CommandInterpretation with extracted intent and parameters
         """
         system_prompt = self.SYSTEM_PROMPT_COMMAND.format(
             servers=", ".join(available_servers)
         )
-        
+
         cache_key = self._get_cache_key(f"cmd:{command}")
         cached = self._get_cached(cache_key)
         if cached:
             logger.debug("Using cached interpretation")
             return cached
-        
+
         if not self._check_rate_limit():
             return CommandInterpretation(
                 intent="error",
@@ -340,12 +340,12 @@ Context:
                 action=None,
                 confidence=0.0
             )
-        
+
         try:
             secrets = self.config.load_secrets()
-            
+
             self._record_request()
-            
+
             response = self.client.messages.create(
                 model=secrets.claude.model,
                 max_tokens=512,
@@ -354,17 +354,17 @@ Context:
                     {"role": "user", "content": command}
                 ]
             )
-            
+
             content = response.content[0].text
-            
+
             try:
                 if "```json" in content:
                     content = content.split("```json")[1].split("```")[0]
                 elif "```" in content:
                     content = content.split("```")[1].split("```")[0]
-                
+
                 data = json.loads(content.strip())
-                
+
                 result = CommandInterpretation(
                     intent=data.get("intent", "unknown"),
                     server_id=data.get("server_id"),
@@ -374,13 +374,13 @@ Context:
                     raw_command=data.get("raw_command"),
                     confidence=data.get("confidence", 0.5)
                 )
-                
+
                 self._set_cached(cache_key, result)
-                
+
                 logger.info(f"Command interpreted: intent={result.intent}, server={result.server_id}")
-                
+
                 return result
-                
+
             except json.JSONDecodeError as e:
                 logger.error(f"Failed to parse command interpretation: {e}")
                 return CommandInterpretation(
@@ -390,7 +390,7 @@ Context:
                     action=None,
                     confidence=0.0
                 )
-                
+
         except Exception as e:
             logger.error(f"Claude API error: {e}")
             return CommandInterpretation(
@@ -400,7 +400,7 @@ Context:
                 action=None,
                 confidence=0.0
             )
-    
+
     async def resolve_shell_command(
         self,
         request: str,
@@ -469,7 +469,7 @@ Context:
         now = datetime.now()
         minute_ago = now - timedelta(minutes=1)
         hour_ago = now - timedelta(hours=1)
-        
+
         return {
             "cache_size": len(self._cache),
             "requests_last_minute": sum(1 for t in self._request_times if t > minute_ago),

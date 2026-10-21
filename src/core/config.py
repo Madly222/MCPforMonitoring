@@ -7,7 +7,6 @@ Loads and validates configuration from YAML files:
 - config/services/*.yaml: Service-specific configurations
 """
 
-import os
 import sys
 from pathlib import Path
 from typing import Any, Optional
@@ -163,7 +162,7 @@ class SecretsConfig(BaseModel):
             if server.id == server_id and server.auth_type == "password":
                 return server.auth_value
         return ""
-    
+
     def get_sudo_password(self, server_id: str) -> Optional[str]:
         for server in self.servers:
             if server.id == server_id:
@@ -258,37 +257,37 @@ class SettingsConfig(BaseModel):
 
 
 class ConfigLoader:
-    
+
     _instance: Optional["ConfigLoader"] = None
     _secrets: Optional[SecretsConfig] = None
     _settings: Optional[SettingsConfig] = None
     _service_configs: dict[str, dict[str, Any]] = {}
-    
+
     def __new__(cls) -> "ConfigLoader":
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
-    
+
     def load_yaml(self, path: Path) -> dict[str, Any]:
         if not path.exists():
             raise FileNotFoundError(f"Configuration file not found: {path}")
-        
+
         with open(path, "r", encoding="utf-8") as f:
             data = yaml.safe_load(f)
-        
+
         return data or {}
-    
+
     def load_secrets(self, path: Optional[Path] = None) -> SecretsConfig:
         if self._secrets is not None:
             return self._secrets
-        
+
         secrets_path = path or SECRETS_FILE
-        
+
         if not secrets_path.exists():
             logger.error(f"Secrets file not found: {secrets_path}")
             logger.info("Please copy secrets.example.yaml to secrets.yaml and configure it")
             sys.exit(1)
-        
+
         try:
             data = self.load_yaml(secrets_path)
             self._secrets = SecretsConfig(**data)
@@ -298,11 +297,11 @@ class ConfigLoader:
         except Exception as e:
             logger.error(f"Failed to load secrets: {e}")
             sys.exit(1)
-    
+
     def _merge_runtime_overrides(self) -> None:
         """
         Merge web-edited server/OLT overrides over secrets.yaml.
-        
+
         Seed-and-own: on first load the runtime store is seeded from secrets.yaml;
         afterwards the store is the source of truth. Any failure here is non-fatal
         and falls back to the secrets.yaml values so startup never breaks.
@@ -311,7 +310,7 @@ class ConfigLoader:
             import src.web.runtime_config as rc
         except Exception:
             return
-        
+
         try:
             if not rc.servers_seeded():
                 rc.seed_servers([s.model_dump() for s in self._secrets.servers])
@@ -329,7 +328,7 @@ class ConfigLoader:
             self._secrets.servers = merged
         except Exception as e:
             logger.error(f"Runtime server override skipped (using secrets.yaml): {e}")
-        
+
         try:
             if self._secrets.onu_monitoring is not None:
                 if not rc.olts_seeded():
@@ -339,18 +338,18 @@ class ConfigLoader:
                 ]
         except Exception as e:
             logger.error(f"Runtime OLT override skipped (using secrets.yaml): {e}")
-    
+
     def load_settings(self, path: Optional[Path] = None) -> SettingsConfig:
         if self._settings is not None:
             return self._settings
-        
+
         settings_path = path or SETTINGS_FILE
-        
+
         if not settings_path.exists():
             logger.warning(f"Settings file not found: {settings_path}, using defaults")
             self._settings = SettingsConfig()
             return self._settings
-        
+
         try:
             data = self.load_yaml(settings_path)
             self._settings = SettingsConfig(**data)
@@ -360,17 +359,17 @@ class ConfigLoader:
             logger.warning(f"Failed to load settings: {e}, using defaults")
             self._settings = SettingsConfig()
             return self._settings
-    
+
     def load_service_config(self, service_type: str) -> dict[str, Any]:
         if service_type in self._service_configs:
             return self._service_configs[service_type]
-        
+
         service_file = SERVICES_DIR / f"{service_type}.yaml"
-        
+
         if not service_file.exists():
             logger.warning(f"Service config not found: {service_file}")
             return {}
-        
+
         try:
             data = self.load_yaml(service_file)
             self._service_configs[service_type] = data
@@ -379,36 +378,36 @@ class ConfigLoader:
         except Exception as e:
             logger.warning(f"Failed to load service config {service_type}: {e}")
             return {}
-    
+
     def get_enabled_servers(self) -> list[ServerConfig]:
         secrets = self.load_secrets()
         return [s for s in secrets.servers if s.enabled]
-    
+
     def get_server_by_id(self, server_id: str) -> Optional[ServerConfig]:
         secrets = self.load_secrets()
         for server in secrets.servers:
             if server.id == server_id:
                 return server
         return None
-    
+
     def get_ssh_key_path(self, key_filename: str) -> Path:
         return KEYS_DIR / key_filename
-    
+
     def get_sudo_password(self, server_id: str) -> Optional[str]:
         secrets = self.load_secrets()
         return secrets.get_sudo_password(server_id)
-    
+
     # ONU Configuration methods
     def get_onu_monitoring_config(self) -> Optional[ONUMonitoringConfig]:
         secrets = self.load_secrets()
         return secrets.onu_monitoring
-    
+
     def get_enabled_olts(self) -> list[OLTConfig]:
         config = self.get_onu_monitoring_config()
         if config:
             return [olt for olt in config.olts if olt.enabled]
         return []
-    
+
     def get_olt_by_id(self, olt_id: str) -> Optional[OLTConfig]:
         config = self.get_onu_monitoring_config()
         if config:
@@ -416,7 +415,7 @@ class ConfigLoader:
                 if olt.id == olt_id:
                     return olt
         return None
-    
+
     def reload(self) -> None:
         self._secrets = None
         self._settings = None

@@ -6,7 +6,6 @@ Gathers comprehensive information about remote servers.
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any
 
 from loguru import logger
 from src.core.ssh_manager import SSHManager
@@ -16,14 +15,14 @@ from src.core.ssh_manager import SSHManager
 class ServerReport:
     server_id: str
     collected_at: datetime = field(default_factory=datetime.now)
-    
+
     # OS
     os_name: str = ""
     os_version: str = ""
     os_codename: str = ""
     kernel: str = ""
     arch: str = ""
-    
+
     # Hardware
     cpu_model: str = ""
     cpu_cores: int = 0
@@ -33,37 +32,37 @@ class ServerReport:
     disk_total_gb: float = 0.0
     disk_used_gb: float = 0.0
     disk_percent: float = 0.0
-    
+
     # Network
     hostname: str = ""
     interfaces: list = field(default_factory=list)
     open_ports: list = field(default_factory=list)
-    
+
     # Status
     uptime: str = ""
     load_average: str = ""
     init_system: str = ""
-    
+
     # Security
     reboot_required: bool = False
     firewall_status: str = "unknown"
-    
+
     # Services
     total_services: int = 0
     running_services: int = 0
     failed_services: int = 0
-    
+
     errors: list = field(default_factory=list)
 
 
 class SystemInfoCollector:
-    
+
     def __init__(self, ssh: SSHManager):
         self.ssh = ssh
-    
+
     async def collect(self, server_id: str) -> ServerReport:
         report = ServerReport(server_id=server_id)
-        
+
         try:
             await self._collect_os(server_id, report)
             await self._collect_hardware(server_id, report)
@@ -74,17 +73,17 @@ class SystemInfoCollector:
         except Exception as e:
             logger.error(f"Error collecting info for {server_id}: {e}")
             report.errors.append(str(e))
-        
+
         return report
-    
+
     async def _run(self, server_id: str, cmd: str, timeout: float = 10.0) -> str:
         result = await self.ssh.execute(server_id, cmd, timeout=timeout)
         return result.stdout.strip() if result.success else ""
-    
+
     async def _run_sudo(self, server_id: str, cmd: str, timeout: float = 30.0) -> str:
         result = await self.ssh.execute_sudo(server_id, cmd, timeout=timeout)
         return result.stdout.strip() if result.success else ""
-    
+
     async def _collect_os(self, server_id: str, report: ServerReport):
         # Parse /etc/os-release
         output = await self._run(server_id, "cat /etc/os-release 2>/dev/null")
@@ -98,20 +97,20 @@ class SystemInfoCollector:
                     report.os_version = value
                 elif key == "VERSION_CODENAME":
                     report.os_codename = value
-        
+
         report.kernel = await self._run(server_id, "uname -r")
         report.arch = await self._run(server_id, "uname -m")
-    
+
     async def _collect_hardware(self, server_id: str, report: ServerReport):
         cpu = await self._run(server_id, "grep 'model name' /proc/cpuinfo | head -1 | cut -d: -f2")
         report.cpu_model = cpu.strip()
-        
+
         cores = await self._run(server_id, "nproc 2>/dev/null || grep -c processor /proc/cpuinfo")
         try:
             report.cpu_cores = int(cores)
         except ValueError:
             pass
-        
+
         mem = await self._run(server_id, "free -m | grep Mem | awk '{print $2,$3}'")
         parts = mem.split()
         if len(parts) >= 2:
@@ -122,7 +121,7 @@ class SystemInfoCollector:
                     report.memory_percent = round(report.memory_used_mb / report.memory_total_mb * 100, 1)
             except ValueError:
                 pass
-        
+
         disk = await self._run(server_id, "df -BG / | tail -1 | awk '{gsub(\"G\",\"\"); print $2,$3,$5}'")
         parts = disk.split()
         if len(parts) >= 3:
@@ -132,10 +131,10 @@ class SystemInfoCollector:
                 report.disk_percent = float(parts[2].rstrip('%'))
             except ValueError:
                 pass
-    
+
     async def _collect_network(self, server_id: str, report: ServerReport):
         report.hostname = await self._run(server_id, "hostname -f 2>/dev/null || hostname")
-        
+
         output = await self._run(
             server_id,
             "ip -4 addr show 2>/dev/null | grep inet | awk '{print $NF, $2}'"
@@ -147,7 +146,7 @@ class SystemInfoCollector:
                     "name": parts[0],
                     "ip": parts[1].split("/")[0]
                 })
-        
+
         output = await self._run(
             server_id,
             "ss -tlnp 2>/dev/null | grep LISTEN | awk '{print $4}' | rev | cut -d: -f1 | rev | sort -un | head -15"
@@ -155,21 +154,21 @@ class SystemInfoCollector:
         for port in output.split("\n"):
             if port.isdigit():
                 report.open_ports.append(int(port))
-    
+
     async def _collect_status(self, server_id: str, report: ServerReport):
         report.uptime = await self._run(server_id, "uptime -p 2>/dev/null || uptime | sed 's/.*up/up/'")
         report.load_average = await self._run(server_id, "cat /proc/loadavg | cut -d' ' -f1-3")
-        
+
         init = await self._run(
             server_id,
             "if command -v systemctl >/dev/null 2>&1 && systemctl is-system-running >/dev/null 2>&1; then echo 'systemd'; else echo 'sysvinit'; fi"
         )
         report.init_system = init or "unknown"
-    
+
     async def _collect_security(self, server_id: str, report: ServerReport):
         reboot = await self._run(server_id, "[ -f /var/run/reboot-required ] && echo yes || echo no")
         report.reboot_required = reboot == "yes"
-        
+
         fw = await self._run(server_id, "ufw status 2>/dev/null | head -1 || echo unknown")
         if "active" in fw.lower():
             report.firewall_status = "active"
@@ -177,7 +176,7 @@ class SystemInfoCollector:
             report.firewall_status = "inactive"
         else:
             report.firewall_status = "unknown"
-    
+
     async def _collect_services(self, server_id: str, report: ServerReport):
         if report.init_system == "systemd":
             total = await self._run(server_id, "systemctl list-units --type=service --no-legend 2>/dev/null | wc -l")
@@ -187,7 +186,7 @@ class SystemInfoCollector:
             total = await self._run(server_id, "ls /etc/init.d/ 2>/dev/null | wc -l")
             running = await self._run(server_id, "ps aux | grep -v grep | wc -l")
             failed = "0"
-        
+
         try:
             report.total_services = int(total)
             report.running_services = int(running)

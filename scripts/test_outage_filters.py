@@ -90,10 +90,12 @@ new_w = [m for m in [w_active, w_notice] if acc._match_signature(m) not in acc.g
 check("new notice still triggers", w_notice in new_w and w_active not in new_w)
 
 print("\n== invalidate() resets cache ==")
-em._cached_status = "x"; em._last_check_time = now
+em._cached_status = "x"
+em._last_check_time = now
 em.invalidate()
 check("electric cache cleared", em._cached_status is None and em._last_check_time is None)
-acc._cached_status = "x"; acc._last_check_time = now
+acc._cached_status = "x"
+acc._last_check_time = now
 acc.invalidate()
 check("water cache cleared", acc._cached_status is None and acc._last_check_time is None)
 

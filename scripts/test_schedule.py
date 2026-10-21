@@ -56,7 +56,8 @@ def _make_fake(name):
 
     async def _check(force=False):
         calls[name] += 1
-        class S: ok = True
+        class S:
+            ok = True
         return S()
     setattr(mod, f"check_{name}_status", _check)
     return mod

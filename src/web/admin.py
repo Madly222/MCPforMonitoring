@@ -73,7 +73,7 @@ async def create_user(
     try:
         created = store.add_user(body.username, body.password, body.role)
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
 
     get_audit_logger().log(
         action="user_add",
@@ -109,7 +109,7 @@ async def delete_user(
     try:
         store.delete_user(username)
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
 
     get_audit_logger().log(
         action="user_delete",
@@ -135,7 +135,7 @@ async def change_password(
     try:
         store.set_password(username, body.password)
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
 
     get_audit_logger().log(
         action="user_password_change",
@@ -172,7 +172,7 @@ async def change_role(
     try:
         store.set_role(username, body.role)
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
 
     get_audit_logger().log(
         action="user_role_change",
@@ -231,7 +231,7 @@ async def update_notifications(
     try:
         result = rc.set_notification_config(channel, body)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     get_audit_logger().log(
         action="settings_notifications",
         username=user.username, role=user.role,
@@ -257,7 +257,7 @@ async def set_acc_pattern_ep(
     try:
         pattern = rc.set_acc_pattern(body.pattern)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     try:
         from src.monitoring.acc_monitor import invalidate as _acc_invalidate
         _acc_invalidate()
@@ -292,7 +292,7 @@ async def set_schedule_ep(
     try:
         new_time = rc.set_schedule_time(channel, body.time)
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     get_audit_logger().log(
         action="settings_schedule",
         username=user.username, role=user.role,
@@ -343,11 +343,13 @@ async def reseed_from_file(
     section = (body.get("section") or "").lower()
     if section == "servers":
         rc.clear_servers()
-        get_config().reload(); get_config().load_secrets()  # force immediate re-seed
+        get_config().reload()
+        get_config().load_secrets()  # force immediate re-seed
         detail, restart = "servers re-seeded from secrets.yaml", True
     elif section == "olts":
         rc.clear_olts()
-        get_config().reload(); get_config().load_secrets()
+        get_config().reload()
+        get_config().load_secrets()
         detail, restart = "olts re-seeded from secrets.yaml", True
     elif section == "users":
         n = get_user_store().reseed_from_secrets()
@@ -384,7 +386,7 @@ async def set_env_ep(
     try:
         n = envc.write_env(clean)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     get_audit_logger().log(
         action="settings_env", username=user.username, role=user.role,
         detail=f"keys={','.join(sorted(clean))}", success=True, ip=_client_ip(request),
@@ -408,7 +410,7 @@ async def set_dns_zone_ep(
     try:
         zone = rc.set_dns_test_zone(body.get("zone"))
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     get_audit_logger().log(
         action="settings_dns_zone",
         username=user.username, role=user.role,
@@ -433,7 +435,7 @@ async def set_ssh_timeout_ep(
     try:
         value = rc.set_ssh_timeout(body.get("seconds"))
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     get_audit_logger().log(
         action="settings_ssh_timeout",
         username=user.username, role=user.role,
@@ -459,7 +461,7 @@ async def set_command_timeout_ep(
     try:
         value = rc.set_command_timeout(body.get("seconds"))
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     get_audit_logger().log(
         action="settings_command_timeout",
         username=user.username, role=user.role,
@@ -488,7 +490,7 @@ async def set_auto_check_ep(
             body.get("interval_seconds", 30),
         )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     get_audit_logger().log(
         action="settings_auto_check",
         username=user.username, role=user.role,
@@ -563,11 +565,11 @@ async def create_server(body: dict, request: Request, user: UserInfo = Depends(r
     try:
         validated = ServerConfig(**body)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Invalid server: {e}")
+        raise HTTPException(status_code=400, detail=f"Invalid server: {e}") from e
     try:
         rc.add_server(validated.model_dump())
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     get_config().reload()
     get_audit_logger().log(action="server_add", username=user.username, role=user.role,
                            target=validated.id, success=True, ip=_client_ip(request))
@@ -586,7 +588,7 @@ async def edit_server(server_id: str, body: dict, request: Request, user: UserIn
     try:
         validated = ServerConfig(**merged)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Invalid server: {e}")
+        raise HTTPException(status_code=400, detail=f"Invalid server: {e}") from e
     rc.update_server(server_id, validated.model_dump())
     get_config().reload()
     get_audit_logger().log(action="server_edit", username=user.username, role=user.role,
@@ -600,7 +602,7 @@ async def remove_server(server_id: str, request: Request, user: UserInfo = Depen
     try:
         rc.delete_server(server_id)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     get_config().reload()
     get_audit_logger().log(action="server_delete", username=user.username, role=user.role,
                            target=server_id, success=True, ip=_client_ip(request))
@@ -627,11 +629,11 @@ async def create_olt(body: dict, request: Request, user: UserInfo = Depends(requ
     try:
         validated = OLTConfig(**body)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Invalid OLT: {e}")
+        raise HTTPException(status_code=400, detail=f"Invalid OLT: {e}") from e
     try:
         rc.add_olt(validated.model_dump())
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     get_config().reload()
     get_audit_logger().log(action="olt_add", username=user.username, role=user.role,
                            target=validated.id, success=True, ip=_client_ip(request))
@@ -649,7 +651,7 @@ async def edit_olt(olt_id: str, body: dict, request: Request, user: UserInfo = D
     try:
         validated = OLTConfig(**merged)
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Invalid OLT: {e}")
+        raise HTTPException(status_code=400, detail=f"Invalid OLT: {e}") from e
     rc.update_olt(olt_id, validated.model_dump())
     get_config().reload()
     get_audit_logger().log(action="olt_edit", username=user.username, role=user.role,
@@ -663,7 +665,7 @@ async def remove_olt(olt_id: str, request: Request, user: UserInfo = Depends(req
     try:
         rc.delete_olt(olt_id)
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     get_config().reload()
     get_audit_logger().log(action="olt_delete", username=user.username, role=user.role,
                            target=olt_id, success=True, ip=_client_ip(request))

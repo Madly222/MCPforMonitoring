@@ -16,7 +16,6 @@ import json
 import os
 import re
 import threading
-from pathlib import Path
 from typing import Optional
 
 from loguru import logger
@@ -151,7 +150,7 @@ def set_acc_pattern(pattern: str) -> str:
     try:
         re.compile(pattern)
     except re.error as e:
-        raise ValueError(f"Invalid regex pattern: {e}")
+        raise ValueError(f"Invalid regex pattern: {e}") from e
     with _lock:
         data = _load()
         data["acc_pattern"] = pattern
@@ -237,7 +236,7 @@ def set_auto_check(enabled: bool, interval_seconds) -> dict:
     try:
         interval = int(interval_seconds)
     except (TypeError, ValueError):
-        raise ValueError("interval_seconds must be an integer")
+        raise ValueError("interval_seconds must be an integer") from None
     if interval < _MIN_AUTOCHECK_INTERVAL:
         raise ValueError(f"interval_seconds must be >= {_MIN_AUTOCHECK_INTERVAL}")
     with _lock:
@@ -305,7 +304,7 @@ def set_ssh_timeout(seconds) -> int:
     try:
         value = int(seconds)
     except (TypeError, ValueError):
-        raise ValueError("Timeout must be an integer number of seconds")
+        raise ValueError("Timeout must be an integer number of seconds") from None
     if value < _MIN_SSH_TIMEOUT or value > _MAX_SSH_TIMEOUT:
         raise ValueError(
             f"Timeout must be between {_MIN_SSH_TIMEOUT} and {_MAX_SSH_TIMEOUT} seconds"
@@ -343,7 +342,7 @@ def set_command_timeout(seconds) -> int:
     try:
         value = int(seconds)
     except (TypeError, ValueError):
-        raise ValueError("Timeout must be an integer number of seconds")
+        raise ValueError("Timeout must be an integer number of seconds") from None
     if value < _MIN_COMMAND_TIMEOUT or value > _MAX_COMMAND_TIMEOUT:
         raise ValueError(
             f"Timeout must be between {_MIN_COMMAND_TIMEOUT} and {_MAX_COMMAND_TIMEOUT} seconds"
