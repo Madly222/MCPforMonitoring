@@ -7,6 +7,7 @@ Handles monitoring and management of DHCP servers:
 - dnsmasq
 """
 
+import shlex
 from typing import Any, Optional
 
 
@@ -116,12 +117,12 @@ class DHCPService(BaseService):
             if det and det["name"] == "isc-dhcp-server":
                 count_result = await self.ssh.execute(
                     self.server_id,
-                    f"grep -c '^lease' {leases_file} 2>/dev/null || echo '0'"
+                    f"grep -c '^lease' {shlex.quote(leases_file)} 2>/dev/null || echo '0'"
                 )
             else:
                 count_result = await self.ssh.execute(
                     self.server_id,
-                    f"wc -l < {leases_file} 2>/dev/null || echo '0'"
+                    f"wc -l < {shlex.quote(leases_file)} 2>/dev/null || echo '0'"
                 )
 
             try:
@@ -164,7 +165,7 @@ class DHCPService(BaseService):
                 )
             result = await self.ssh.execute(
                 self.server_id,
-                f"cat {leases_file}"
+                f"cat {shlex.quote(leases_file)}"
             )
             return DiagnosticResult(
                 name=name,
@@ -184,7 +185,7 @@ class DHCPService(BaseService):
                 )
             result = await self.ssh.execute(
                 self.server_id,
-                f"cat {config_file}"
+                f"cat {shlex.quote(config_file)}"
             )
             return DiagnosticResult(
                 name=name,
@@ -204,9 +205,9 @@ class DHCPService(BaseService):
                 )
 
             if det["name"] == "isc-dhcp-server":
-                cmd = f"dhcpd -t -cf {config_file} 2>&1"
+                cmd = f"dhcpd -t -cf {shlex.quote(config_file)} 2>&1"
             elif det["name"] == "kea-dhcp4":
-                cmd = f"kea-dhcp4 -t {config_file} 2>&1"
+                cmd = f"kea-dhcp4 -t {shlex.quote(config_file)} 2>&1"
             else:
                 cmd = "dnsmasq --test 2>&1"
 
@@ -229,9 +230,9 @@ class DHCPService(BaseService):
                 )
 
             if det["name"] == "isc-dhcp-server":
-                cmd = f"grep -c '^lease' {leases_file} 2>/dev/null || echo '0'"
+                cmd = f"grep -c '^lease' {shlex.quote(leases_file)} 2>/dev/null || echo '0'"
             else:
-                cmd = f"wc -l < {leases_file} 2>/dev/null || echo '0'"
+                cmd = f"wc -l < {shlex.quote(leases_file)} 2>/dev/null || echo '0'"
 
             result = await self.ssh.execute(self.server_id, cmd)
             return DiagnosticResult(
@@ -245,7 +246,7 @@ class DHCPService(BaseService):
             process_name = await self.get_process_name()
             result = await self.ssh.execute(
                 self.server_id,
-                f"ps aux | grep {process_name} | grep -v grep"
+                f"ps aux | grep -- {shlex.quote(process_name)} | grep -v grep"
             )
             return DiagnosticResult(
                 name=name,
@@ -277,7 +278,7 @@ class DHCPService(BaseService):
 
         result = await self.ssh.execute(
             self.server_id,
-            f"cat {leases_file}"
+            f"cat {shlex.quote(leases_file)}"
         )
 
         if not result.success:
@@ -377,7 +378,7 @@ class DHCPService(BaseService):
             # Fallback to syslog with dhcp filter
             result = await self.ssh.execute(
                 self.server_id,
-                f"grep -i dhcp /var/log/syslog 2>/dev/null | tail -n {lines} || tail -n {lines} /var/log/syslog 2>/dev/null || echo 'Cannot read logs'"
+                f"grep -i dhcp /var/log/syslog 2>/dev/null | tail -n {int(lines)} || tail -n {int(lines)} /var/log/syslog 2>/dev/null || echo 'Cannot read logs'"
             )
             return result.stdout if result.success else f"Error: {result.stderr}"
 
@@ -385,7 +386,7 @@ class DHCPService(BaseService):
 
         result = await self.ssh.execute(
             self.server_id,
-            f"tail -n {lines} {log_file} 2>/dev/null || echo 'Cannot read log file'"
+            f"tail -n {int(lines)} {shlex.quote(log_file)} 2>/dev/null || echo 'Cannot read log file'"
         )
 
         return result.stdout if result.success else f"Error: {result.stderr}"

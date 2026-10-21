@@ -9,6 +9,8 @@ Provides async SSH connections to remote servers for:
 """
 
 import asyncio
+import re
+import shlex
 from typing import Optional, AsyncIterator
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -23,6 +25,39 @@ from src.core.config import get_config, ServerConfig, KEYS_DIR
 # an unreachable / misconfigured host makes asyncssh.connect() hang for the OS
 # default (tens of seconds up to minutes), which used to freeze the whole
 # dashboard because status collection waits on every server at once.
+SUDO_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+# systemd unit / init.d script names: letters, digits and @ . _ : + -
+_SERVICE_NAME_RE = re.compile(r"[A-Za-z0-9@._:+][A-Za-z0-9@._:+-]*")
+
+
+def validate_service_name(name: str) -> str:
+    """Return the name unchanged, or raise ValueError if it is not a plain unit name."""
+    if not name or not _SERVICE_NAME_RE.fullmatch(name):
+        raise ValueError(f"Invalid service name: {name!r}")
+    return name
+
+
+def build_sudo_command(command: str, sudo_password: Optional[str]) -> str:
+    """Wrap a shell command so all of it runs as root.
+
+    The command goes through ``sh -c`` so pipes and ``||`` fallbacks run under
+    sudo too, not just the first program. With a password, sudo reads it from
+    stdin (-S); without one, -n fails at once instead of waiting for a prompt.
+    """
+    inner = f"env PATH={SUDO_PATH} sh -c {shlex.quote(command)}"
+    if sudo_password:
+        return f"printf '%s\\n' {shlex.quote(sudo_password)} | sudo -S -p '' {inner} 2>&1"
+    return f"sudo -n {inner}"
+
+
+def build_tail_command(log_file: str, filter_pattern: Optional[str] = None) -> str:
+    command = f"tail -F {shlex.quote(log_file)} 2>/dev/null"
+    if filter_pattern:
+        command += f" | grep --line-buffered {shlex.quote(filter_pattern)}"
+    return command
+
+
 SSH_CONNECT_TIMEOUT = 8.0  # fallback default; the live value comes from the store
 
 
@@ -351,20 +386,7 @@ class SSHManager:
         PATH is set inside sudo environment to ensure commands are found.
         """
         sudo_password = self._config.get_sudo_password(server_id)
-
-        # Full PATH for sudo environment - must be set INSIDE sudo via env
-        sudo_path = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-
-        if sudo_password:
-            # Escape single quotes in password
-            escaped_password = sudo_password.replace("'", "'\\''")
-            # -S reads password from stdin, -p '' suppresses custom prompt
-            sudo_command = f"echo '{escaped_password}' | sudo -S -p '' env PATH={sudo_path} {command} 2>&1"
-        else:
-            # Try passwordless sudo (requires NOPASSWD in sudoers)
-            sudo_command = f"sudo env PATH={sudo_path} {command}"
-
-        return await self.execute(server_id, sudo_command, timeout)
+        return await self.execute(server_id, build_sudo_command(command, sudo_password), timeout)
 
     async def check_service_status(
         self,
@@ -372,8 +394,10 @@ class SSHManager:
         service_name: str,
         process_name: Optional[str] = None
     ) -> ServiceStatus:
+        validate_service_name(service_name)
         init_sys = await self.detect_init_system(server_id)
         proc_name = process_name or service_name
+        q_proc = shlex.quote(proc_name)
 
         if init_sys == InitSystem.SYSTEMD:
             status_cmd = f"systemctl is-active {service_name} 2>/dev/null"
@@ -386,7 +410,7 @@ class SSHManager:
             enabled = enabled_result.stdout.strip()
 
         else:
-            running_cmd = f"pgrep -x {proc_name} >/dev/null 2>&1 && echo 'running' || echo 'stopped'"
+            running_cmd = f"pgrep -x {q_proc} >/dev/null 2>&1 && echo 'running' || echo 'stopped'"
             enabled_cmd = f"ls /etc/rc2.d/S*{service_name}* >/dev/null 2>&1 && echo 'enabled' || echo 'disabled'"
 
             status_result = await self.execute(server_id, running_cmd)
@@ -397,7 +421,7 @@ class SSHManager:
 
         pid = None
         if running:
-            pid_cmd = f"pgrep -x {proc_name} | head -1"
+            pid_cmd = f"pgrep -x {q_proc} | head -1"
             pid_result = await self.execute(server_id, pid_cmd)
             try:
                 pid = int(pid_result.stdout.strip())
@@ -418,6 +442,7 @@ class SSHManager:
         server_id: str,
         service_name: str
     ) -> CommandResult:
+        validate_service_name(service_name)
         init_sys = await self.detect_init_system(server_id)
 
         if init_sys == InitSystem.SYSTEMD:
@@ -434,6 +459,7 @@ class SSHManager:
         server_id: str,
         service_name: str
     ) -> CommandResult:
+        validate_service_name(service_name)
         init_sys = await self.detect_init_system(server_id)
 
         if init_sys == InitSystem.SYSTEMD:
@@ -450,6 +476,7 @@ class SSHManager:
         server_id: str,
         service_name: str
     ) -> CommandResult:
+        validate_service_name(service_name)
         init_sys = await self.detect_init_system(server_id)
 
         if init_sys == InitSystem.SYSTEMD:
@@ -466,6 +493,7 @@ class SSHManager:
         server_id: str,
         service_name: str
     ) -> CommandResult:
+        validate_service_name(service_name)
         init_sys = await self.detect_init_system(server_id)
 
         if init_sys == InitSystem.SYSTEMD:
@@ -484,9 +512,9 @@ class SSHManager:
         tail_lines: Optional[int] = None
     ) -> CommandResult:
         if tail_lines:
-            command = f"tail -n {tail_lines} {file_path}"
+            command = f"tail -n {int(tail_lines)} {shlex.quote(file_path)}"
         else:
-            command = f"cat {file_path}"
+            command = f"cat {shlex.quote(file_path)}"
 
         return await self.execute(server_id, command)
 
@@ -498,16 +526,16 @@ class SSHManager:
     ) -> CommandResult:
         """Read file with sudo privileges (for protected log files)."""
         if tail_lines:
-            command = f"tail -n {tail_lines} {file_path}"
+            command = f"tail -n {int(tail_lines)} {shlex.quote(file_path)}"
         else:
-            command = f"cat {file_path}"
+            command = f"cat {shlex.quote(file_path)}"
 
         return await self.execute_sudo(server_id, command)
 
     async def file_exists(self, server_id: str, file_path: str) -> bool:
         result = await self.execute(
             server_id,
-            f"[ -f {file_path} ] && echo 'exists' || echo 'not found'"
+            f"[ -f {shlex.quote(file_path)} ] && echo 'exists' || echo 'not found'"
         )
         return "exists" in result.stdout
 
@@ -531,10 +559,7 @@ class SSHManager:
         if not server:
             raise ValueError(f"Server not found: {server_id}")
 
-        if filter_pattern:
-            command = f"tail -F {log_file} 2>/dev/null | grep --line-buffered '{filter_pattern}'"
-        else:
-            command = f"tail -F {log_file} 2>/dev/null"
+        command = build_tail_command(log_file, filter_pattern)
 
         logger.info(f"Starting log tail on {server_id}: {log_file}")
 
@@ -565,18 +590,7 @@ class SSHManager:
             raise ValueError(f"Server not found: {server_id}")
 
         sudo_password = self._config.get_sudo_password(server_id)
-        sudo_path = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-
-        if filter_pattern:
-            tail_cmd = f"tail -F {log_file} 2>/dev/null | grep --line-buffered '{filter_pattern}'"
-        else:
-            tail_cmd = f"tail -F {log_file} 2>/dev/null"
-
-        if sudo_password:
-            escaped_password = sudo_password.replace("'", "'\\''")
-            command = f"echo '{escaped_password}' | sudo -S -p '' env PATH={sudo_path} {tail_cmd}"
-        else:
-            command = f"sudo env PATH={sudo_path} {tail_cmd}"
+        command = build_sudo_command(build_tail_command(log_file, filter_pattern), sudo_password)
 
         logger.info(f"Starting sudo log tail on {server_id}: {log_file}")
 

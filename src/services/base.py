@@ -5,6 +5,7 @@ Abstract base class for all service-specific handlers.
 Provides common interface for service monitoring and management.
 """
 
+import shlex
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -250,7 +251,7 @@ class BaseService(ABC):
 
         result = await self.ssh.execute(
             self.server_id,
-            f"tail -n {lines} {log_file} 2>/dev/null || echo 'Cannot read log file'"
+            f"tail -n {int(lines)} {shlex.quote(log_file)} 2>/dev/null || echo 'Cannot read log file'"
         )
 
         return result.stdout if result.success else f"Error: {result.stderr}"

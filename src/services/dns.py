@@ -8,6 +8,7 @@ Handles monitoring and management of DNS servers:
 - pdns (PowerDNS)
 """
 
+import shlex
 from typing import Any, Optional
 
 from loguru import logger
@@ -155,7 +156,7 @@ class DNSService(BaseService):
         for path in paths:
             result = await self.ssh.execute(
                 self.server_id,
-                f"[ -d {path} ] && echo 'exists'"
+                f"[ -d {shlex.quote(path)} ] && echo 'exists'"
             )
             if "exists" in result.stdout:
                 self._zones_dir = path
@@ -228,7 +229,7 @@ class DNSService(BaseService):
                 zone = rc.get_dns_test_zone()
             except Exception:
                 zone = "example.com"
-            custom_test = custom_test.replace("{zone}", zone)
+            custom_test = custom_test.replace("{zone}", shlex.quote(zone))
 
         dns_test = await self.ssh.execute(
             self.server_id,
@@ -268,7 +269,7 @@ class DNSService(BaseService):
         if det and det["name"] == "bind9" and info["zones_dir"]:
             count_result = await self.ssh.execute(
                 self.server_id,
-                f"find {info['zones_dir']} -name '*.zone' -o -name 'db.*' 2>/dev/null | wc -l"
+                f"find {shlex.quote(info['zones_dir'])} -name '*.zone' -o -name 'db.*' 2>/dev/null | wc -l"
             )
             try:
                 info["zones_count"] = int(count_result.stdout.strip())
@@ -360,7 +361,7 @@ class DNSService(BaseService):
                 )
             result = await self.ssh.execute(
                 self.server_id,
-                f"cat {config_file}"
+                f"cat {shlex.quote(config_file)}"
             )
             return DiagnosticResult(
                 name=name,
@@ -408,7 +409,7 @@ class DNSService(BaseService):
 
             result = await self.ssh.execute(
                 self.server_id,
-                f"find {zones_dir} -type f \\( -name '*.zone' -o -name 'db.*' \\) 2>/dev/null | head -50"
+                f"find {shlex.quote(zones_dir)} -type f \\( -name '*.zone' -o -name 'db.*' \\) 2>/dev/null | head -50"
             )
             return DiagnosticResult(
                 name=name,
@@ -458,7 +459,7 @@ class DNSService(BaseService):
             process_name = await self.get_process_name()
             result = await self.ssh.execute(
                 self.server_id,
-                f"ps aux | grep -E '{process_name}' | grep -v grep"
+                f"ps aux | grep -E -- {shlex.quote(process_name)} | grep -v grep"
             )
             return DiagnosticResult(
                 name=name,
@@ -503,8 +504,8 @@ class DNSService(BaseService):
             filter_pattern = "named|dns|bind|unbound" if det else "dns"
             result = await self.ssh.execute_sudo(
                 self.server_id,
-                f"grep -iE '{filter_pattern}' /var/log/syslog 2>/dev/null | tail -n {lines} || "
-                f"tail -n {lines} /var/log/syslog 2>/dev/null || echo 'Cannot read logs'"
+                f"grep -iE -- {shlex.quote(filter_pattern)} /var/log/syslog 2>/dev/null | tail -n {int(lines)} || "
+                f"tail -n {int(lines)} /var/log/syslog 2>/dev/null || echo 'Cannot read logs'"
             )
             return result.stdout if result.success else f"Error: {result.stderr}"
 
@@ -513,7 +514,7 @@ class DNSService(BaseService):
         # Try without sudo first, then with sudo
         result = await self.ssh.execute(
             self.server_id,
-            f"tail -n {lines} {log_file} 2>/dev/null"
+            f"tail -n {int(lines)} {shlex.quote(log_file)} 2>/dev/null"
         )
 
         if result.success and result.stdout.strip():
@@ -521,7 +522,7 @@ class DNSService(BaseService):
 
         result = await self.ssh.execute_sudo(
             self.server_id,
-            f"tail -n {lines} {log_file} 2>/dev/null || echo 'Cannot read log file'"
+            f"tail -n {int(lines)} {shlex.quote(log_file)} 2>/dev/null || echo 'Cannot read log file'"
         )
 
         return result.stdout if result.success else f"Error: {result.stderr}"

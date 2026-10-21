@@ -5,6 +5,7 @@ Handles monitoring and management of RADIUS servers:
 - FreeRADIUS
 """
 
+import shlex
 from typing import Any, Optional
 
 from loguru import logger
@@ -236,7 +237,7 @@ class RADIUSService(BaseService):
         for path in log_paths:
             result = await self.ssh.execute_sudo(
                 self.server_id,
-                f"[ -f {path} ] && echo 'exists'"
+                f"[ -f {shlex.quote(path)} ] && echo 'exists'"
             )
             if "exists" in result.stdout:
                 existing.append(path)
@@ -277,7 +278,7 @@ class RADIUSService(BaseService):
                 )
             result = await self.ssh.execute_sudo(
                 self.server_id,
-                f"cat {config_file}"
+                f"cat {shlex.quote(config_file)}"
             )
             return DiagnosticResult(
                 name=name,
@@ -412,7 +413,7 @@ class RADIUSService(BaseService):
         log_file = log_files[0]
         result = await self.ssh.execute_sudo(
             self.server_id,
-            f"tail -n {lines} {log_file} 2>/dev/null || echo 'Cannot read log file'"
+            f"tail -n {int(lines)} {shlex.quote(log_file)} 2>/dev/null || echo 'Cannot read log file'"
         )
 
         return result.stdout if result.success else f"Error: {result.stderr}"
