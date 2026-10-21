@@ -13,6 +13,8 @@ from enum import Enum
 
 from loguru import logger
 
+from src.services.base import detection_found as _detection_found
+
 from src.core.config import get_config
 from src.core.ssh_manager import get_ssh_manager, SSHManager
 
@@ -239,7 +241,7 @@ class LogWatcher:
 
                 for det in detection:
                     result = await self.ssh.execute(server.id, det["check"], timeout=10.0)
-                    if result.success and "found" in result.stdout:
+                    if result.success and _detection_found(result.stdout):
                         detected_name = det["name"]
                         break
 

@@ -63,6 +63,11 @@ class DiagnosticResult:
     error: Optional[str] = None
 
 
+def detection_found(stdout: str) -> bool:
+    """A detection check prints "found" or "not found"; only an exact "found" line counts."""
+    return any(line.strip() == "found" for line in stdout.splitlines())
+
+
 class BaseService(ABC):
 
     service_type: str = "generic"
@@ -90,7 +95,7 @@ class BaseService(ABC):
 
         for det in detection:
             result = await self.ssh.execute(self.server_id, det["check"], timeout=10.0)
-            if result.success and "found" in result.stdout:
+            if result.success and detection_found(result.stdout):
                 self._detected_service = det
                 logger.debug(f"Detected {det['name']} on {self.server_id}")
                 return det

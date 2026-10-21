@@ -14,6 +14,7 @@ from typing import Any, Optional
 from loguru import logger
 
 from src.services.base import (
+    detection_found,
     BaseService,
     HealthCheckResult,
     DiagnosticResult,
@@ -44,7 +45,7 @@ class DNSService(BaseService):
 
         for det in detection:
             result = await self.ssh.execute(self.server_id, det["check"], timeout=10.0)
-            if result.success and "found" in result.stdout:
+            if result.success and detection_found(result.stdout):
                 self._detected_service = det
                 logger.debug(f"Detected {det['name']} on {self.server_id}")
                 return det
