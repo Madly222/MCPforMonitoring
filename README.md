@@ -158,7 +158,9 @@ About 140 tests cover the risk classifier and limiter, the confirmation flow ove
 
 ## Background and design decisions
 
-This started as an internal tool for the network team of an ISP and ran against its production fleet before it was cleaned up for publication.
+This is an internal tool for the network operations team of a small ISP, in production for about half a year against the company's real equipment: 5 Linux servers (DHCP, DNS, RADIUS) and 2 ZTE C320 OLTs, plus the Cisco switches and routers behind NetBox. Up to five engineers have access; one of them is the main user and drove most of the requirements.
+
+Before it, none of this was automated: service checks, log reading, ONU signal checks, finding which switch port a subscriber's MAC is on, keeping NetBox in sync with the cabling and watching the utilities' outage pages were all done by hand. The app grew one tool at a time, each added when a colleague needed a piece of their daily work automated, which is why it is a toolbox for one team rather than a single-purpose product. Before publication it was cleaned up: tests, CI, the risk policy, the demo and this documentation were added (see [CHANGELOG.md](CHANGELOG.md)).
 
 - **Templates before the model.** Status, logs and restarts are most of the traffic. Rendering them from a cached host profile costs no tokens and behaves the same every time; Claude handles the long tail, and its answers are cached per host profile.
 - **Classify commands instead of trusting the model's own "safe" flag.** The prompt asks Claude to refuse destructive requests, but the decision to run something is made by deterministic code reading a policy file the operator controls.
