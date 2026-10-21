@@ -52,6 +52,10 @@ Feature tree: [02-servers](features/02-servers.md)
 
 ![Restart the monitor](screenshots/gallery/07-restart-monitor-confirm.png)
 
+**Incidents.** Errors found in the server logs. Known ones carry a diagnosis and a fix plan, each command with its risk and the policy's verdict, and an admin can apply it; unknown ones go to Claude when an API key is set. Feature tree: [03-monitoring](features/03-monitoring.md).
+
+![Incidents](screenshots/08-incidents.png)
+
 ## 3. Terminal and AI commands
 
 Feature tree: [04-terminal](features/04-terminal.md)
@@ -59,6 +63,10 @@ Feature tree: [04-terminal](features/04-terminal.md)
 **Interpret mode.** A plain-language request is turned into a shell command, run over SSH and summarised by Claude.
 
 ![AI console](screenshots/02-ai-console.png)
+
+**Confirmation of a risky command.** A command the risk policy does not let run on its own comes back with the exact command line, its risk and the reason, and runs only if the same admin confirms it.
+
+![Confirm a risky command](screenshots/09-confirm-command.png)
 
 **Direct SSH console.** Pick a server, optionally run with sudo.
 

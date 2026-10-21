@@ -38,7 +38,7 @@ Without Docker: `pip install -r requirements.txt && DEMO_MODE=1 python -m src.ma
 | **Administration** | Users and roles, live server/OLT configuration, notification settings, `.env` editor, audit log. |
 | **MCP server** | Read-only [Model Context Protocol](https://modelcontextprotocol.io) tools so Claude Desktop or Claude Code can ask about status, errors, ONUs and outages ([mcp_server/](mcp_server/README.md)). |
 
-A visual tour, one tree per area: [docs/features](docs/features/README.md). All 26 screens: [docs/SCREENSHOTS.md](docs/SCREENSHOTS.md).
+A visual tour, one tree per area: [docs/features](docs/features/README.md). All 28 screens: [docs/SCREENSHOTS.md](docs/SCREENSHOTS.md).
 
 ## How AI commands stay safe
 
@@ -55,6 +55,10 @@ flowchart LR
     POL -->|"anything else"| ASK["Show the exact command,<br/>its risk and why"] --> OK{Same admin<br/>confirms in 5 min} --> RUN
     RUN --> AUDIT[(Audit log)]
 ```
+
+| A risky command waits for the operator | Known errors come with a fix plan |
+|---|---|
+| ![Confirmation dialog for a risky command](docs/screenshots/09-confirm-command.png) | ![Incidents card with fix plans](docs/screenshots/08-incidents.png) |
 
 - **Templates first.** Most requests are status, logs, errors or a restart. The resolver renders those from a per-host capability profile (systemd or SysVinit, journald or log files) without calling Claude, and caches whatever Claude resolves per server.
 - **Risk policy.** Every command the app builds, from a template or from Claude, is classified by `src/actions/policy.py`: read-only programs are risk 0, restarts follow `config/safe_actions.yaml`, `stop` is risk 2, and anything unrecognised, writing to a file or using command substitution is risk 3. Pipes and `||` chains take the risk of their worst part, and quoting is respected. Only risk-0 commands and restarts of listed services run without a human.
