@@ -115,6 +115,8 @@ async def lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
+    server_cfg = get_config().load_secrets().mcp_server
+
     app = FastAPI(
         title="MCP Server Monitor",
         description="Intelligent server monitoring and auto-remediation system",
@@ -122,13 +124,15 @@ def create_app() -> FastAPI:
         lifespan=lifespan
     )
 
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+    # The dashboard is served by this app, so CORS is off unless origins are listed.
+    if server_cfg.cors_origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=server_cfg.cors_origins,
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
 
     app.include_router(auth_router, prefix="/api/auth", tags=["Authentication"])
     app.include_router(api_router, prefix="/api", tags=["API"])

@@ -20,11 +20,21 @@ from src.core.config import get_config, PROJECT_ROOT
 
 VALID_ROLES = ("operator", "admin", "superadmin")
 
+MIN_PASSWORD_LENGTH = 10
+
 USERS_FILE = PROJECT_ROOT / "sessions" / "users.json"
 
 
 def _hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+
+def validate_password(password: str) -> None:
+    """Raise ValueError if the password does not meet the policy."""
+    if not password:
+        raise ValueError("Password is required")
+    if len(password) < MIN_PASSWORD_LENGTH:
+        raise ValueError(f"Password must be at least {MIN_PASSWORD_LENGTH} characters")
 
 
 def _looks_hashed(value: str) -> bool:
@@ -142,8 +152,7 @@ class UserStore:
             raise ValueError("Username is required")
         if role not in VALID_ROLES:
             raise ValueError(f"Invalid role: {role}")
-        if not password:
-            raise ValueError("Password is required")
+        validate_password(password)
         with self._lock:
             if username in self._users:
                 raise ValueError(f"User already exists: {username}")
@@ -168,8 +177,7 @@ class UserStore:
 
     def set_password(self, username: str, password: str) -> None:
         """Change a user's password. Raises ValueError on invalid input."""
-        if not password:
-            raise ValueError("Password is required")
+        validate_password(password)
         with self._lock:
             if username not in self._users:
                 raise ValueError(f"User not found: {username}")

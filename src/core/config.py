@@ -116,6 +116,12 @@ class MCPServerConfig(BaseModel):
     web_port: int = 4455
     session_secret: str
     session_expire_hours: int = 24
+    # Browser origins allowed to call the API cross-origin. Empty = same-origin only.
+    cors_origins: list[str] = Field(default_factory=list)
+    # Set to true when the dashboard is served over HTTPS (e.g. behind a reverse proxy).
+    cookie_secure: bool = False
+    login_max_attempts: int = 5
+    login_lockout_minutes: int = 15
 
 
 class ClaudeConfig(BaseModel):

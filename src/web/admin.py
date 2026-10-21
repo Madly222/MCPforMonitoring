@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from loguru import logger
 
-from src.web.auth import UserInfo, require_superadmin
+from src.web.auth import UserInfo, get_session_store, require_superadmin
 from src.web.users import get_user_store, VALID_ROLES
 from src.web.audit import get_audit_logger
 from src.web import runtime_config as rc
@@ -110,6 +110,7 @@ async def delete_user(
         store.delete_user(username)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+    get_session_store().delete_user_sessions(username)
 
     get_audit_logger().log(
         action="user_delete",
@@ -136,6 +137,8 @@ async def change_password(
         store.set_password(username, body.password)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+    # The user must log in again with the new password everywhere
+    get_session_store().delete_user_sessions(username)
 
     get_audit_logger().log(
         action="user_password_change",
