@@ -8,6 +8,7 @@ truth for authentication and user management.
 Roles: superadmin > admin > operator.
 """
 
+import os
 import json
 import threading
 from datetime import datetime
@@ -112,6 +113,7 @@ class UserStore:
         tmp = USERS_FILE.with_suffix(".json.tmp")
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump({"users": list(self._users.values())}, f, indent=2, ensure_ascii=False)
+        os.chmod(tmp, 0o600)  # password hashes
         tmp.replace(USERS_FILE)
 
     def verify(self, username: str, password: str) -> Optional[dict]:

@@ -4,6 +4,7 @@ Authentication Module.
 Handles user authentication and session management.
 """
 
+import os
 import hashlib
 import json
 import math
@@ -104,6 +105,7 @@ class SessionStore:
         tmp = self._path.with_suffix(".json.tmp")
         with open(tmp, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
+        os.chmod(tmp, 0o600)
         tmp.replace(self._path)
 
     def create_session(self, username: str, role: str) -> str:

@@ -147,7 +147,8 @@ Environment variables `MONITOR_DATA_DIR`, `MONITOR_SECRETS_FILE`, `DEMO_MODE` an
 - Three roles: `operator` reads, `admin` runs commands, confirms risky ones and writes to NetBox, `superadmin` also manages users and configuration. [`tests/test_route_roles.py`](tests/test_route_roles.py) pins the required role of each of the 75 routes, so a new endpoint fails CI until someone decides who may call it.
 - Passwords are bcrypt-hashed, at least 10 characters. Sessions are random 256-bit tokens in an HttpOnly, SameSite=Lax cookie (`Secure` behind HTTPS); the server stores only their SHA-256. Roles are re-read on every request, so demotions and deletions apply at once, and password changes end the user's other sessions.
 - Repeated failed logins lock the username and the client IP out (HTTP 429).
-- CORS is off unless origins are listed. Secrets, keys and runtime data are gitignored and live outside the image.
+- SSH host keys are trusted on first use and checked on every later connection. Servers can use SSH keys and `NOPASSWD` sudo, so no server password needs to be stored.
+- Secrets live in `secrets.yaml`, `.env` and `keys/`, all gitignored and outside the image; files the app writes with credentials or sessions are owner-only (0600). CORS is off unless origins are listed.
 - Every privileged action, including each command and its confirmation, is written to an append-only audit log.
 
 ## Tests and CI

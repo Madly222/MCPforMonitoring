@@ -9,8 +9,10 @@ Provides async SSH connections to remote servers for:
 """
 
 import asyncio
+import os
 import re
 import shlex
+from pathlib import Path
 from typing import Optional, AsyncIterator
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -19,7 +21,7 @@ from enum import Enum
 import asyncssh
 from loguru import logger
 
-from src.core.config import get_config, ServerConfig, KEYS_DIR
+from src.core.config import get_config, ServerConfig, KEYS_DIR, SESSIONS_DIR
 
 # Hard ceiling for establishing an SSH connection (TCP + auth). Without this,
 # an unreachable / misconfigured host makes asyncssh.connect() hang for the OS
@@ -58,6 +60,36 @@ def build_tail_command(log_file: str, filter_pattern: Optional[str] = None) -> s
     return command
 
 
+KNOWN_HOSTS_FILE = SESSIONS_DIR / "known_hosts"
+
+
+class KnownHosts:
+    """Host keys of monitored servers in OpenSSH known_hosts format (trust on first use)."""
+
+    def __init__(self, path: Optional[Path] = None):
+        self.path = path or KNOWN_HOSTS_FILE
+
+    @staticmethod
+    def pattern(host: str, port: int) -> str:
+        return host if port == 22 else f"[{host}]:{port}"
+
+    def has(self, host: str, port: int) -> bool:
+        if not self.path.exists():
+            return False
+        wanted = self.pattern(host, port)
+        for line in self.path.read_text(encoding="utf-8").splitlines():
+            if line and not line.startswith("#") and wanted in line.split(" ", 1)[0].split(","):
+                return True
+        return False
+
+    def add(self, host: str, port: int, key: asyncssh.SSHKey) -> None:
+        public = key.export_public_key("openssh").decode("ascii").strip()
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        with open(self.path, "a", encoding="utf-8") as f:
+            f.write(f"{self.pattern(host, port)} {public}\n")
+        os.chmod(self.path, 0o600)
+
+
 SSH_CONNECT_TIMEOUT = 8.0  # fallback default; the live value comes from the store
 
 
@@ -94,6 +126,10 @@ def _friendly_ssh_error(raw: str) -> str:
         return f"SSH key not found. {raw}"
     if "name or service not known" in low or "getaddrinfo" in low:
         return f"Cannot resolve the host name. {raw}"
+    if "host key" in low and ("not trusted" in low or "revoked" in low):
+        return ("Host key does not match the one saved on the first connection: the server was "
+                f"reinstalled, or this is not the expected host. If it was reinstalled, remove its "
+                f"line from {KNOWN_HOSTS_FILE}. {raw}")
     if "disabled" in low:
         return f"Server is disabled in the config. {raw}"
     return raw
@@ -170,7 +206,6 @@ class SSHConnectionPool:
             "host": server.host,
             "port": server.port,
             "username": server.user,
-            "known_hosts": None,
             # asyncssh's own timeout for the TCP connect + auth handshake.
             "connect_timeout": connect_timeout,
         }
@@ -182,6 +217,13 @@ class SSHConnectionPool:
             connect_kwargs["client_keys"] = [str(key_path)]
         else:
             connect_kwargs["password"] = server.auth_value
+
+        known_hosts = KnownHosts()
+        check_keys = get_config().load_secrets().mcp_server.ssh_host_keys == "tofu"
+        first_contact = check_keys and not known_hosts.has(server.host, server.port)
+        # A known server is checked against its saved key; a new one is accepted
+        # once and its key saved for next time.
+        connect_kwargs["known_hosts"] = str(known_hosts.path) if check_keys and not first_contact else None
 
         logger.debug(f"Connecting to {server.id} ({server.host}:{server.port})")
 
@@ -198,6 +240,12 @@ class SSHConnectionPool:
                 f"Timed out connecting to {server.id} "
                 f"({server.host}:{server.port}) after {connect_timeout:.0f}s"
             ) from None
+
+        if first_contact:
+            key = conn.get_server_host_key()
+            if key is not None:
+                known_hosts.add(server.host, server.port, key)
+                logger.info(f"Saved the SSH host key of {server.id} ({key.get_algorithm()})")
 
         logger.info(f"Connected to {server.id} ({server.host})")
 

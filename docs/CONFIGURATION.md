@@ -91,6 +91,7 @@ Each `olts[]` entry:
 | `cookie_secure` | bool | `false` | Mark the session cookie Secure (set when served over HTTPS) |
 | `login_max_attempts` | int | `5` | Failed logins per username or IP before a lockout |
 | `login_lockout_minutes` | int | `15` | Lockout length and the window failures are counted in |
+| `ssh_host_keys` | `tofu` \| `off` | `tofu` | `tofu` saves each server's SSH host key on the first connection (`sessions/known_hosts`) and refuses a different key later; `off` accepts any key |
 
 ### `claude`
 | Field | Type | Default | Notes |

@@ -1,5 +1,6 @@
 """Session store, login throttling and the auth/admin HTTP flow."""
 
+import os
 from datetime import datetime, timedelta
 
 import pytest
@@ -163,3 +164,12 @@ def test_short_passwords_are_rejected(client):
     resp = client.post("/api/admin/users", json={"username": "carol", "password": short, "role": "operator"})
     assert resp.status_code == 400
     assert str(MIN_PASSWORD_LENGTH) in resp.json()["detail"]
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX permissions")
+def test_session_and_user_files_are_owner_only(web_env, tmp_path):
+    auth.SessionStore().create_session("alice", "superadmin")
+    get_user_store()
+
+    for name in ("web_sessions.json", "users.json"):
+        assert (tmp_path / name).stat().st_mode & 0o777 == 0o600, name

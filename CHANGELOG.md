@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.1 — 2026-10-21
+
+### Security
+- SSH host keys of monitored servers are trusted on first use (`sessions/known_hosts`) and checked on every later connection; a changed key is refused with an explanation. `mcp_server.ssh_host_keys: off` restores the old behaviour, which accepted any key.
+- `.env`, the user, session and runtime-settings stores and `known_hosts` are written owner-only (0600).
+- Deployment guide: SSH keys instead of passwords, what `NOPASSWD` sudo does and does not limit, file permissions.
+
 ## 1.1.0 — 2026-10-21
 
 Hardening and clean-up for publication. The project is renamed NetOps Control Plane.

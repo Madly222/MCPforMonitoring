@@ -195,8 +195,30 @@ If timer unit files changed, re-copy them and `sudo systemctl daemon-reload`.
 - **Firewall.** Limit `:4455` to trusted networks.
 - **Secrets.** `secrets.yaml`, `.env`, and `keys/` are gitignored — keep file
   permissions tight (`chmod 600` on keys; restrict the project dir).
-- **Least privilege.** Give the monitoring SSH user only the sudo rights it needs
-  for service control; prefer `NOPASSWD` scoped to specific commands.
+- **SSH keys instead of passwords.** Put a key in `keys/` and use
+  `auth_type: key` with `auth_value: monitor` (the file name in `keys/`), so
+  `secrets.yaml` holds no server passwords:
+
+  ```bash
+  ssh-keygen -t ed25519 -f keys/monitor -N ""
+  ssh-copy-id -i keys/monitor.pub monitor@192.0.2.10
+  ```
+- **Least privilege.** Run the panel's SSH sessions as a dedicated `monitor` user
+  with key-only login. To avoid storing a `sudo_password`, give that user
+  `NOPASSWD` sudo. Be aware that the panel wraps every elevated command as
+  `sudo env PATH=... sh -c '<command>'` (so that pipes and `||` fallbacks run
+  elevated too), and sudoers wildcards match `;`, so sudo cannot be narrowed to
+  "only restarts" with patterns: whoever holds the monitor key has root on that
+  server. What limits the damage is the panel itself (roles, the risk policy,
+  confirmations and the audit log) and keeping `keys/` readable by the service
+  user only.
+- **Host keys.** With `mcp_server.ssh_host_keys: tofu` (the default) each server's
+  key is saved on the first connection and checked afterwards. After reinstalling a
+  server, delete its line from `sessions/known_hosts`.
+- **File permissions.** The app writes `.env`, `sessions/users.json`,
+  `sessions/runtime_settings.json`, `sessions/web_sessions.json` and
+  `sessions/known_hosts` as owner-only (0600). Do the same for `secrets.yaml` and
+  `keys/*` (`chmod 600`), and run the service as its own user.
 - **Sessions.** Delete `sessions/web_sessions.json` and restart to log everyone out.
 
 ---

@@ -7,6 +7,7 @@ token of a changed key is replaced. Secret-looking keys are masked on read and
 only overwritten when a non-empty value is supplied.
 """
 
+import os
 import re
 
 from loguru import logger
@@ -114,6 +115,7 @@ def write_env(updates: dict) -> int:
     text = "\n".join(out) + ("\n" if had_trailing_nl else "")
     tmp = ENV_PATH.with_suffix(ENV_PATH.suffix + ".tmp")
     tmp.write_text(text, encoding="utf-8")
+    os.chmod(tmp, 0o600)  # SMTP, NetBox and switch credentials
     tmp.replace(ENV_PATH)
     logger.info(f".env updated: {', '.join(sorted(seen | (set(updates) - seen)))}")
     return len(updates)

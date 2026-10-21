@@ -51,6 +51,7 @@ def _save(data: dict) -> None:
     tmp = RUNTIME_FILE.with_suffix(".json.tmp")
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
+    os.chmod(tmp, 0o600)  # holds SSH and SNMP credentials
     tmp.replace(RUNTIME_FILE)
     _cache = data
 

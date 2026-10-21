@@ -134,6 +134,9 @@ class MCPServerConfig(BaseModel):
     cookie_secure: bool = False
     login_max_attempts: int = 5
     login_lockout_minutes: int = 15
+    # SSH host keys of monitored servers: "tofu" remembers each server's key on
+    # the first connection and refuses a different one later; "off" accepts any.
+    ssh_host_keys: Literal["tofu", "off"] = "tofu"
 
 
 class ClaudeConfig(BaseModel):
