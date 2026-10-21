@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.3 — 2026-10-21
+
+### Fixed
+- CI was red on 1.1.2 because of the tests, not the classifier: the property test treated `>&0` (descriptor duplication, like `2>&1`) as a file write. It now flags only redirections that can write, with `>&0`, `grep 'a>b'` and `>& file` pinned as examples.
+- The SSH host-key test waits for its server to close before reusing the port.
+- CI turns failing tests into run annotations, so a failure is readable without signing in to GitHub.
+
 ## 1.1.2 — 2026-10-21
 
 ### Security

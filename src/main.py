@@ -76,7 +76,7 @@ def main():
     setup_logging()
 
     logger.info("=" * 60)
-    logger.info("NetOps Control Plane v1.1.2")
+    logger.info("NetOps Control Plane v1.1.3")
     logger.info("=" * 60)
 
     check_configuration()
