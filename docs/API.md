@@ -92,7 +92,17 @@ Available diagnostics depend on the service handler.
 Body: `CommandRequest`. Interprets a natural-language command via Claude; if
 confidence ≤ 0.7 or the API fails, falls back to keyword parsing
 (`status` / `restart` / `logs` / `health`). Response: `CommandResponse`
-(`source` indicates `claude` or `local`).
+(`source` indicates `template`, `cache`, `claude` or `local`).
+
+A shell command built by the resolver runs only if `config/safe_actions.yaml`
+allows it without confirmation (read-only commands, restarts of listed
+services). Otherwise nothing runs and `confirmation` is set:
+`{id, server_id, command, sudo, action, risk, reason, why, expires_in_seconds}`.
+
+### POST `/api/execute/confirm`  · *admin*
+Body: `{confirmation_id}`. Runs a command `/api/execute` held back. Only the
+user who made the request can confirm it, once, within 5 minutes; otherwise 404.
+Both steps are audited (`command_needs_confirmation`, `command_confirmed`).
 
 ### POST `/api/service/restart`
 Restart a service (simplified entry point).
@@ -102,7 +112,14 @@ State of the monitoring subsystem (watcher, health checker).
 
 ### GET `/api/monitoring/errors`
 Recently detected errors (from the log-watch + error-detector pipeline).
-Supports a time window.
+Supports a time window (`?minutes=60`). Response includes the
+`auto_remediation.mode`, and per error the matched `pattern`, the
+`remediation` record (planned/executed fix commands with their risk and
+result) and Claude's `analysis` for errors no pattern matched.
+
+### POST `/api/monitoring/errors/{error_hash}/fix`  · *admin*
+Runs the fix commands of a known error because an operator confirmed them in
+the dashboard. Audited as `remediation_applied`.
 
 ### GET `/api/monitoring/health`
 Latest per-server health reports.

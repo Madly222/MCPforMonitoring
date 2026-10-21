@@ -1296,6 +1296,7 @@ async def get_recent_errors(
     errors = detector.get_recent_errors(minutes)
 
     return {
+        "mode": get_config().load_settings().auto_remediation.mode,
         "count": len(errors),
         "errors": [
             {
@@ -1309,15 +1310,40 @@ async def get_recent_errors(
                 "last_seen": e.last_seen.isoformat(),
                 "count": e.count,
                 "resolved": e.resolved,
+                "resolution": e.resolution,
                 "pattern": {
                     "diagnosis": e.pattern.diagnosis,
                     "severity": e.pattern.severity,
-                    "auto_fix": e.pattern.auto_fix
-                } if e.pattern else None
+                    "auto_fix": e.pattern.auto_fix,
+                    "suggestions": e.pattern.suggestions,
+                } if e.pattern else None,
+                "remediation": e.remediation,
+                "analysis": e.analysis,
             }
             for e in errors
         ]
     }
+
+
+@router.post("/monitoring/errors/{error_hash}/fix")
+async def apply_error_fix(
+    error_hash: str,
+    http_request: Request,
+    user: UserInfo = Depends(require_admin)
+):
+    """Run the fix commands of a known error, after the operator confirmed them in the UI."""
+    from src.actions.remediation import get_remediator
+    from src.monitoring.error_detector import get_error_detector
+
+    detector = get_error_detector()
+    detected = detector.get_error(error_hash)
+    if detected is None:
+        raise HTTPException(status_code=404, detail="Error not found (it may have aged out)")
+    if detected.pattern is None or not detected.pattern.commands:
+        raise HTTPException(status_code=400, detail="This error has no fix commands")
+
+    ip = http_request.client.host if http_request.client else None
+    return await get_remediator().apply(detected, detector, user.username, user.role, ip)
 
 
 @router.get("/monitoring/health")

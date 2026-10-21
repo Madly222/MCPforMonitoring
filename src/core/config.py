@@ -9,7 +9,7 @@ Loads and validates configuration from YAML files:
 
 import sys
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 import yaml
 from pydantic import BaseModel, Field, field_validator
@@ -252,6 +252,14 @@ class IncidentsStorageConfig(BaseModel):
     directory: str = "logs/incidents"
 
 
+class AutoRemediationConfig(BaseModel):
+    # off: ignore fix commands; suggest: show them with the policy verdict;
+    # auto: run the ones config/safe_actions.yaml allows, within its limits
+    mode: Literal["off", "suggest", "auto"] = "suggest"
+    # Ask Claude to diagnose errors that match no known pattern (needs claude.api_key)
+    analyze_unknown_errors: bool = True
+
+
 class IncidentsConfig(BaseModel):
     storage: IncidentsStorageConfig = Field(default_factory=IncidentsStorageConfig)
     retention_days: int = 90
@@ -264,6 +272,7 @@ class SettingsConfig(BaseModel):
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     web_ui: WebUIConfig = Field(default_factory=WebUIConfig)
     incidents: IncidentsConfig = Field(default_factory=IncidentsConfig)
+    auto_remediation: AutoRemediationConfig = Field(default_factory=AutoRemediationConfig)
 
 
 class ConfigLoader:

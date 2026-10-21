@@ -41,6 +41,10 @@ class DetectedError:
     count: int = 1
     resolved: bool = False
     resolution: Optional[str] = None
+    # Filled in by src.actions.remediation: the fix plan and its outcome,
+    # and Claude's diagnosis for errors no pattern matched
+    remediation: Optional[dict] = None
+    analysis: Optional[dict] = None
 
 
 class ErrorDetector:
@@ -206,6 +210,9 @@ class ErrorDetector:
         if detected.error_hash in self._recent_errors:
             self._recent_errors[detected.error_hash].resolved = True
             self._recent_errors[detected.error_hash].resolution = resolution
+
+    def get_error(self, error_hash: str) -> Optional[DetectedError]:
+        return self._recent_errors.get(error_hash)
 
     def get_recent_errors(self, minutes: int = 60) -> list[DetectedError]:
         cutoff = datetime.now() - timedelta(minutes=minutes)

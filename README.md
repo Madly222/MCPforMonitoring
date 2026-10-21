@@ -237,10 +237,7 @@ ServersMonitoringMCP/
 │   │   ├── dhcp.py
 │   │   ├── dns.py
 │   │   └── radius.py
-│   ├── actions/                # (scaffolding) auto-remediation action layer
-│   ├── knowledge/              # (scaffolding) knowledge-base helpers
-│   ├── notifications/          # (scaffolding) notification dispatch
-│   ├── storage/                # (scaffolding) persistence helpers
+│   ├── actions/                # Risk policy, confirmations, auto-remediation
 │   ├── monitoring/             # Background monitors + automation jobs
 │   │   ├── log_watcher.py
 │   │   ├── error_detector.py
@@ -463,12 +460,14 @@ All endpoints are under `/api`. Authentication is session-based; most require a 
 ### Commands & monitoring
 | Method | Path | Description |
 |--------|------|-------------|
-| POST | `/api/execute` | Natural-language command (Claude + fallback) |
+| POST | `/api/execute` | Natural-language command (Claude + fallback); risky commands come back for confirmation |
+| POST | `/api/execute/confirm` | Run a command `/api/execute` held back (same user, 5 min) |
 | POST | `/api/service/restart` | Restart a service |
 | POST | `/api/console/exec` | Run a raw command on a server (admin, audited) |
 | GET | `/api/claude/health` | Verify Claude key/model are reachable |
 | GET | `/api/monitoring/status` | Monitor subsystem status |
-| GET | `/api/monitoring/errors` | Recent detected errors |
+| GET | `/api/monitoring/errors` | Recent detected errors with fix plans and Claude diagnoses |
+| POST | `/api/monitoring/errors/{hash}/fix` | Apply a known error's fix (admin, audited) |
 | GET | `/api/monitoring/health` | Latest health reports |
 | GET | `/api/health` | App liveness probe |
 
@@ -550,7 +549,7 @@ Error handling is data-driven via YAML:
 - **`knowledge_base/ignore_patterns.yaml`** — regex filters to suppress log noise.
 - **`knowledge_base/learned/`** — runtime-learned patterns.
 
-Auto-remediation is gated by **`config/safe_actions.yaml`**, which classifies actions by risk level (0–3). Only low-risk actions may auto-execute; destructive operations always require manual confirmation.
+Fix commands and every command built from a plain-language request go through **`config/safe_actions.yaml`** (`src/actions/policy.py`), which classifies them by risk level (0–3). `settings.yaml > auto_remediation.mode` decides what happens to known errors: `off`, `suggest` (default: the dashboard shows the fix and an admin applies it) or `auto` (fixes the policy allows run at once, within its cooldowns and hourly limits; everything else stays a suggestion). Errors that match no pattern are sent to Claude for a diagnosis, whose commands are shown but never run on their own.
 
 ---
 
@@ -564,7 +563,7 @@ Auto-remediation is gated by **`config/safe_actions.yaml`**, which classifies ac
 - Values interpolated into remote shell commands (paths, patterns, service names) are quoted or validated, and sudo wraps the whole command.
 - The runtime store (`sessions/users.json`, `sessions/runtime_settings.json`) and audit log (`logs/audit.jsonl`) live under gitignored directories — never commit them.
 - Privileged actions are role-gated: the admin console requires `superadmin`, and the SSH command console (`POST /api/console/exec`) requires at least `admin`. Every such action is written to the audit log.
-- Auto-remediation is constrained by an explicit risk policy (`safe_actions.yaml`).
+- Commands the app builds itself (templates, Claude) run without confirmation only when `safe_actions.yaml` classifies them as read-only or as an allowed restart; everything else needs the operator to confirm the exact command.
 - Rotate all credentials before any production deployment.
 
 > **CORS:** off by default (same-origin only). List trusted origins in `mcp_server.cors_origins` only if another site must call the API.

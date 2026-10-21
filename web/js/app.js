@@ -268,9 +268,115 @@ function escapeHtml(str) {
         .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+// ------------------------------------------------------------------ Incidents
+
+const REMEDIATION_MODE_LABELS = {
+    off: 'Auto-fix: off',
+    suggest: 'Auto-fix: suggest only',
+    auto: 'Auto-fix: on',
+};
+let _incidentsBound = false;
+let _incidentsByHash = {};
+
+function isAdminUser() {
+    return !!currentUser && (currentUser.role === 'admin' || currentUser.role === 'superadmin');
+}
+
+function renderStep(step, note) {
+    const risk = step.risk == null ? '' : `<span class="chip chip-risk-${Math.min(step.risk, 3)}">risk ${step.risk}</span>`;
+    const verdict = note || (step.auto ? 'may run automatically' : 'needs a human');
+    const reason = step.reason ? ` — ${escapeHtml(step.reason)}` : '';
+    const result = step.result ? ` · <strong>${escapeHtml(step.result)}</strong>` : '';
+    const output = step.output ? `<pre class="incident-output">${escapeHtml(step.output)}</pre>` : '';
+    return `<li><code>$ ${escapeHtml(step.command)}</code> ${risk}
+        <div class="incident-meta">${escapeHtml(verdict)}${reason}${result}</div>${output}</li>`;
+}
+
+function renderIncident(e) {
+    const severity = (e.pattern && e.pattern.severity) || (e.analysis && e.analysis.severity) || e.event_type;
+    const rem = e.remediation;
+    const status = e.resolved ? 'resolved' : (rem ? rem.status : (e.pattern ? 'known' : 'unknown'));
+    let body = '';
+
+    if (e.pattern) {
+        body += `<div class="incident-diagnosis">${escapeHtml(e.pattern.diagnosis)}</div>`;
+    } else if (e.analysis) {
+        body += `<div class="incident-diagnosis"><span class="chip">Claude</span> ${escapeHtml(e.analysis.diagnosis)}</div>`;
+    }
+
+    if (rem && rem.steps && rem.steps.length) {
+        body += `<ul class="incident-steps">${rem.steps.map(s => renderStep(s)).join('')}</ul>`;
+    }
+    if (e.analysis && e.analysis.fix_commands && e.analysis.fix_commands.length) {
+        body += `<ul class="incident-steps">${e.analysis.fix_commands
+            .map(s => renderStep(s, 'suggested by Claude, never run automatically')).join('')}</ul>`;
+    }
+    const suggestions = (e.pattern && e.pattern.suggestions && e.pattern.suggestions.length)
+        ? e.pattern.suggestions : (e.analysis ? e.analysis.suggestions || [] : []);
+    if (suggestions.length) {
+        body += `<ul class="incident-suggestions">${suggestions.map(s => `<li>${escapeHtml(s)}</li>`).join('')}</ul>`;
+    }
+
+    const canApply = isAdminUser() && !e.resolved && rem && rem.steps && rem.steps.some(s => s.risk != null && s.result !== 'ok');
+    const applyBtn = canApply
+        ? `<button class="btn btn-sm btn-primary incident-apply" data-hash="${escapeHtml(e.error_hash)}">Apply fix</button>` : '';
+
+    return `<div class="incident incident-${escapeHtml(severity)}">
+        <div class="incident-head">
+            <span class="chip chip-${escapeHtml(status)}">${escapeHtml(status)}</span>
+            <strong>${escapeHtml(e.server_id)}</strong> · ${escapeHtml(e.service_type)}
+            <span class="incident-meta">× ${e.count} · last ${new Date(e.last_seen).toLocaleTimeString()}</span>
+            ${applyBtn}
+        </div>
+        <code class="incident-line">${escapeHtml(e.line)}</code>
+        ${body}
+    </div>`;
+}
+
+async function applyIncidentFix(hash) {
+    const e = _incidentsByHash[hash];
+    if (!e || !e.remediation) return;
+    const commands = e.remediation.steps.filter(s => s.risk != null).map(s => '$ ' + s.command).join('\n');
+    const maxRisk = Math.max(...e.remediation.steps.map(s => s.risk || 0));
+    const ok = await Dialog.confirm(`Run on ${e.server_id}?\n\n${commands}`, 'Apply fix', maxRisk >= 2);
+    if (!ok) return;
+    try {
+        const record = await API.monitoring.applyFix(hash);
+        await Dialog.alert(`Fix ${record.status} on ${e.server_id}.`);
+    } catch (err) {
+        await Dialog.alert('Fix failed: ' + err.message);
+    }
+    loadIncidents();
+}
+
+async function loadIncidents() {
+    const list = document.getElementById('incidentsList');
+    if (!list) return;
+    if (!_incidentsBound) {
+        list.addEventListener('click', (ev) => {
+            const btn = ev.target.closest('.incident-apply');
+            if (btn) applyIncidentFix(btn.dataset.hash);
+        });
+        _incidentsBound = true;
+    }
+    try {
+        const data = await API.monitoring.errors({ minutes: 60 });
+        const modeEl = document.getElementById('incidentsMode');
+        if (modeEl) modeEl.textContent = REMEDIATION_MODE_LABELS[data.mode] || '';
+        const errors = (data.errors || []).sort((a, b) => b.last_seen.localeCompare(a.last_seen));
+        _incidentsByHash = Object.fromEntries(errors.map(e => [e.error_hash, e]));
+        list.innerHTML = errors.length
+            ? errors.map(renderIncident).join('')
+            : '<p class="empty-state">No errors in the last hour</p>';
+    } catch (err) {
+        list.innerHTML = `<p class="empty-state">Incidents unavailable: ${escapeHtml(err.message)}</p>`;
+    }
+}
+
 async function loadServerStatus() {
     const grid = document.getElementById('serversGrid');
     bindServersGrid();
+    loadIncidents();
 
     let configured = [];
     try {

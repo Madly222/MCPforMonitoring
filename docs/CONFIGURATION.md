@@ -164,15 +164,26 @@ Read directly by the automation modules. Full annotated template:
 | | `rate_limit.requests_per_minute` | `60` | API rate limit |
 | `incidents` | `storage.format` / `directory` | `json` / `logs/incidents` | Incident storage |
 | | `retention_days` | `90` | Incident retention |
+| `auto_remediation` | `mode` | `suggest` | `off` / `suggest` / `auto` — what happens to the fix commands of known errors (see §4) |
+| | `analyze_unknown_errors` | `true` | Ask Claude to diagnose errors no pattern matches; its commands are shown, never run |
 
 If `settings.yaml` is missing or invalid, the app logs a warning and falls back
 to these defaults.
 
 ---
 
-## 4. `config/safe_actions.yaml` (auto-remediation policy)
+## 4. `config/safe_actions.yaml` (risk policy)
 
-Defines which remediation actions may run automatically, gated by **risk level**:
+Read by `src/actions/policy.py`. Every command the app would run without a human
+typing it goes through this policy: fix commands of known errors
+(`auto_remediation.mode: auto`) and commands that `/api/execute` builds from a
+plain-language request (templates or Claude). A command the policy does not let
+run on its own is held back: the dashboard asks the operator to confirm it, and
+fixes stay as suggestions.
+
+Commands are classified by **risk level**; a compound command (`a | b`, `a || b`)
+takes the risk of its riskiest part, and anything not recognised, writing to a
+file or using command substitution is risk 3:
 
 | Level | Meaning |
 |-------|---------|
@@ -189,7 +200,10 @@ Sections:
   by `conditions`.
 - `never_auto_execute` — always require manual confirmation (config/zone/firewall
   changes, deletions, account/network/cert changes).
-- `limits` — global rate caps and backoff.
+- `limits` — global rate caps and backoff, applied to automatic fixes.
+
+Rules with `conditions` (queue size, disk usage, ...) never run automatically:
+the app does not evaluate those conditions. `notify_and_execute` is not used yet.
 
 ---
 

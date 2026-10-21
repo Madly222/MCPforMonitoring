@@ -166,6 +166,11 @@ the legacy path: Claude `interpret_command` → if confidence > 0.7 run it, else
 keyword fallback (`status`/`restart`/`logs`|`errors`/`health`). Managed-service
 lifecycle (dhcp/dns/radius restart/start/stop) still routes through the validated
 service handlers. `source` = `template`|`cache`|`claude`|`local`.
+
+Before a resolved command runs, `src/actions/policy.py` classifies it against
+`config/safe_actions.yaml`. Read-only commands and restarts of listed services run
+at once; anything else is parked in `src/actions/pending.py` and returned with a
+`confirmation` block, and only `POST /api/execute/confirm` by the same user runs it.
 Offline test: `python scripts/check_resolver.py` (no live server / key needed).
 
 ---

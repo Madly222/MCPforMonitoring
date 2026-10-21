@@ -116,11 +116,18 @@ log_watcher (SSH tail -F)  →  LogEvent
   → app.handle_log_event()  →  error_detector.process_event()
        ├─ matches ignore_patterns.yaml? → drop (noise)
        ├─ matches known_errors.yaml?     → DetectedError(pattern, diagnosis)
-       │     can_auto_fix() and safe_actions.yaml permits? → (auto-fix stage)
-       └─ unknown?                        → candidate for Claude analysis
+       │     → Remediator.handle() (src/actions/remediation.py)
+       │         fill {service_name}, classify each fix command (policy.py)
+       │         mode off     → nothing
+       │         mode suggest → plan attached to the error
+       │         mode auto    → run what safe_actions.yaml allows, within its
+       │                        cooldowns/limits; audit; mark resolved
+       └─ unknown?                        → Remediator.analyze_unknown()
+                                             Claude diagnosis attached (never run)
 ```
 Detected errors are retained in memory and surfaced via
-`GET /api/monitoring/errors` and the dashboard.
+`GET /api/monitoring/errors` and the dashboard's Incidents card, where an admin
+can apply a suggested fix (`POST /api/monitoring/errors/{hash}/fix`).
 
 ### 3.3 Health
 `health_checker` polls each server/service on an interval and stores the latest

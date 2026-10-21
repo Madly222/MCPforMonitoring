@@ -97,6 +97,18 @@ web_ui:
 # INCIDENTS
 # ==============================================================================
 
+auto_remediation:
+  # What to do with the fix commands of known errors (knowledge_base/known_errors.yaml):
+  #   off     - nothing
+  #   suggest - show them on the dashboard with the policy verdict; a human applies them
+  #   auto    - run the ones config/safe_actions.yaml allows, within its cooldowns
+  #             and limits; the rest stay as suggestions
+  mode: suggest
+
+  # Ask Claude to diagnose errors that match no known pattern. Its suggested
+  # commands are shown, never run automatically.
+  analyze_unknown_errors: true
+
 incidents:
   # Storage settings
   storage:

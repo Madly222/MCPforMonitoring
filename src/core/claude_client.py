@@ -63,7 +63,7 @@ class ClaudeClient:
 Analyze the provided error logs and system information.
 
 Your response must be valid JSON with this exact structure:
-{{
+{
     "diagnosis": "Brief explanation of the problem",
     "severity": "critical|warning|info",
     "can_auto_fix": true|false,
@@ -71,7 +71,7 @@ Your response must be valid JSON with this exact structure:
     "needs_human": true|false,
     "reason": "Why human intervention needed (if applicable)",
     "suggestions": ["suggestion1", "suggestion2"]
-}}
+}
 
 Rules:
 - Be concise and precise

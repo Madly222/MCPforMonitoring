@@ -14,6 +14,7 @@ from src.core.ssh_manager import get_ssh_manager
 from src.monitoring.log_watcher import get_log_watcher, LogEvent
 from src.monitoring.error_detector import get_error_detector
 from src.monitoring.health_checker import get_health_checker
+from src.actions.remediation import get_remediator, spawn
 from src.web.api import router as api_router
 from src.web.auth import router as auth_router
 from src.web.api_netbox import router as netbox_router
@@ -23,16 +24,17 @@ async def handle_log_event(event: LogEvent):
     detector = get_error_detector()
     detected = detector.process_event(event)
 
-    if detected:
-        if detected.pattern:
-            logger.info(f"Known error on {event.server_id}: {detected.pattern.diagnosis[:50]}...")
+    if not detected:
+        return
 
-            if detector.can_auto_fix(detected):
-                logger.info(f"Auto-fix available for: {detected.error_hash}")
-                # TODO: Execute auto-fix in Stage 5
-        else:
-            logger.warning(f"Unknown error on {event.server_id}: {event.line[:50]}...")
-            # TODO: Send to Claude API for analysis in Stage 4
+    remediator = get_remediator()
+    if detected.pattern:
+        logger.info(f"Known error on {event.server_id}: {detected.pattern.diagnosis[:50]}...")
+        # Restarts can take a while; keep the log stream moving
+        spawn(remediator.handle(detected, detector))
+    else:
+        logger.warning(f"Unknown error on {event.server_id}: {event.line[:50]}...")
+        spawn(remediator.analyze_unknown(detected))
 
 
 @asynccontextmanager

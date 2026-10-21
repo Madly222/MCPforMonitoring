@@ -148,6 +148,9 @@ const API = {
         health() {
             return API.request('/monitoring/health');
         },
+        applyFix(errorHash) {
+            return API.request(`/monitoring/errors/${encodeURIComponent(errorHash)}/fix`, { method: 'POST' });
+        },
     },
 
     // -------------------------------------------------------------- Commands
