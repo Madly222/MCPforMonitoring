@@ -1,7 +1,9 @@
 version: 2
 updates:
   - package-ecosystem: pip
-    directories: ["/", "/mcp_server"]
+    # The scan from / also finds mcp_server/requirements.txt; listing
+    # /mcp_server as well opened a second PR for every mcp update
+    directory: /
     schedule:
       interval: weekly
     ignore:
