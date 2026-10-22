@@ -14,7 +14,7 @@
 # ------------------------------------------------------------------------------
 # Web framework
 # ------------------------------------------------------------------------------
-fastapi==0.142.4
+fastapi==0.149.0
 starlette==1.7.0          # fastapi's ASGI layer, pinned for its security fixes; the last release for Python 3.10
 uvicorn[standard]==0.27.1
 
