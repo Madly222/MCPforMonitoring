@@ -16,6 +16,7 @@
 - pydantic 2.13.5, pyyaml 6.0.3 and httpx 0.28.1, as the updates above require.
 - Removed dependencies nothing imports: aiosmtplib and python-multipart (both had advisories), pydantic-settings, itsdangerous and aiofiles.
 - The route-role test reads routes through `fastapi.routing.iter_route_contexts`, since FastAPI now keeps included routers unexpanded in `app.routes`.
+- Passwords are limited to 72 bytes, the most bcrypt reads (72 Latin or 36 Cyrillic characters), with a clear message when a new one is longer. bcrypt 4 silently ignored the rest; bcrypt 5 raises an error instead, which would have locked out users with a longer password and stopped seeding from `secrets.yaml`. Logins and seeding still compare only the first 72 bytes, as before, so passwords set earlier keep working under either version. Tested with bcrypt 4.1.2 and 5.0.0.
 
 ## 1.1.3 — 2026-10-21
 

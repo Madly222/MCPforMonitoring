@@ -3,12 +3,14 @@
 import os
 from datetime import datetime, timedelta
 
+import bcrypt
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 import src.web.auth as auth
-from src.web.users import MIN_PASSWORD_LENGTH, get_user_store
+from src.core.config import WebUserConfig
+from src.web.users import MAX_PASSWORD_BYTES, MIN_PASSWORD_LENGTH, get_user_store
 
 
 @pytest.fixture
@@ -164,6 +166,47 @@ def test_short_passwords_are_rejected(client):
     resp = client.post("/api/admin/users", json={"username": "carol", "password": short, "role": "operator"})
     assert resp.status_code == 400
     assert str(MIN_PASSWORD_LENGTH) in resp.json()["detail"]
+
+
+# bcrypt reads 72 bytes at most; a Cyrillic letter is 2 bytes in UTF-8
+LONG_PASSPHRASE = "корректная лошадь батарейка скрепка ноутбук"  # 82 bytes
+
+
+@pytest.mark.parametrize("password", ["x" * (MAX_PASSWORD_BYTES + 1), "п" * (MAX_PASSWORD_BYTES // 2 + 1)])
+def test_passwords_over_72_bytes_are_rejected(client, password):
+    login(client)
+
+    resp = client.post("/api/admin/users", json={"username": "carol", "password": password, "role": "operator"})
+    assert resp.status_code == 400
+    assert str(MAX_PASSWORD_BYTES) in resp.json()["detail"]
+    resp = client.post("/api/auth/change-password", json={"current_password": "correct horse", "new_password": password})
+    assert resp.status_code == 400
+
+
+@pytest.mark.parametrize("password", ["x" * MAX_PASSWORD_BYTES, "п" * (MAX_PASSWORD_BYTES // 2)])
+def test_a_72_byte_password_works(client, password):
+    login(client)
+
+    resp = client.post("/api/admin/users", json={"username": "carol", "password": password, "role": "operator"})
+    assert resp.status_code == 200
+    assert login(TestClient(client.app), "carol", password).status_code == 200
+
+
+def test_long_password_hashed_before_the_limit_still_logs_in(web_env):
+    """bcrypt 4 hashed the first 72 bytes of a longer password and dropped the rest;
+    bcrypt 5 refuses such a password. A user who set one before keeps logging in."""
+    store = get_user_store()
+    store._users["bob"]["password"] = bcrypt.hashpw(
+        LONG_PASSPHRASE.encode("utf-8")[:MAX_PASSWORD_BYTES], bcrypt.gensalt(rounds=4)).decode("utf-8")
+
+    assert store.verify("bob", LONG_PASSPHRASE) == {"username": "bob", "role": "operator"}
+    assert store.verify("bob", "correct horse") is None
+
+
+def test_long_plaintext_password_in_secrets_is_seeded(client, web_env):
+    web_env.web_users.append(WebUserConfig(username="dave", password=LONG_PASSPHRASE, role="operator"))
+
+    assert login(client, "dave", LONG_PASSPHRASE).status_code == 200
 
 
 @pytest.mark.skipif(os.name != "posix", reason="POSIX permissions")

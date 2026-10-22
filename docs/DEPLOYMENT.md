@@ -46,7 +46,7 @@ chmod 600 keys/*
 ```
 
 Before going live:
-- Change all default passwords in `web_users` (at least 10 characters).
+- Change all default passwords in `web_users` (10 characters to 72 bytes; only the first 72 bytes of a longer one count).
 - Behind HTTPS, set `mcp_server.cookie_secure: true` (see [Hardening](#7-hardening)).
 
 Smoke-test before installing the service:
