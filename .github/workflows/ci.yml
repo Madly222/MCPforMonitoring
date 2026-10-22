@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Weekly, so advisories published after the last push still fail the audit
+  schedule:
+    - cron: "0 6 * * 1"
 
 jobs:
   lint:
@@ -15,6 +18,19 @@ jobs:
           python-version: "3.12"
       - run: pip install ruff
       - run: ruff check .
+
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pip-audit
+      - name: Known vulnerabilities in the app's dependencies
+        run: pip-audit -r requirements.txt
+      - name: Known vulnerabilities in the MCP server's dependencies
+        run: pip-audit -r mcp_server/requirements.txt
 
   test:
     runs-on: ubuntu-latest

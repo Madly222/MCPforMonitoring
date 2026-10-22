@@ -47,6 +47,9 @@ GLUE = [
     "sudo {d}", "sudo -u root {d}", "env {d}", "LANG=C {d}", "LD_PRELOAD=/tmp/x.so {s}",
     "{s} > /etc/x; {s}", "( {d} )", "{{ {d}; }}", "if true; then {d}; fi", "for f in a; do {d}; done",
     "  {d}  ", "{s} ;; {d}",
+    "case x in x) {d} ;; esac", "case x in x){d};;esac", "case x in a) {s} ;; x) {d} ;; esac",
+    "for f do {d}; done", "for ((;;)) do {d}; done", "ls() {{ {d}; }}; ls", "({s})&&{d}",
+    "({s})>/usr/bin/ls; {d}", "{s};>/usr/bin/ls {d}",
 ]
 
 
@@ -111,6 +114,9 @@ SHELLISH = st.text(
 @example(">&0")  # found in CI: descriptor duplication is not a write
 @example("grep 'a>b' /etc/hosts")
 @example("cat /etc/hosts >& /etc/cron.d/x")
+@example("(cat /etc/hosts)>/usr/bin/ls")
+@example("ls;>/usr/bin/ls")
+@example("cat <>/etc/x")
 def test_arbitrary_text_never_crashes_and_dangerous_syntax_is_never_allowed(text):
     c = POLICY.classify(text)
     assert 0 <= c.risk <= 3
@@ -129,7 +135,11 @@ def _writing_redirects(text: str) -> list[str]:
     tokens = list(lexer)
     found = []
     for i, tok in enumerate(tokens):
-        if not set(tok) & {">"} or not set(tok) <= set("<>&|"):
+        if not set(tok) <= set("<>&|();"):
+            continue
+        # shlex glues the operators of ")>", ";>" or "|>": the redirection is what follows
+        tok = tok.lstrip("();|")
+        if ">" not in tok:
             continue
         target = tokens[i + 1] if i + 1 < len(tokens) else ""
         if tok in (">&", "<&") and (target.isdigit() or target == "-"):

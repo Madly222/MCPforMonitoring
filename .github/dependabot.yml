@@ -1,0 +1,20 @@
+version: 2
+updates:
+  - package-ecosystem: pip
+    directories: ["/", "/mcp_server"]
+    schedule:
+      interval: weekly
+    ignore:
+      # 1.8 and later need Python 3.11; lift this when CI stops testing 3.10
+      - dependency-name: starlette
+        versions: [">=1.8"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly

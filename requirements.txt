@@ -1,5 +1,5 @@
 # ==============================================================================
-# MCP Server Monitor - Python Dependencies
+# NetOps Control Plane - Python Dependencies
 # ==============================================================================
 # Python 3.10+ required
 # Install:  pip install -r requirements.txt
@@ -8,36 +8,34 @@
 #   - mysql client  -> DHCP->NetBox MAC sync DB queries (apt install mysql-client)
 #   - snmp / snmpwalk -> ONU monitoring          (apt install snmp)
 #   - openssh-client -> SSH operations           (usually preinstalled)
-# See README.md > Requirements for the full list.
+# See README.md > Running it for real.
 # ==============================================================================
 
 # ------------------------------------------------------------------------------
 # Web framework
 # ------------------------------------------------------------------------------
-fastapi==0.109.2
+fastapi==0.142.4
+starlette==1.7.0          # fastapi's ASGI layer, pinned for its security fixes; the last release for Python 3.10
 uvicorn[standard]==0.27.1
 
 # ------------------------------------------------------------------------------
 # SSH clients
 # ------------------------------------------------------------------------------
-asyncssh==2.14.2          # primary async SSH (core ssh_manager)
-paramiko==3.4.0           # sync SSH (dhcp_mac_sync, netbox services)
-netmiko==4.3.0            # Cisco IOS automation (netbox-autofill)
+asyncssh==2.24.1          # primary async SSH (core ssh_manager)
+paramiko==5.0.0           # sync SSH (dhcp_mac_sync, netbox services)
+netmiko==4.8.0            # Cisco IOS automation (netbox-autofill)
 
 # ------------------------------------------------------------------------------
 # Configuration
 # ------------------------------------------------------------------------------
-pyyaml==6.0.1
-pydantic==2.6.1
-pydantic-settings==2.1.0
-python-dotenv==1.0.1      # loads .env for business-automation modules
+pyyaml==6.0.3
+pydantic==2.13.5
+python-dotenv==1.2.4      # loads .env for business-automation modules
 
 # ------------------------------------------------------------------------------
 # Security / auth
 # ------------------------------------------------------------------------------
 bcrypt==4.1.2
-python-multipart==0.0.9
-itsdangerous==2.1.2
 
 # ------------------------------------------------------------------------------
 # Claude AI
@@ -47,15 +45,9 @@ anthropic==1.17.0
 # ------------------------------------------------------------------------------
 # HTTP clients
 # ------------------------------------------------------------------------------
-httpx==0.26.0             # health checks
-aiohttp==3.9.3            # electric/water disconnection scrapers
-requests==2.31.0          # NetBox REST helpers
-
-# ------------------------------------------------------------------------------
-# Email
-# ------------------------------------------------------------------------------
-aiosmtplib==3.0.1
-# (smtplib from stdlib is also used by some monitors)
+httpx==0.28.1             # MCP server; FastAPI's TestClient
+aiohttp==3.14.5           # electric/water disconnection scrapers
+requests==2.34.2          # NetBox REST helpers
 
 # ------------------------------------------------------------------------------
 # NetBox integration
@@ -63,7 +55,6 @@ aiosmtplib==3.0.1
 pynetbox==7.3.3
 
 # ------------------------------------------------------------------------------
-# Logging / async utils
+# Logging
 # ------------------------------------------------------------------------------
 loguru==0.7.2
-aiofiles==23.2.1

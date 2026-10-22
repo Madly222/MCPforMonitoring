@@ -64,7 +64,7 @@ _SAFE_ENV_VARS = {"LANG", "LANGUAGE", "TZ", "SYSTEMD_COLORS", "SYSTEMD_PAGER", "
 _SAFE_ENV_PREFIXES = ("LC_",)
 _SHELL_KEYWORDS = {
     "for", "do", "done", "if", "then", "elif", "else", "fi", "while", "until", "case", "esac",
-    "break", "continue", "{", "}", "(", ")", "!",
+    "break", "continue", "{", "}", "!",
 }
 # Config test switches: these programs only parse config with the flag present
 _CONFIG_TEST_FLAGS = {
@@ -80,8 +80,15 @@ _CONFIG_TEST_FLAGS = {
 }
 
 _SEPARATORS = {"|", "||", "&&", ";", "&", ";;", "|&"}
+# A parenthesis opens or closes a subshell, a case pattern, a function body or an
+# arithmetic loop header; whatever follows it is a new command
+_PARENS = {"(", ")"}
 _ENV_ASSIGNMENT = re.compile(r"([A-Za-z_][A-Za-z0-9_]*)=.*", re.S)
-_REDIRECTS = {">", ">>", "&>", "&>>", ">|", ">&", "<", "<<", "<<<", "<&"}
+_REDIRECTS = {">", ">>", "&>", "&>>", ">|", ">&", "<", "<<", "<<<", "<&", "<>"}
+# shlex returns a run of these characters as one token (")>", ";>", "((;;))");
+# _split_operators cuts it into the operators sh reads
+_PUNCTUATION = set("();<>|&")
+_OPERATORS = sorted(_SEPARATORS | _REDIRECTS | _PARENS, key=len, reverse=True)
 
 
 @dataclass
@@ -171,7 +178,7 @@ class ActionPolicy:
         # so anything after it is still classified.
         lexer.commenters = ""
         try:
-            tokens = list(lexer)
+            tokens = [op for tok in lexer for op in _split_operators(tok)]
         except ValueError:
             return Classification(command, UNKNOWN, UNKNOWN_RISK, reason="unbalanced quotes")
 
@@ -179,7 +186,7 @@ class ActionPolicy:
         i = 0
         while i < len(tokens):
             tok = tokens[i]
-            if tok in _SEPARATORS:
+            if tok in _SEPARATORS or tok in _PARENS:
                 segments.append([])
             elif tok in _REDIRECTS:
                 target = tokens[i + 1] if i + 1 < len(tokens) else ""
@@ -198,7 +205,9 @@ class ActionPolicy:
         worst = Classification(command, READ_ONLY, 0, reason="read-only")
         for words in segments:
             part = self._classify_segment(words)
-            if part.risk > worst.risk:
+            # A risk-0 action such as a reload still outranks read-only, so that
+            # auto_allowed checks it against its rule's allowed_services
+            if part.risk > worst.risk or (worst.action == READ_ONLY and part.action != READ_ONLY):
                 worst = Classification(command, part.action, part.risk, part.service, part.reason)
         return worst
 
@@ -212,8 +221,14 @@ class ActionPolicy:
         if not stripped:
             return Classification(segment, UNKNOWN, UNKNOWN_RISK, reason="sudo or env without a command")
         words = stripped
-        if words and words[0] in ("for", "case", "select"):
-            # "for VAR in LIST" / "case WORD in": a loop header, not a command
+        if words and words[0] in ("for", "select"):
+            # "for VAR in LIST" is a loop header, but in "for VAR do CMD" the body
+            # starts in the same segment, so whatever follows "do" is classified
+            if "do" not in words:
+                return Classification(segment, READ_ONLY, 0, reason="shell syntax")
+            words = words[words.index("do") + 1:]
+        elif words and words[0] == "case":
+            # "case WORD in PATTERN": the ")" closing the pattern starts a new segment
             return Classification(segment, READ_ONLY, 0, reason="shell syntax")
         while words and words[0] in _SHELL_KEYWORDS:
             words = words[1:]
@@ -229,13 +244,16 @@ class ActionPolicy:
 
         lifecycle = _lifecycle(prog, args)
         if lifecycle:
-            verb, service = lifecycle
+            verb, units = lifecycle
             if verb in _STATUS_VERBS:
-                return Classification(segment, READ_ONLY, 0, service, "service status")
+                return Classification(segment, READ_ONLY, 0, " ".join(units), "service status")
             action, default_risk = _LIFECYCLE[verb]
             rule = self.auto_rules.get(action)
             risk = rule.risk_level if rule else default_risk
-            return Classification(segment, action, risk, service, f"{verb} {service}")
+            # "systemctl restart named networking" acts on every unit it names, so no
+            # single service stands for it in allowed_services
+            service = units[0] if len(units) == 1 else None
+            return Classification(segment, action, risk, service, f"{verb} {', '.join(units)}")
 
         if prog in _CONFIG_TEST_FLAGS:
             flags = _CONFIG_TEST_FLAGS[prog]
@@ -273,6 +291,8 @@ class ActionPolicy:
             return False, f"risk {c.risk} is above auto_execute.max_risk_level {self.auto_max_risk}"
         if rule.conditions:
             return False, "the rule has conditions this app cannot evaluate"
+        if rule.allowed_services is not None and c.service is None:
+            return False, f"{c.reason}: several services in one command always need confirmation"
         if rule.allowed_services is not None and c.service not in rule.allowed_services:
             return False, f"service {c.service!r} is not in allowed_services for {c.action}"
         return True, f"{c.action} allowed by safe_actions.yaml"
@@ -288,6 +308,18 @@ class ActionPolicy:
 
 def _normalize(command: str) -> str:
     return " ".join(command.split())
+
+
+def _split_operators(tok: str) -> list[str]:
+    """Cut a run of shell punctuation such as ")>" or ";>" into separate operators."""
+    if not tok or not set(tok) <= _PUNCTUATION:
+        return [tok]
+    ops = []
+    while tok:
+        op = next(o for o in _OPERATORS if tok.startswith(o))
+        ops.append(op)
+        tok = tok[len(op):]
+    return ops
 
 
 def _strip_prefixes(words: list[str]) -> tuple[list[str], Optional[str]]:
@@ -317,21 +349,21 @@ def _strip_prefixes(words: list[str]) -> tuple[list[str], Optional[str]]:
     return words, None
 
 
-def _lifecycle(prog: str, args: list[str]) -> Optional[tuple[str, str]]:
-    """Return (verb, service) for systemctl / service / init.d invocations."""
+def _lifecycle(prog: str, args: list[str]) -> Optional[tuple[str, list[str]]]:
+    """Return (verb, units) for systemctl / service / init.d invocations."""
     if prog == "systemctl":
         rest = [a for a in args if not a.startswith("-")]
         if len(rest) >= 2 and (rest[0] in _LIFECYCLE or rest[0] in _STATUS_VERBS):
-            return rest[0], rest[1].removesuffix(".service")
+            return rest[0], [unit.removesuffix(".service") for unit in rest[1:]]
         if rest and rest[0] in _STATUS_VERBS:
-            return rest[0], ""
+            return rest[0], []
         return None
     if prog == "service" and len(args) >= 2 and (args[1] in _LIFECYCLE or args[1] in _STATUS_VERBS):
-        return args[1], args[0]
+        return args[1], [args[0]]
     if prog.startswith("/etc/init.d/") and args and (args[0] in _LIFECYCLE or args[0] in _STATUS_VERBS):
-        return args[0], prog.rsplit("/", 1)[-1]
+        return args[0], [prog.rsplit("/", 1)[-1]]
     if prog in ("rndc",) and args and args[0] in ("reload", "reconfig"):
-        return "reload", "named"
+        return "reload", ["named"]
     return None
 
 
