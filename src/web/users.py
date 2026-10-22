@@ -22,12 +22,21 @@ from src.core.config import get_config, SESSIONS_DIR
 VALID_ROLES = ("operator", "admin", "superadmin")
 
 MIN_PASSWORD_LENGTH = 10
+# bcrypt reads only the first 72 bytes of a password: bcrypt 4 dropped the rest
+# silently, bcrypt 5 raises ValueError. A Cyrillic letter takes 2 bytes in UTF-8.
+MAX_PASSWORD_BYTES = 72
 
 USERS_FILE = SESSIONS_DIR / "users.json"
 
 
+def _bcrypt_input(password: str) -> bytes:
+    """The bytes bcrypt reads. Longer passwords set before the limit existed were
+    hashed from their first 72 bytes, so cutting them here keeps those logins working."""
+    return password.encode("utf-8")[:MAX_PASSWORD_BYTES]
+
+
 def _hash_password(password: str) -> str:
-    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    return bcrypt.hashpw(_bcrypt_input(password), bcrypt.gensalt()).decode("utf-8")
 
 
 def validate_password(password: str) -> None:
@@ -36,6 +45,11 @@ def validate_password(password: str) -> None:
         raise ValueError("Password is required")
     if len(password) < MIN_PASSWORD_LENGTH:
         raise ValueError(f"Password must be at least {MIN_PASSWORD_LENGTH} characters")
+    if len(password.encode("utf-8")) > MAX_PASSWORD_BYTES:
+        raise ValueError(
+            f"Password must be at most {MAX_PASSWORD_BYTES} bytes: "
+            f"{MAX_PASSWORD_BYTES} Latin or {MAX_PASSWORD_BYTES // 2} Cyrillic characters"
+        )
 
 
 def _looks_hashed(value: str) -> bool:
@@ -95,6 +109,11 @@ class UserStore:
         now = datetime.now().isoformat()
         for user in secrets.web_users:
             role = user.role if user.role in VALID_ROLES else "operator"
+            if not _looks_hashed(user.password) and len(user.password.encode("utf-8")) > MAX_PASSWORD_BYTES:
+                logger.warning(
+                    f"Password of {user.username} in secrets.yaml is longer than {MAX_PASSWORD_BYTES} bytes; "
+                    f"only the first {MAX_PASSWORD_BYTES} count"
+                )
             password = user.password if _looks_hashed(user.password) else _hash_password(user.password)
             self._users[user.username] = {
                 "username": user.username,
@@ -122,7 +141,7 @@ class UserStore:
         if not user:
             return None
         try:
-            if bcrypt.checkpw(password.encode("utf-8"), user["password"].encode("utf-8")):
+            if bcrypt.checkpw(_bcrypt_input(password), user["password"].encode("utf-8")):
                 return {"username": user["username"], "role": user["role"]}
         except Exception as e:
             logger.error(f"Password verification error: {e}")
