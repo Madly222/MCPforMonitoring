@@ -29,7 +29,7 @@ netmiko==4.8.0            # Cisco IOS automation (netbox-autofill)
 # Configuration
 # ------------------------------------------------------------------------------
 pyyaml==6.0.3
-pydantic==2.13.5
+pydantic==2.14.1
 python-dotenv==1.2.4      # loads .env for business-automation modules
 
 # ------------------------------------------------------------------------------
