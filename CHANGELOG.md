@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+### Security
+- The risk classifier let more commands run as root without confirmation:
+  - shell syntax hid the command inside it: a `case` branch (`case x in x) rm -rf / ;; esac`), a `for` loop whose body follows its header without a separator (`for x do …`, `for ((;;)) do …`) and a function body (`ls() { rm -rf /; }; ls`) were read as a loop or case header. Parentheses now start a new command, and a `for` header is classified from its `do` on;
+  - shlex returns operators glued to a parenthesis or separator as one token, so `(cat x)>/usr/bin/ls`, `ls;>/usr/bin/ls` and `ls|>file` hid a redirection; such runs are now cut into separate operators, and `<>` counts as a write;
+  - `systemctl restart bind9 networking` (or `… reboot.target`) was checked against `allowed_services` by its first unit only; a restart or reload naming several units now always needs confirmation;
+  - a reload (risk 0) was taken for read-only, so `allowed_services` was never checked for it and `systemctl reload` of any unit ran unconfirmed.
+- Every case above is a regression test, and the property tests glue dangerous commands on with the same constructs.
+- Dependencies with known advisories updated: aiohttp 3.14.5, starlette 1.7.0 (through FastAPI 0.142.4), asyncssh 2.24.1, paramiko 5.0.0 (with netmiko 4.8.0), python-dotenv 1.2.4, requests 2.34.2; `pip-audit` finds none left.
+- CI audits `requirements.txt` and `mcp_server/requirements.txt` with `pip-audit` on every push and weekly; Dependabot proposes pip, GitHub Actions and Docker base-image updates.
+
+### Changed
+- pydantic 2.13.5, pyyaml 6.0.3 and httpx 0.28.1, as the updates above require.
+- Removed dependencies nothing imports: aiosmtplib and python-multipart (both had advisories), pydantic-settings, itsdangerous and aiofiles.
+- The route-role test reads routes through `fastapi.routing.iter_route_contexts`, since FastAPI now keeps included routers unexpanded in `app.routes`.
+
 ## 1.1.3 — 2026-10-21
 
 ### Fixed

@@ -7,7 +7,7 @@ instead of defaulting to whatever the handler happened to declare.
 
 import pytest
 from fastapi import FastAPI
-from fastapi.routing import APIRoute
+from fastapi.routing import APIRoute, iter_route_contexts
 from fastapi.testclient import TestClient
 
 from src.web.admin import router as admin_router
@@ -77,14 +77,18 @@ def build_app() -> FastAPI:
 
 
 def route_table():
-    for route in build_app().routes:
+    # app.routes keeps included routers unexpanded; the route contexts carry each
+    # route's full path. No router adds dependencies at include time, so a
+    # route's own dependant holds every role check.
+    for context in iter_route_contexts(build_app().routes):
+        route = context.original_route
         if not isinstance(route, APIRoute):
             continue
         names = {d.call.__name__ for d in route.dependant.dependencies}
         roles = [DEPENDENCY_ROLE[n] for n in names if n in DEPENDENCY_ROLE]
         actual = max(roles, key=[PUBLIC, USER, ADMIN, SUPERADMIN].index) if roles else PUBLIC
-        for method in route.methods:
-            yield method, route.path, actual
+        for method in context.methods:
+            yield method, context.path, actual
 
 
 def test_every_route_has_the_expected_role():

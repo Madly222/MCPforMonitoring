@@ -66,6 +66,22 @@ def test_restart_of_an_unlisted_service_needs_a_human(policy):
     assert "allowed_services" in why
 
 
+def test_restart_of_several_units_needs_a_human_even_if_the_first_is_listed(policy):
+    c = policy.classify("systemctl restart isc-dhcp-server networking.service")
+    assert (c.action, c.risk, c.service) == ("restart_service", 1, None)
+    assert "isc-dhcp-server, networking" in c.reason
+    allowed, why = policy.auto_allowed(c)
+    assert not allowed
+    assert "several services" in why
+
+
+def test_reload_is_checked_against_allowed_services(policy):
+    c = policy.classify("uptime; systemctl reload bind9")
+    assert (c.action, c.risk, c.service) == ("reload_config", 0, "bind9")
+    assert policy.auto_allowed(c)[0]
+    assert not policy.auto_allowed(policy.classify("systemctl reload nginx-unlisted"))[0]
+
+
 def test_stop_is_medium_risk(policy):
     c = policy.classify("service postfix stop")
     assert (c.action, c.risk, c.service) == ("stop_service", 2, "postfix")

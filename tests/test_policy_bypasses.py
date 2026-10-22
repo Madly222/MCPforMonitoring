@@ -25,6 +25,25 @@ BYPASSES = [
     "cat /etc/hosts >& /etc/cron.d/x",
     "cat /etc/hosts >&/etc/cron.d/x",
     ">&",
+    # shell syntax whose body was taken for part of a loop or case header
+    "case x in x) rm -rf / ;; esac",
+    "case x in x) rm -rf / ; esac",
+    "case x in x)rm -rf /;;esac",
+    "for x do rm -rf /; done",
+    "for ((;;)) do rm -rf /; done",
+    "ls() { rm -rf /; }; ls",
+    # an operator glued to a parenthesis or separator hid a redirection
+    "(cat /etc/hosts)>/usr/bin/ls",
+    "ls;>/usr/bin/ls",
+    "ls|>/usr/bin/ls",
+    "cat <>/etc/cron.d/x",
+    # only the first unit was checked against allowed_services
+    "systemctl restart bind9 reboot.target",
+    "systemctl restart named sshd networking",
+    "systemctl reload bind9 networking",
+    # a risk-0 reload was taken for read-only, so allowed_services was never checked
+    "systemctl reload networking",
+    "uptime; systemctl force-reload networking",
     # read-only programs that run code
     "awk 'BEGIN{system(\"rm -rf /\")}'",
     "sed -n '1e id' /etc/hosts",
@@ -99,6 +118,11 @@ LEGITIMATE = [
     "journalctl -n 5 2>&1 | tail -n 5",
     "ls /nope 2>/dev/null >&2",
     "grep -c 'a#b' /etc/hosts",
+    "(uptime; free -m) | head -n 5",
+    "for f in /var/log/syslog /var/log/messages; do tail -n 5 \"$f\"; done",
+    "case x in x) uptime ;; esac",
+    "ls 2>&1;>&2",
+    "systemctl status bind9 named --no-pager",
     _ERR_GREP + " /var/log/syslog | tail -n 50",
     "uptime; echo '--- memory ---'; free -m 2>/dev/null | head -n 2; echo '--- disk / ---'; df -h / | tail -1",
 ]
