@@ -74,14 +74,25 @@ check("past-date signature pruned", em._match_signature(m_yesterday) not in em.g
 print("\n== water (ACC): restoration-time filtering ==")
 end_past = (now - timedelta(hours=1)).strftime('%d.%m.%Y %H:%M')
 end_future = (now + timedelta(hours=3)).strftime('%d.%m.%Y %H:%M')
-w_expired = f"[Работы] 📍 Centru: Asachi 71 [în lucru]\n   Откл: 01.01.2026 09:00, Восст: {end_past}"
-w_active = f"[Работы] 📍 Centru: Asachi 71 [în lucru]\n   Откл: 01.01.2026 09:00, Восст: {end_future}"
-w_notice = "[Уведомление] ⚠️ Плановое отключение!\n   📅 mâine\n   📍 Улицы: Asachi"
+w_expired = f"[Works] 📍 Centru: Asachi 71 [în lucru]\n   From: 01.01.2026 09:00, until: {end_past}"
+w_active = f"[Works] 📍 Centru: Asachi 71 [în lucru]\n   From: 01.01.2026 09:00, until: {end_future}"
+w_notice = "[Notice] ⚠️ Planned disconnection\n   📅 mâine\n   📍 Streets: Asachi"
 
 wout = acc.filter_current_matches([w_expired, w_active, w_notice])
-check("restored (past Восст) dropped", w_expired not in wout)
-check("ongoing (future Восст) kept", w_active in wout)
-check("plain notice (no Восст) kept", w_notice in wout)
+check("restored (past 'until') dropped", w_expired not in wout)
+check("ongoing (future 'until') kept", w_active in wout)
+check("plain notice (no 'until') kept", w_notice in wout)
+
+print("\n== water (ACC): labels the parser builds are the ones it reads ==")
+row = (
+    "<tr><td colspan='5' class='sector_title'>Centru</td></tr>"
+    f"<tr><td>în lucru</td><td>x</td><td>Asachi</td><td>71</td><td>avarie</td>"
+    f"<td>01.01.2026 09:00</td><td>{end_past}</td></tr>"
+)
+parsed = acc.parse_table_rows(row, acc.re.compile(r"Asachi\s*71"))
+check("table row parsed", len(parsed) == 1)
+check("its end time is read back", bool(parsed) and acc._match_end(parsed[0]) is not None)
+check("and it is dropped once past", bool(parsed) and acc.filter_current_matches(parsed) == [])
 
 print("\n== water: content de-dup ==")
 acc.mark_notified([w_active])

@@ -17,6 +17,8 @@
 - Removed dependencies nothing imports: aiosmtplib and python-multipart (both had advisories), pydantic-settings, itsdangerous and aiofiles.
 - The route-role test reads routes through `fastapi.routing.iter_route_contexts`, since FastAPI now keeps included routers unexpanded in `app.routes`.
 - Passwords are limited to 72 bytes, the most bcrypt reads (72 Latin or 36 Cyrillic characters), with a clear message when a new one is longer. bcrypt 4 silently ignored the rest; bcrypt 5 raises an error instead, which would have locked out users with a longer password and stopped seeding from `secrets.yaml`. Logins and seeding still compare only the first 72 bytes, as before, so passwords set earlier keep working under either version. Tested with bcrypt 4.1.2 and 5.0.0.
+- Power and water outage e-mails, and the water outage entries on the dashboard, are in English like the rest of the app. An ongoing water disconnection may be e-mailed once more on the day of the upgrade, because its first line, the de-duplication key, changed.
+- Leftovers of the old name: the CI image tag, the example sender name and the package author. The systemd unit keeps its name, `mcp-monitor`, so existing installs and the panel's own restart button keep working.
 
 ## 1.1.3 — 2026-10-21
 

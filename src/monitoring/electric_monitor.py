@@ -122,14 +122,14 @@ def send_email_notification(matches: list) -> bool:
         _domain = EMAIL_CONFIG["from"].split("@")[-1] if "@" in EMAIL_CONFIG["from"] else None
         msg['Date'] = formatdate(localtime=True)
         msg['Message-ID'] = make_msgid(domain=_domain)
-        msg['Subject'] = f"⚡ Premier Energy - Запланированное отключение электричества! ({datetime.now().strftime('%d.%m.%Y')})"
+        msg['Subject'] = f"⚡ Premier Energy - planned power outage ({datetime.now().strftime('%d.%m.%Y')})"
 
-        body = f"""⚡ ВНИМАНИЕ! Запланированное отключение электричества!
+        body = f"""⚡ A planned power outage matches a monitored address.
 
-Дата проверки: {datetime.now().strftime('%d.%m.%Y %H:%M')}
+Checked: {datetime.now().strftime('%d.%m.%Y %H:%M')}
 
 {'='*50}
-НАЙДЕНО:
+FOUND:
 {'='*50}
 
 """
@@ -138,7 +138,7 @@ def send_email_notification(matches: list) -> bool:
 
         body += f"""
 {'='*50}
-Проверьте сайт для подробностей:
+Details on the provider's site:
 https://premierenergydistribution.md/ru/toate-lucrarile-programate
 
 --

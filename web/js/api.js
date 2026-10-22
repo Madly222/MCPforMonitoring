@@ -1,5 +1,5 @@
 /**
- * API Client for MCP Server Monitor
+ * API Client for NetOps Control Plane
  *
  * Real backend client (the UI example shipped a mock; this replaces it).
  * Auth is cookie-based (session_id, httponly) -> every request uses
