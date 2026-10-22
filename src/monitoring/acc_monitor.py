@@ -80,15 +80,15 @@ def send_email_notification(matches: list) -> bool:
         _domain = EMAIL_CONFIG["from"].split("@")[-1] if "@" in EMAIL_CONFIG["from"] else None
         msg['Date'] = formatdate(localtime=True)
         msg['Message-ID'] = make_msgid(domain=_domain)
-        msg['Subject'] = f"⚠️ ACC.md - Возможно отключение воды! ({datetime.now().strftime('%d.%m.%Y')})"
+        msg['Subject'] = f"⚠️ ACC.md - possible water disconnection ({datetime.now().strftime('%d.%m.%Y')})"
 
-        body = f"""⚠️ ВНИМАНИЕ! Обнаружено отключение воды!
+        body = f"""⚠️ A water disconnection matches a monitored address.
 
-Дата проверки: {datetime.now().strftime('%d.%m.%Y %H:%M')}
-Адрес мониторинга: {_acc_pattern()}
+Checked: {datetime.now().strftime('%d.%m.%Y %H:%M')}
+Address pattern: {_acc_pattern()}
 
 {'='*50}
-НАЙДЕНО:
+FOUND:
 {'='*50}
 
 """
@@ -97,7 +97,7 @@ def send_email_notification(matches: list) -> bool:
 
         body += f"""
 {'='*50}
-Проверьте сайт для подробностей:
+Details on the provider's site:
 https://www.acc.md/disconnections
 
 --
@@ -128,8 +128,8 @@ def _match_signature(match: str) -> str:
 
 
 def _match_end(match: str) -> Optional[datetime]:
-    """Parse the restoration time ('Восст: dd.mm.yyyy hh:mm') if present."""
-    m = re.search(r'Восст[^0-9]*(\d{2})\.(\d{2})\.(\d{4})(?:\s+(\d{2}):(\d{2}))?', match)
+    """Parse the restoration time ('until: dd.mm.yyyy hh:mm') if present."""
+    m = re.search(r'until[^0-9]*(\d{2})\.(\d{2})\.(\d{4})(?:\s+(\d{2}):(\d{2}))?', match)
     if not m:
         return None
     try:
@@ -250,7 +250,7 @@ def parse_notifications(html: str, regex) -> list:
         streets = decode_html_entities(time_match.group(2).strip())
 
         if regex.search(streets):
-            match_str = f"[Уведомление] ⚠️ Плановое отключение!\n   📅 {time_date}\n   📍 Улицы: {streets}"
+            match_str = f"[Notice] ⚠️ Planned disconnection\n   📅 {time_date}\n   📍 Streets: {streets}"
             matches.append(match_str)
 
     return matches
@@ -293,15 +293,15 @@ def parse_table_rows(html: str, regex) -> list:
             date_info = ""
             if dates:
                 if len(dates) >= 2:
-                    date_info = f"Откл: {dates[0]}, Восст: {dates[1]}"
+                    date_info = f"From: {dates[0]}, until: {dates[1]}"
                 else:
-                    date_info = f"Дата: {dates[0]}"
+                    date_info = f"Date: {dates[0]}"
 
-            match_str = f"[Работы] 📍 {current_sector}: {street} {number}"
+            match_str = f"[Works] 📍 {current_sector}: {street} {number}"
             if status:
                 match_str += f" [{status}]"
             if problem:
-                match_str += f"\n   Причина: {problem}"
+                match_str += f"\n   Cause: {problem}"
             if date_info:
                 match_str += f"\n   {date_info}"
 

@@ -53,9 +53,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: docker build -t mcp-monitor .
+      - run: docker build -t netops-control-plane .
       - name: Start the demo container
-        run: docker run -d --name demo -e DEMO_MODE=1 -p 4455:4455 mcp-monitor
+        run: docker run -d --name demo -e DEMO_MODE=1 -p 4455:4455 netops-control-plane
       - name: Health check and demo login
         run: |
           for i in $(seq 1 30); do
