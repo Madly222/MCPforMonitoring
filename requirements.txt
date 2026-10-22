@@ -22,7 +22,7 @@ uvicorn[standard]==0.27.1
 # SSH clients
 # ------------------------------------------------------------------------------
 asyncssh==2.24.1          # primary async SSH (core ssh_manager)
-paramiko==5.0.0           # sync SSH (dhcp_mac_sync, netbox services)
+paramiko==5.1.0           # sync SSH (dhcp_mac_sync, netbox services)
 netmiko==4.8.0            # Cisco IOS automation (netbox-autofill)
 
 # ------------------------------------------------------------------------------
